@@ -50,7 +50,7 @@ rule emseq_biscuit_align:
         """
 rule emseq_dedup:
     input:
-        bam = f"{emseq_bam_dir}/{{library_id}}_merged.bam",
+        bam = f"{emseq_bam_dir}/{{library_id}}.bam",
         fasta = f"{ref_dir}/biscuit/{emseq_ref_fasta}",
     log:
         f"{log_dir}/{{library_id}}_emseq_dedup.log",

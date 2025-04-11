@@ -667,7 +667,7 @@ cat /tmp/test/qc/dupsifter-dedup-stats.txt
   #+begin_src snakemake
 rule emseq_dedup:
     input:
-        bam = f"{emseq_bam_dir}/{{library_id}}_merged.bam",
+        bam = f"{emseq_bam_dir}/{{library_id}}.bam",
         fasta = f"{ref_dir}/biscuit/{emseq_ref_fasta}",
     log:
         f"{log_dir}/{{library_id}}_emseq_dedup.log",
@@ -747,25 +747,55 @@ rule emseq_multiqc:
 :end:
 
 ***** Biscuit index
+:PROPERTIES:
+:ID:       7c540ad8-2c04-4dff-bf88-ae9c260a6a91
+:END:
 https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.bwa_index.tar.gz
 
 
 #+begin_src bash
-aria2c -c -x 10 -s 10 -m 5 -d $data_dir/inputs/ \
-    -o Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz \
-    https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+source ~/repos/aerodigestive/config/bash-env.sh
 
-cd $data_dir/ref
+data_dir="/mnt/data/projects/aero"
 
-mkdir $data_dir/ref/biscuit
+if [ -e "$data_dir/inputs/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz" ]; then
+    echo "File exists, skipping download."
+else
+    aria2c -c -x 10 -s 10 -m 5 -d $data_dir/inputs/ \
+	   -o Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz \
+	   https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
 
-# unzip the fasta.gz to ref
-gunzip -c $data_dir/inputs/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz > $data_dir/ref/biscuit/Homo_sapiens.GRCh38.dna.primary_assembly.fa
+fi
 
-samtools faidx $data_dir/ref/biscuit/Homo_sapiens.GRCh38.dna.primary_assembly.fa
 
-nohup biscuit index $data_dir/ref/biscuit/Homo_sapiens.GRCh38.dna.primary_assembly.fa & disown
+if [ -e "$data_dir/inputs/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz" ]; then
+    echo "File exists, skipping download."
+else
+    aria2c -c -x 10 -s 10 -m 5 -d $data_dir/inputs/ \
+	   -o GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz \
+	   https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
+fi
 
+
+# Ensembl primary assembly
+ensembl_dir="$data_dir/ref/biscuit/biscuit-ensembl-hg38"
+ensembl_input="$data_dir/inputs/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
+ensembl_fa="$ensembl_dir/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+
+mkdir -p "$ensembl_dir"
+gunzip -c "$ensembl_input" > "$ensembl_fa"
+samtools faidx "$ensembl_fa"
+nohup biscuit index "$ensembl_fa" & disown
+
+# NCBI decoy set
+ncbi_dir="$data_dir/ref/biscuit/biscuit-ncbi-decoy-hg38"
+ncbi_input="$data_dir/inputs/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz"
+ncbi_fa="$ncbi_dir/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna"
+
+mkdir -p "$ncbi_dir"
+gunzip -c "$ncbi_input" > "$ncbi_fa"
+samtools faidx "$ncbi_fa"
+nohup biscuit index "$ncbi_fa" & disown
 #+end_src
 
 ***** EM-seq methylation

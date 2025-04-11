@@ -1,0 +1,7 @@
+conda-env: emseq
+
+sourced-conda-envs:
+  - name: biotools
+    version: 1.0.1
+  - name: basecamp
+    version: 1.1.0

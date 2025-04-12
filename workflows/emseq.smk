@@ -37,16 +37,20 @@ rule emseq_biscuit_align:
     output:
         bam = f"{emseq_bam_dir}/{{library_id}}.bam",
     params:
-        threads = threads,
+        align_threads = lambda wildcards, threads: int(threads * 0.85),
     resources:
         concurrency=100
     shell:
         """
         biscuit align \
-        -@ {params.threads} \
+        -@ {params.align_threads} \
         -biscuit-ref {input.fasta} \
         {input.r1} {input.r2} \
-        | samtools sort -@ {params.threads} -o {output.bam} &>> {log}
+        | samtools sort \
+        -@ 8 \
+        -m 2G \
+        -T {data_dir}/tmp/{wildcards.library_id}_sorttmp \
+        -o {output.bam} &>> {log}
         """
 rule emseq_dedup:
     input:

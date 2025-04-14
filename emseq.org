@@ -473,6 +473,7 @@ rule emseq_biscuit_align:
         concurrency=100
     shell:
         """
+        mkdir -p {data_dir}/tmp && \
         biscuit align \
         -@ 82 \
         -biscuit-ref {input.fasta} \

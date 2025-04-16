@@ -224,6 +224,7 @@ rule emseq_fastp:
         --thread {params.threads} \
         """
 #+end_src
+
 **** EM-seq Biscuit WGMS alignment
 - [ ] check pradeeps alignment command chaudhuri-lab-bucket1/ris/work/pradeep_project/Fastq_data/Prostate_Urine_Plasma/bam/bam_allbams/PB056_C1
 - https://chatgpt.com/c/67ddfbd9-7c18-8005-bd73-89e31712eb29
@@ -731,448 +732,6 @@ rule emseq_post_pileup:
         && biscuit vcf2bed -c {input.vcf} > {output.bismark}
         """
 #+end_src
-**** DMR
-https://www.bioconductor.org/packages/release/bioc/vignettes/dmrseq/inst/doc/dmrseq.html
-https://huishenlab.github.io/biscuit/docs/methylextraction.html
-https://bioconductor.org/packages/release/bioc/html/DSS.html
-https://ziemann-lab.net/public/guppy_methylseq/PCAanalysis.html
-
-
-#+begin_src python
-from pathlib import Path
-import pandas as pd
-
-pileup_dir = Path("/tmp/breast/analysis/emseq/pileup")
-out_suffix = "_methylkit.tsv"
-
-for bedfile in pileup_dir.glob("*_pileup.bed"):
-    df = pd.read_csv(bedfile, sep="\t", header=None,
-                     names=["chr", "start", "end", "meth_ratio", "coverage"])
-    df["pos"] = df["start"] + 1  # methylKit expects 1-based coordinate
-    df["strand"] = "+"
-    df["num_mC"] = (df["meth_ratio"] * df["coverage"]).round().astype(int)
-    df["num_C"] = df["coverage"] - df["num_mC"]
-
-    out_df = df[["chr", "pos", "strand", "coverage", "num_mC", "num_C"]]
-
-    outfile = bedfile.with_name(bedfile.stem.replace("_pileup", "") + out_suffix)
-    out_df.to_csv(outfile, sep="\t", header=False, index=False)
-
-#+end_src
-
-#+begin_src snakemake
-rule methylkit_dmr_obj:
-    input:
-        bismark_cov lambda wildcards: expand(f"{emseq_dir}/pileup/{{library_id}}_bismark_cov.bed",
-                                             library = emseq_map[wildcards.experiment]['libs']),
-    log:
-    output:
-        f"{}
-#+end_src
-
-#+begin_src R
-# biscuit vcf2bed -k 2 -c PRO_13_pileup.vcf.gz > my_beta_m_u.bed
-
-library(methylKit)
-
-myobj = methRead("/tmp/breast/analysis/emseq/pileup/PRO_13_bismark_cov.bed",
-                 pipeline="bismarkCoverage",
-                 mincov = 2,
-                 sample.id = "TEST",
-                 assembly="hg38")
-
-
-myobj
-
-getMethylationStats(myobj,plot=TRUE,both.strands=FALSE)
-
-
-getCoverageStats(myobj,plot=TRUE,both.strands=FALSE)
-
-filtered.myobj=filterByCoverage(myobj,lo.count=10,lo.perc=NULL,
-                                hi.count=NULL,hi.perc=99.9)
-
-filtered.myobj
-
-obj=read("/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv",sample.id="test",assembly="hg38",header=FALSE, context="CpG", resolution="base",
-          pipeline=list(fraction=TRUE,chr.col=1,start.col=2,end.col=2,
-                        coverage.col=4,strand.col=3,freqC.col=5 )
-        )
-
-obj
-
-methRead()
-
-library(methylKit)
-
-help(methRead)
-
-obj <- methRead(
-  location = "/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv",
-  sample.id = "test",
-  assembly = "hg38",
-  pipeline = list(
-    fraction = TRUE,
-    chr.col = 1,
-    start.col = 2,
-    end.col = 2,
-    coverage.col = 4,
-    strand.col = 3,
-    freqC.col = 5
-  ),
-  header = FALSE,
-  context = "CpG",
-  resolution = "base"
-)
-
-
-df <- read.table("/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv", header = FALSE)
-str(df)
-
-obj <- methRead(
-  location = "/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv",
-  sample.id = "test",
-  assembly = "hg38",
-  pipeline = list(
-    fraction = FALSE,
-    chr.col = 1,
-    start.col = 2,
-    end.col = 2,
-    coverage.col = 4,
-    strand.col = 3,
-    numCs.col = 5,
-    numTs.col = 6
-  ),
-  header = FALSE,
-  context = "CpG",
-  resolution = "base"
-)
-
-
-file.list <- list(
-  "/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv",
-  "/tmp/breast/analysis/emseq/pileup/PRO_13_methylkit.tsv"
-)
-
-# read the files to a methylRawList object: myobj
-myobj=methRead(file.list,
-           sample.id=list("test1","ctrl1"),
-           assembly="hg38",
-           treatment=c(1,0),
-           context="CpG",
-           mincov = 2
-           )
-
-
-samples <- methRead(
-  file.list,
-  sample.id = c("NH22", "PRO_13"),
-  assembly = "hg38",
-  treatment = c(0, 1),
-  context = "CpG",
-  pipeline = "generic",
-  header = FALSE
-)
-
-
-samples <- methRead(
-  file.list,
-  sample.id = c("NH22", "PRO_13"),
-  assembly = "hg38",
-  treatment = c(0, 1),
-  context = "CpG",
-  pipeline = "bismarkCoverage",
-  header = FALSE
-)
-
-obj <- methRead(
-  location = "/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv",
-  sample.id = "test",
-  assembly = "hg38",
-  pipeline = list(
-    chr.col = 1,
-    start.col = 2,
-    end.col = 2,
-    strand.col = 3,
-    coverage.col = 4,
-    numCs.col = 5,
-    numTs.col = 6,
-    context.col = NULL,
-    context.filter = FALSE
-  ),
-  header = FALSE,
-  context = "CpG",
-  resolution = "base"
-)
-
-obj <- methRead(
-  location = "/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv",
-  sample.id = "test",
-  assembly = "hg38",
-  pipeline = list(
-    chr.col = 1,
-    start.col = 2,
-    end.col = 2,
-    strand.col = 3,
-    coverage.col = 4,
-    numCs.col = 5,
-    numTs.col = 6,
-    fraction = FALSE
-  ),
-  header = FALSE,
-  context = "CpG",
-  resolution = "base"
-)
-
-obj <- methRead(
-  location = "/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv",
-  sample.id = "test",
-  assembly = "hg38",
-  pipeline = list(
-    chr.col = 1,
-    start.col = 2,
-    end.col = 2,
-    strand.col = 3,
-    coverage.col = 4,
-    numCs.col = 5,
-    numTs.col = 6
-  ),
-  header = FALSE,
-  context = "CpG",
-  resolution = "base"
-)
-
-
-obj <- methRead(
-  location = "/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv",
-  sample.id = "test",
-  assembly = "hg38",
-  pipeline = list(
-    chr.col = 1,
-    start.col = 2,
-    end.col = 2,
-    strand.col = 3,
-    coverage.col = 4,
-    numCs.col = 5,
-    numTs.col = 6,
-    column.names = c("chr", "start", "strand", "coverage", "numCs", "numTs")
-  ),
-  header = FALSE,
-  context = "CpG",
-  resolution = "base"
-)
-
-library(methylKit)
-
-obj <- methRead(
-  location = "/tmp/breast/analysis/emseq/pileup/NH22_bismark_clean.tsv",
-  sample.id = "NH22",
-  assembly = "hg38",
-  treatment = 0,
-  context = "CpG",
-  pipeline = "bismark",
-  header = FALSE,
-  resolution = "base"
-)
-
-df <- read.table("/tmp/breast/analysis/emseq/pileup/NH22_bismark_like.tsv", header=FALSE, sep="\t", stringsAsFactors=FALSE)
-str(df)
-
-df <- read.table("/tmp/breast/analysis/emseq/pileup/NH22_bismark_clean.tsv",
-                 sep = "\t", header = FALSE, colClasses = c("character", "integer", "integer", "integer", "integer", "character"))
-
-obj <- methRead(df,
-  sample.id = "NH22",
-  assembly = "hg38",
-  treatment = 0,
-  context = "CpG",
-  pipeline = "bismark",
-  resolution = "base"
-)
-
-
-write.table(df, "/tmp/breast/analysis/emseq/pileup/NH22_bismark_clean2.tsv", sep="\t", quote=FALSE, row.names=FALSE, col.names=FALSE)
-
-obj <- methRead(
-  location = "NH22_bismark_clean2.tsv",
-  sample.id = "NH22",
-  assembly = "hg38",
-  treatment = 0,
-  context = "CpG",
-  pipeline = "bismark",
-  header = FALSE,
-  resolution = "base"
-)
-
-head(df)
-
-
-obj=methRead("/tmp/breast/analysis/emseq/pileup/NH22_bismark_clean.tsv",
-         sample.id="test",
-         assembly="hg38",
-         header=FALSE,
-         context="CpG",
-         resolution="base",
-         pipeline=list(fraction=FALSE,
-                       chr.col=1,
-                       start.col=2,
-                       end.col=3,
-                       coverage.col=4,
-                       strand.col=6,
-                       freqC.col=5 )
-        )
-
-
-obj <- methRead(
-  location = "/tmp/breast/analysis/emseq/pileup/NH22_bismark_clean.tsv",
-  sample.id = "test",
-  assembly = "hg38",
-  header = FALSE,
-  context = "CpG",
-  resolution = "base",
-  treatment = 0,
-  pipeline = list(
-    chr.col = 1,
-    start.col = 2,
-    end.col = 3,
-    meth.col = 4,
-    unmeth.col = 5,
-    strand.col = 6
-  )
-)
-
-obj <- methRead(
-  location = "/tmp/breast/analysis/emseq/pileup/NH22_bismark_clean.tsv",
-  sample.id = "test",
-  assembly = "hg38",
-  header = FALSE,
-  treatment = 0,
-  context = "CpG",
-  pipeline = "bismark"
-)
-
-# Read in your original data
-data <- read.table("/tmp/breast/analysis/emseq/pileup/NH22_bismark_clean.tsv",
-                  header = FALSE,
-                  col.names = c("chr", "start", "end", "meth", "unmeth", "strand"))
-
-# Calculate total coverage and methylation percentage
-data$coverage <- data$meth + data$unmeth
-data$methPercent <- round(data$meth / data$coverage * 100, 2)
-
-# Write to a new file in methylKit-compatible format
-write.table(data[, c("chr", "start", "end", "strand", "coverage", "methPercent")],
-            file = "/tmp/breast/analysis/emseq/pileup/NH22_converted.tsv",
-            quote = FALSE, sep = "\t", row.names = FALSE, col.names = FALSE)
-
-obj <- methRead(
-  location = "/tmp/breast/analysis/emseq/pileup/NH22_converted.tsv",
-  sample.id = "test",
-  assembly = "hg38",
-  header = FALSE,
-  treatment = 0,
-  context = "CpG",
-  resolution = "base",
-  pipeline = list(
-    chr.col = 1,
-    start.col = 2,
-    end.col = 3,
-    strand.col = 4,
-    coverage.col = 5,
-    freqC.col = 6
-  )
-)
-
-
-generic.file=system.file("extdata", "generic1.CpG.txt",package = "methylKit")
-read.table(generic.file,header=TRUE)
-
-test= read.table("/tmp/breast/analysis/emseq/pileup/PRO_13_methylkit_formatted.tsv", header=T)
-
-head(test)
-
-# And this is how you can read that generic file as a methylKit object
-myobj=methRead(test,
-               pipeline=list(fraction=FALSE,
-                             chr.col=1,
-                             start.col=2,
-                             end.col=2,
-                             coverage.col=4,
-                             strand.col=3,
-                             freqC.col=5),
-               sample.id="test1",assembly="hg38")
-
-
-myobj
-
-nrow(read.table("/tmp/breast/analysis/emseq/pileup/PRO_13_methylkit_formatted.tsv", header=TRUE))  # should match wc -l minus 1
-
-myobj = methRead("/tmp/breast/analysis/emseq/pileup/PRO_13_methylkit_formatted.tsv",
-                 pipeline=list(fraction=FALSE,
-                               chr.col=1,
-                               start.col=2,
-                               end.col=2,
-                               coverage.col=4,
-                               strand.col=3,
-                               freqC.col=5),
-                 sample.id="test1", assembly="hg38")
-
-# And this is how you can read that generic file as a methylKit object
-myobj=methRead( generic.file,
-               pipeline=list(fraction=FALSE,
-                             chr.col=1,
-                             start.col=2,
-                             end.col=2,
-                             coverage.col=4,
-                             strand.col=3,
-                             freqC.col=5),
-               sample.id="test1",assembly="hg38")
-
-
-myobj
-# This creates tabix files that save methylation
-
-myobj = methRead("/tmp/breast/analysis/emseq/pileup/PRO_13_methylkit_patched.tsv",
-                 pipeline=list(fraction=FALSE,
-                               chr.col=1,
-                               start.col=2,
-                               end.col=2,
-                               coverage.col=4,
-                               strand.col=3,
-                               freqC.col=5),
-                 sample.id="test1", assembly="hg38")
-myobj
-
-
-
-myobj = methRead("/tmp/breast/analysis/emseq/pileup/PRO_13_methylkit_formatted.tsv",
-                 pipeline=list(fraction=FALSE,
-                               chr.col=1,
-                               start.col=2,
-                               end.col=2,
-                               coverage.col=4,
-                               strand.col=3,
-                               freqC.col=5),
-                 sample.id="test1",
-                 mincov = 1,
-                 assembly="hg38")
-
-
-
-
-myobj = methRead("/tmp/breast/analysis/emseq/pileup/test.tsv",
-                 pipeline=list(fraction=FALSE,
-                               chr.col=1,
-                               start.col=2,
-                               end.col=2,
-                               coverage.col=4,
-                               strand.col=3,
-                               freqC.col=5),
-                 sample.id="test1", assembly="hg38")
-
-#+end_src
-
-
 **** QC
 ***** FastQC
 - Snakemake, inline
@@ -1855,5 +1414,685 @@ myobj = methRead("/tmp/breast/analysis/emseq/pileup/test.tsv",
 
 ***** EM-seq cfDNA copy number alteration
 EM-seq protects 5mC and 5hmC from damination with TET2 enzymatic oxidation. Unprotected cytosines are deaminated to uracils.
+
+***** DMR
+https://www.bioconductor.org/packages/release/bioc/vignettes/dmrseq/inst/doc/dmrseq.html
+https://huishenlab.github.io/biscuit/docs/methylextraction.html
+https://bioconductor.org/packages/release/bioc/html/DSS.html
+https://ziemann-lab.net/public/guppy_methylseq/PCAanalysis.html
+
+
+#+begin_src python
+from pathlib import Path
+import pandas as pd
+
+pileup_dir = Path("/tmp/breast/analysis/emseq/pileup")
+out_suffix = "_methylkit.tsv"
+
+for bedfile in pileup_dir.glob("*_pileup.bed"):
+    df = pd.read_csv(bedfile, sep="\t", header=None,
+                     names=["chr", "start", "end", "meth_ratio", "coverage"])
+    df["pos"] = df["start"] + 1  # methylKit expects 1-based coordinate
+    df["strand"] = "+"
+    df["num_mC"] = (df["meth_ratio"] * df["coverage"]).round().astype(int)
+    df["num_C"] = df["coverage"] - df["num_mC"]
+
+    out_df = df[["chr", "pos", "strand", "coverage", "num_mC", "num_C"]]
+
+    outfile = bedfile.with_name(bedfile.stem.replace("_pileup", "") + out_suffix)
+    out_df.to_csv(outfile, sep="\t", header=False, index=False)
+
+#+end_src
+        bismark = lambda wildcards: expand(f"{emseq_dir}/pileup/{{library_id}}_bismark_cov.bed",
+                                           library = meth_map[wildcards.experiment]['libs']),
+
+#+begin_src snakemake :tangle ./workflows/em-seq.smk
+rule make_single_methylkit_obj:
+    input:
+        bismark = f"{data_dir}/analysis/emseq/pileup/{{library_id}}_bismark_cov.bed",
+    log:
+        f"{log_dir}/methylkit_{{library_id}}.log",
+    output:
+        txt = f"{emseq_dir}/dmr/tabix/{{library_id}}.txt",
+        bgz = f"{emseq_dir}/dmr/tabix/{{library_id}}.txt.bgz",
+        tbi = f"{emseq_dir}/dmr/tabix/{{library_id}}.txt.bgz.tbi",
+    params:
+        Rscript = f"{emseq_script_dir}/make_single_methylkit_obj.R",
+        out_dir = f"{emseq_dir}/dmr/tabix",
+        mincov = emseq_mincov,
+        build = emseq_build,
+        treatment = lambda wc: treatment_map[wc.library_id],
+    shell:
+        """
+        Rscript {params.Rscript} \
+          --bismark_cov_bed {input.bismark} \
+          --library_id {wildcards.library_id} \
+          --mincov {params.mincov} \
+          --out_dir {params.out_dir} \
+          --treatment {params.treatment} \
+          --build {params.build} \
+          &>> {log}
+        """
+
+#+end_src
+
+#+begin_src R :tangle ./scripts/make_single_methylkit_obj.R
+library(argparse)
+library(methylKit)
+
+parser <- ArgumentParser()
+parser$add_argument("--bismark_cov_bed", required = TRUE)
+parser$add_argument("--library_id", required = TRUE)
+parser$add_argument("--treatment", type = "integer", required = TRUE)
+parser$add_argument("--mincov", type = "integer", required = TRUE)
+parser$add_argument("--out_dir", required = TRUE)
+parser$add_argument("--build", required = TRUE)
+
+args <- parser$parse_args()
+
+myobj= methRead(args$bismark_cov_bed,
+                sample.id = args$library_id,
+                treatment = args$treatment,
+                context="CpG",
+                pipeline="bismarkCoverage",
+                mincov = args$mincov,
+                assembly=args$build,
+                dbtype = "tabix",
+                dbdir = args$out_dir)
+
+#+end_src
+
+#+begin_src snakemake :tangle ./workflows/em-seq.smk
+rule make_methylkit_diff_db:
+    input:
+        mkit_lib_db = lambda wildcards: expand(
+            f"{emseq_dir}/dmr/tabix/{{library_id}}.txt.bgz",
+            library_id = meth_map[wildcards.experiment]['libs']
+        ),
+    log:
+        f"{log_dir}/{{experiment}}_make_methylkit_diff_db.log",
+    output:
+        unite = f"{emseq_dir}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
+        diff = f"{emseq_dir}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
+    params:
+        library_id = lambda wildcards: " ".join(meth_map[wildcards.experiment]['libs']),
+        treatment_list = lambda wildcards: meth_map[wildcards.experiment]['tx'],
+        out_dir = f"{emseq_dir}/dmr/diff",
+        script = f"{emseq_script_dir}/make_methylkit_diff_db.R",
+    shell:
+        """
+        Rscript {params.script} \
+        --lib_db_list "{input.mkit_lib_db}" \
+        --lib_id_list "{params.library_id}" \
+        --treatment_list "{params.treatment_list}" \
+        --cores 8 \
+        --out_dir {params.out_dir} \
+        --suffix {wildcards.experiment} > {log} 2>&1
+        """
+#+end_src
+
+#+begin_src R :tangle ./scripts/make_methylkit_diff_db.R
+library(argparse)
+library(methylKit)
+
+# --- Argument Parsing ---
+parser <- ArgumentParser()
+parser$add_argument("--lib_db_list", required = TRUE)
+parser$add_argument("--lib_id_list", required = TRUE)
+parser$add_argument("--treatment_list", required = TRUE)
+parser$add_argument("--cores", required = TRUE)
+parser$add_argument("--out_dir", required = TRUE)
+parser$add_argument("--suffix", required = TRUE)
+
+args <- parser$parse_args()
+
+lib_db_list <- unlist(strsplit(args$lib_db_list, " "))
+lib_id_list <- unlist(strsplit(args$lib_id_list, " "))
+treatment_list <- as.numeric(unlist(strsplit(args$treatment_list, " ")))
+
+stopifnot(length(lib_db_list) == length(lib_id_list),
+          length(lib_id_list) == length(treatment_list))
+
+# --- Read methylation databases ---
+merged_obj <- methRead(
+  location = as.list(lib_db_list),
+  sample.id = as.list(lib_id_list),
+  treatment = treatment_list,
+  context = "CpG",
+  assembly = "hg38",
+  dbtype = "tabix",
+  mincov = 2
+)
+
+# --- Unite ---
+meth <- unite(merged_obj,
+              destrand = FALSE,
+              chunk.size = 1e7,
+              mc.cores = as.numeric(args$cores),
+              save.db = TRUE,
+              suffix = args$suffix,
+              dbdir = args$out_dir)
+
+# --- Diff methylation ---
+diff <- calculateDiffMeth(meth,
+                          mc.cores = as.numeric(args$cores),
+                          chunk.size = 1e7,
+                          save.db = TRUE,
+                          dbdir = args$out_dir)
+#+end_src
+
+
+#+begin_src bash
+Rscript ~/repos/emseq/scripts/make_single_methylkit_obj.R \
+	--bismark_cov_bed "/tmp/breast/analysis/emseq/pileup/NH_11_bismark_cov.bed" \
+	--library_id "NH_11" \
+	--treatment 0 \
+	--mincov 2 \
+	--out_dir "/tmp/breast/analysis/emseq/dmr/tabix"
+
+#+end_src
+
+
+#+begin_src R
+file.list = list()
+
+myobj = methRead("/tmp/breast/analysis/emseq/pileup/PRO_13_bismark_cov.bed",
+                 pipeline="bismarkCoverage",
+                 mincov = 2,
+                 sample.id = "TEST",
+                 assembly="hg38")
+
+file.list =list(
+  "/tmp/breast/analysis/emseq/pileup/PRO_13_bismark_cov.bed",
+  "/tmp/breast/analysis/emseq/pileup/NH_11_bismark_cov.bed",
+  "/tmp/breast/analysis/emseq/pileup/PRO_10_bismark_cov.bed",
+  "/tmp/breast/analysis/emseq/pileup/NH_13_bismark_cov.bed")
+
+
+myobj = methRead(file.list,
+                 sample.id=list("test1","ctrl1","test2","ctrl2"),
+                 treatment=c(1,0,1,0),
+                 context="CpG",
+                 pipeline="bismarkCoverage",
+                 mincov = 2,
+                 assembly="hg38")
+
+myobj
+
+myobj = methRead(file.list,
+                 sample.id=list("test1","ctrl1","test2","ctrl2"),
+                 treatment=c(1,0,1,0),
+                 context="CpG",
+                 pipeline="bismarkCoverage",
+                 mincov = 2,
+                 assembly="hg38",
+                 dbtype = "tabix",
+                 dbdir = "/tmp/breast/analysis/emseq/pileup")
+
+print(myobj[[1]]@dbpath)
+
+#########1#########2#########3#########4#########5#########6#########7#########8
+
+library(methylKit)
+
+myobj = methRead(
+  location = list("/tmp/breast/analysis/emseq/dmr/tabix/NH_11.txt.bgz",
+                  "/tmp/breast/analysis/emseq/dmr/tabix/NH_13.txt.bgz",
+                  "/tmp/breast/analysis/emseq/dmr/tabix/PRO_10.txt.bgz",
+                  "/tmp/breast/analysis/emseq/dmr/tabix/PRO_13.txt.bgz"),
+  sample.id = list("NH_11", "NH_13", "PRO_10", "PRO_13"),
+  treatment = c(1, 1, 0, 0),
+  context = "CpG",
+  assembly = "hg38",
+  dbtype = "tabix",
+)
+
+myobj[1]
+
+getMethylationStats(myobj[[2]],plot=FALSE,both.strands=FALSE)
+
+
+getMethylationStats(myobj[[2]],plot=TRUE,both.strands=FALSE)
+
+
+getCoverageStats(myobj[[2]],plot=TRUE,both.strands=FALSE)
+
+#
+filtered.myobj=filterByCoverage(myobj,lo.count=10,lo.perc=NULL,
+                                hi.count=NULL,hi.perc=99.9)
+# ERRORS if no reads match
+
+meth=unite(myobj, destrand = F)
+
+head(meth)
+
+getCorrelation(meth, plot = T)
+
+clusterSamples(meth, dist="correlation", method="ward", plot=TRUE)
+
+hc = clusterSamples(meth, dist="correlation", method="ward", plot=FALSE)
+
+PCASamples(meth)
+myobj
+
+myDiff=calculateDiffMeth(meth)
+
+diffMethPerChr(myDiff,plot=T, qvalue.cutoff=.5, meth.cutoff=3)
+
+myDiff=calculateDiffMeth(meth,mc.cores=2)
+
+library(tibble)
+
+pvals_tbl <- getData(myDiff) |>
+  as_tibble()
+
+pvals_tbl %>% sort(qvalue)
+
+|>
+  select(pvalue)
+
+# read the files to a methylRawListDB object: myobjDB
+# and save in databases in folder methylDB
+
+
+myobjDB=methRead(file.list,
+           sample.id=list("test1","ctrl1","test2","ctrl2"),
+           assembly="hg38",
+           treatment=c(1,0,1,0),
+           context="CpG",
+           dbtype = "tabix",
+           dbdir = "/tmp/breast/analysis/emseq/pileup"
+           )
+
+print(myobjDB[[1]]@dbpath)
+
+getMethylationStats(myobj,plot=TRUE,both.strands=FALSE)
+
+
+getCoverageStats(myobj,plot=TRUE,both.strands=FALSE)
+
+filtered.myobj=filterByCoverage(myobj,lo.count=10,lo.perc=NULL,
+                                hi.count=NULL,hi.perc=99.9)
+
+filtered.myobj
+
+obj=read("/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv",sample.id="test",assembly="hg38",header=FALSE, context="CpG", resolution="base",
+          pipeline=list(fraction=TRUE,chr.col=1,start.col=2,end.col=2,
+                        coverage.col=4,strand.col=3,freqC.col=5 )
+        )
+
+obj
+
+methRead()
+
+library(methylKit)
+
+help(methRead)
+
+obj <- methRead(
+  location = "/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv",
+  sample.id = "test",
+  assembly = "hg38",
+  pipeline = list(
+    fraction = TRUE,
+    chr.col = 1,
+    start.col = 2,
+    end.col = 2,
+    coverage.col = 4,
+    strand.col = 3,
+    freqC.col = 5
+  ),
+  header = FALSE,
+  context = "CpG",
+  resolution = "base"
+)
+
+
+df <- read.table("/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv", header = FALSE)
+str(df)
+
+obj <- methRead(
+  location = "/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv",
+  sample.id = "test",
+  assembly = "hg38",
+  pipeline = list(
+    fraction = FALSE,
+    chr.col = 1,
+    start.col = 2,
+    end.col = 2,
+    coverage.col = 4,
+    strand.col = 3,
+    numCs.col = 5,
+    numTs.col = 6
+  ),
+  header = FALSE,
+  context = "CpG",
+  resolution = "base"
+)
+
+
+file.list <- list(
+  "/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv",
+  "/tmp/breast/analysis/emseq/pileup/PRO_13_methylkit.tsv"
+)
+
+# read the files to a methylRawList object: myobj
+myobj=methRead(file.list,
+           sample.id=list("test1","ctrl1"),
+           assembly="hg38",
+           treatment=c(1,0),
+           context="CpG",
+           mincov = 2
+           )
+
+
+samples <- methRead(
+  file.list,
+  sample.id = c("NH22", "PRO_13"),
+  assembly = "hg38",
+  treatment = c(0, 1),
+  context = "CpG",
+  pipeline = "generic",
+  header = FALSE
+)
+
+
+samples <- methRead(
+  file.list,
+  sample.id = c("NH22", "PRO_13"),
+  assembly = "hg38",
+  treatment = c(0, 1),
+  context = "CpG",
+  pipeline = "bismarkCoverage",
+  header = FALSE
+)
+
+obj <- methRead(
+  location = "/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv",
+  sample.id = "test",
+  assembly = "hg38",
+  pipeline = list(
+    chr.col = 1,
+    start.col = 2,
+    end.col = 2,
+    strand.col = 3,
+    coverage.col = 4,
+    numCs.col = 5,
+    numTs.col = 6,
+    context.col = NULL,
+    context.filter = FALSE
+  ),
+  header = FALSE,
+  context = "CpG",
+  resolution = "base"
+)
+
+obj <- methRead(
+  location = "/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv",
+  sample.id = "test",
+  assembly = "hg38",
+  pipeline = list(
+    chr.col = 1,
+    start.col = 2,
+    end.col = 2,
+    strand.col = 3,
+    coverage.col = 4,
+    numCs.col = 5,
+    numTs.col = 6,
+    fraction = FALSE
+  ),
+  header = FALSE,
+  context = "CpG",
+  resolution = "base"
+)
+
+obj <- methRead(
+  location = "/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv",
+  sample.id = "test",
+  assembly = "hg38",
+  pipeline = list(
+    chr.col = 1,
+    start.col = 2,
+    end.col = 2,
+    strand.col = 3,
+    coverage.col = 4,
+    numCs.col = 5,
+    numTs.col = 6
+  ),
+  header = FALSE,
+  context = "CpG",
+  resolution = "base"
+)
+
+
+obj <- methRead(
+  location = "/tmp/breast/analysis/emseq/pileup/NH22_methylkit.tsv",
+  sample.id = "test",
+  assembly = "hg38",
+  pipeline = list(
+    chr.col = 1,
+    start.col = 2,
+    end.col = 2,
+    strand.col = 3,
+    coverage.col = 4,
+    numCs.col = 5,
+    numTs.col = 6,
+    column.names = c("chr", "start", "strand", "coverage", "numCs", "numTs")
+  ),
+  header = FALSE,
+  context = "CpG",
+  resolution = "base"
+)
+
+library(methylKit)
+
+obj <- methRead(
+  location = "/tmp/breast/analysis/emseq/pileup/NH22_bismark_clean.tsv",
+  sample.id = "NH22",
+  assembly = "hg38",
+  treatment = 0,
+  context = "CpG",
+  pipeline = "bismark",
+  header = FALSE,
+  resolution = "base"
+)
+
+df <- read.table("/tmp/breast/analysis/emseq/pileup/NH22_bismark_like.tsv", header=FALSE, sep="\t", stringsAsFactors=FALSE)
+str(df)
+
+df <- read.table("/tmp/breast/analysis/emseq/pileup/NH22_bismark_clean.tsv",
+                 sep = "\t", header = FALSE, colClasses = c("character", "integer", "integer", "integer", "integer", "character"))
+
+obj <- methRead(df,
+  sample.id = "NH22",
+  assembly = "hg38",
+  treatment = 0,
+  context = "CpG",
+  pipeline = "bismark",
+  resolution = "base"
+)
+
+
+write.table(df, "/tmp/breast/analysis/emseq/pileup/NH22_bismark_clean2.tsv", sep="\t", quote=FALSE, row.names=FALSE, col.names=FALSE)
+
+obj <- methRead(
+  location = "NH22_bismark_clean2.tsv",
+  sample.id = "NH22",
+  assembly = "hg38",
+  treatment = 0,
+  context = "CpG",
+  pipeline = "bismark",
+  header = FALSE,
+  resolution = "base"
+)
+
+head(df)
+
+
+obj=methRead("/tmp/breast/analysis/emseq/pileup/NH22_bismark_clean.tsv",
+         sample.id="test",
+         assembly="hg38",
+         header=FALSE,
+         context="CpG",
+         resolution="base",
+         pipeline=list(fraction=FALSE,
+                       chr.col=1,
+                       start.col=2,
+                       end.col=3,
+                       coverage.col=4,
+                       strand.col=6,
+                       freqC.col=5 )
+        )
+
+
+obj <- methRead(
+  location = "/tmp/breast/analysis/emseq/pileup/NH22_bismark_clean.tsv",
+  sample.id = "test",
+  assembly = "hg38",
+  header = FALSE,
+  context = "CpG",
+  resolution = "base",
+  treatment = 0,
+  pipeline = list(
+    chr.col = 1,
+    start.col = 2,
+    end.col = 3,
+    meth.col = 4,
+    unmeth.col = 5,
+    strand.col = 6
+  )
+)
+
+obj <- methRead(
+  location = "/tmp/breast/analysis/emseq/pileup/NH22_bismark_clean.tsv",
+  sample.id = "test",
+  assembly = "hg38",
+  header = FALSE,
+  treatment = 0,
+  context = "CpG",
+  pipeline = "bismark"
+)
+
+# Read in your original data
+data <- read.table("/tmp/breast/analysis/emseq/pileup/NH22_bismark_clean.tsv",
+                  header = FALSE,
+                  col.names = c("chr", "start", "end", "meth", "unmeth", "strand"))
+
+# Calculate total coverage and methylation percentage
+data$coverage <- data$meth + data$unmeth
+data$methPercent <- round(data$meth / data$coverage * 100, 2)
+
+# Write to a new file in methylKit-compatible format
+write.table(data[, c("chr", "start", "end", "strand", "coverage", "methPercent")],
+            file = "/tmp/breast/analysis/emseq/pileup/NH22_converted.tsv",
+            quote = FALSE, sep = "\t", row.names = FALSE, col.names = FALSE)
+
+obj <- methRead(
+  location = "/tmp/breast/analysis/emseq/pileup/NH22_converted.tsv",
+  sample.id = "test",
+  assembly = "hg38",
+  header = FALSE,
+  treatment = 0,
+  context = "CpG",
+  resolution = "base",
+  pipeline = list(
+    chr.col = 1,
+    start.col = 2,
+    end.col = 3,
+    strand.col = 4,
+    coverage.col = 5,
+    freqC.col = 6
+  )
+)
+
+
+generic.file=system.file("extdata", "generic1.CpG.txt",package = "methylKit")
+read.table(generic.file,header=TRUE)
+
+test= read.table("/tmp/breast/analysis/emseq/pileup/PRO_13_methylkit_formatted.tsv", header=T)
+
+head(test)
+
+# And this is how you can read that generic file as a methylKit object
+myobj=methRead(test,
+               pipeline=list(fraction=FALSE,
+                             chr.col=1,
+                             start.col=2,
+                             end.col=2,
+                             coverage.col=4,
+                             strand.col=3,
+                             freqC.col=5),
+               sample.id="test1",assembly="hg38")
+
+
+myobj
+
+nrow(read.table("/tmp/breast/analysis/emseq/pileup/PRO_13_methylkit_formatted.tsv", header=TRUE))  # should match wc -l minus 1
+
+myobj = methRead("/tmp/breast/analysis/emseq/pileup/PRO_13_methylkit_formatted.tsv",
+                 pipeline=list(fraction=FALSE,
+                               chr.col=1,
+                               start.col=2,
+                               end.col=2,
+                               coverage.col=4,
+                               strand.col=3,
+                               freqC.col=5),
+                 sample.id="test1", assembly="hg38")
+
+# And this is how you can read that generic file as a methylKit object
+myobj=methRead( generic.file,
+               pipeline=list(fraction=FALSE,
+                             chr.col=1,
+                             start.col=2,
+                             end.col=2,
+                             coverage.col=4,
+                             strand.col=3,
+                             freqC.col=5),
+               sample.id="test1",assembly="hg38")
+
+
+myobj
+# This creates tabix files that save methylation
+
+myobj = methRead("/tmp/breast/analysis/emseq/pileup/PRO_13_methylkit_patched.tsv",
+                 pipeline=list(fraction=FALSE,
+                               chr.col=1,
+                               start.col=2,
+                               end.col=2,
+                               coverage.col=4,
+                               strand.col=3,
+                               freqC.col=5),
+                 sample.id="test1", assembly="hg38")
+myobj
+
+
+
+myobj = methRead("/tmp/breast/analysis/emseq/pileup/PRO_13_methylkit_formatted.tsv",
+                 pipeline=list(fraction=FALSE,
+                               chr.col=1,
+                               start.col=2,
+                               end.col=2,
+                               coverage.col=4,
+                               strand.col=3,
+                               freqC.col=5),
+                 sample.id="test1",
+                 mincov = 1,
+                 assembly="hg38")
+
+
+
+
+myobj = methRead("/tmp/breast/analysis/emseq/pileup/test.tsv",
+                 pipeline=list(fraction=FALSE,
+                               chr.col=1,
+                               start.col=2,
+                               end.col=2,
+                               coverage.col=4,
+                               strand.col=3,
+                               freqC.col=5),
+                 sample.id="test1", assembly="hg38")
+
+#+end_src
+
 
 ** Ideas

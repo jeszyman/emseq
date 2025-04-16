@@ -106,13 +106,6 @@ rule emseq_post_pileup:
 	-t cg {input.vcf} > {output.bed} \
         && biscuit vcf2bed -c {input.vcf} > {output.bismark}
         """
-rule methylkit_dmr_obj:
-    input:
-        bismark_cov lambda wildcards: expand(f"{emseq_dir}/pileup/{{library_id}}_bismark_cov.bed",
-                                             library = emseq_map[wildcards.experiment]['libs']),
-    log:
-    output:
-        f"{}
 rule emseq_fastqc:
     input:
         f"{emseq_fastq_dir}/{{library_id}}_{{processing}}_{{read}}.fastq.gz",
@@ -153,4 +146,56 @@ rule emseq_multiqc:
         --force \
         --outdir {params.out_dir} \
         --filename {params.out_name}
+        """
+rule make_single_methylkit_obj:
+    input:
+        bismark = f"{data_dir}/analysis/emseq/pileup/{{library_id}}_bismark_cov.bed",
+    log:
+        f"{log_dir}/methylkit_{{library_id}}.log",
+    output:
+        txt = f"{emseq_dir}/dmr/tabix/{{library_id}}.txt",
+        bgz = f"{emseq_dir}/dmr/tabix/{{library_id}}.txt.bgz",
+        tbi = f"{emseq_dir}/dmr/tabix/{{library_id}}.txt.bgz.tbi",
+    params:
+        Rscript = f"{emseq_script_dir}/make_single_methylkit_obj.R",
+        out_dir = f"{emseq_dir}/dmr/tabix",
+        mincov = emseq_mincov,
+        build = emseq_build,
+        treatment = lambda wc: treatment_map[wc.library_id],
+    shell:
+        """
+        Rscript {params.Rscript} \
+          --bismark_cov_bed {input.bismark} \
+          --library_id {wildcards.library_id} \
+          --mincov {params.mincov} \
+          --out_dir {params.out_dir} \
+          --treatment {params.treatment} \
+          --build {params.build} \
+          &>> {log}
+        """
+rule make_methylkit_diff_db:
+    input:
+        mkit_lib_db = lambda wildcards: expand(
+            f"{emseq_dir}/dmr/tabix/{{library_id}}.txt.bgz",
+            library_id = meth_map[wildcards.experiment]['libs']
+        ),
+    log:
+        f"{log_dir}/{{experiment}}_make_methylkit_diff_db.log",
+    output:
+        unite = f"{emseq_dir}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
+        diff = f"{emseq_dir}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
+    params:
+        library_id = lambda wildcards: " ".join(meth_map[wildcards.experiment]['libs']),
+        treatment_list = lambda wildcards: meth_map[wildcards.experiment]['tx'],
+        out_dir = f"{emseq_dir}/dmr/diff",
+        script = f"{emseq_script_dir}/make_methylkit_diff_db.R",
+    shell:
+        """
+        Rscript {params.script} \
+        --lib_db_list "{input.mkit_lib_db}" \
+        --lib_id_list "{params.library_id}" \
+        --treatment_list "{params.treatment_list}" \
+        --cores 8 \
+        --out_dir {params.out_dir} \
+        --suffix {wildcards.experiment} > {log} 2>&1
         """

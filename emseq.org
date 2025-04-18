@@ -925,6 +925,18 @@ diff <- calculateDiffMeth(meth,
 :properties:
 :header-args:snakemake: :tangle no
 :end:
+
+- dmr heatmap
+  #+begin_src R
+meth_mat <- percMethylation(meth)
+library(matrixStats)
+
+variances <- rowVars(meth_mat, na.rm = TRUE)
+top_idx <- order(variances, decreasing = TRUE)[1:500]  # or 1000
+top_meth <- meth_mat[top_idx, ]
+
+#+end_src
+
 ***** Depth
 #+begin_src bash
 

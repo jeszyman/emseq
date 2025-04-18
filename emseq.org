@@ -759,7 +759,7 @@ rule emseq_fastqc:
 #+end_src
 ***** MultiQC
 - Snakemake, inline
-  #+begin_src snakemake
+  #+begin_src snakemake :tangle no
 rule emseq_multiqc:
     input:
         expand(f"{qc_dir}/{{library_id}}_{{processing}}_{{read}}_fastqc.zip",
@@ -784,11 +784,162 @@ rule emseq_multiqc:
 
 
 #+end_src
+**** Differential methylation
+
+#+begin_src snakemake
+rule make_single_methylkit_obj:
+    input:
+        bismark = f"{data_dir}/analysis/emseq/pileup/{{library_id}}_bismark_cov.bed",
+    log:
+        f"{log_dir}/methylkit_{{library_id}}.log",
+    output:
+        txt = f"{emseq_dir}/dmr/tabix/{{library_id}}.txt",
+        bgz = f"{emseq_dir}/dmr/tabix/{{library_id}}.txt.bgz",
+        tbi = f"{emseq_dir}/dmr/tabix/{{library_id}}.txt.bgz.tbi",
+    params:
+        Rscript = f"{emseq_script_dir}/make_single_methylkit_obj.R",
+        out_dir = f"{emseq_dir}/dmr/tabix",
+        mincov = emseq_mincov,
+        build = emseq_build,
+        treatment = lambda wc: treatment_map[wc.library_id],
+    shell:
+        """
+        Rscript {params.Rscript} \
+          --bismark_cov_bed {input.bismark} \
+          --library_id {wildcards.library_id} \
+          --mincov {params.mincov} \
+          --out_dir {params.out_dir} \
+          --treatment {params.treatment} \
+          --build {params.build} \
+          &>> {log}
+        """
+
+#+end_src
+
+#+begin_src R :tangle ./scripts/make_single_methylkit_obj.R
+library(argparse)
+library(methylKit)
+
+parser <- ArgumentParser()
+parser$add_argument("--bismark_cov_bed", required = TRUE)
+parser$add_argument("--library_id", required = TRUE)
+parser$add_argument("--treatment", type = "integer", required = TRUE)
+parser$add_argument("--mincov", type = "integer", required = TRUE)
+parser$add_argument("--out_dir", required = TRUE)
+parser$add_argument("--build", required = TRUE)
+
+args <- parser$parse_args()
+
+myobj= methRead(args$bismark_cov_bed,
+                sample.id = args$library_id,
+                treatment = args$treatment,
+                context="CpG",
+                pipeline="bismarkCoverage",
+                mincov = args$mincov,
+                assembly=args$build,
+                dbtype = "tabix",
+                dbdir = args$out_dir)
+
+#+end_src
+
+#+begin_src snakemake
+rule make_methylkit_diff_db:
+    input:
+        mkit_lib_db = lambda wildcards: expand(
+            f"{emseq_dir}/dmr/tabix/{{library_id}}.txt.bgz",
+            library_id = meth_map[wildcards.experiment]['libs']
+        ),
+    log:
+        f"{log_dir}/{{experiment}}_make_methylkit_diff_db.log",
+    output:
+        unite = f"{emseq_dir}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
+        diff = f"{emseq_dir}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
+    params:
+        library_id = lambda wildcards: " ".join(meth_map[wildcards.experiment]['libs']),
+        treatment_list = lambda wildcards: meth_map[wildcards.experiment]['tx'],
+        out_dir = f"{emseq_dir}/dmr/diff",
+        script = f"{emseq_script_dir}/make_methylkit_diff_db.R",
+    shell:
+        """
+        Rscript {params.script} \
+        --lib_db_list "{input.mkit_lib_db}" \
+        --lib_id_list "{params.library_id}" \
+        --treatment_list "{params.treatment_list}" \
+        --cores 8 \
+        --out_dir {params.out_dir} \
+        --suffix {wildcards.experiment} > {log} 2>&1
+        """
+#+end_src
+
+#+begin_src R :tangle ./scripts/make_methylkit_diff_db.R
+library(argparse)
+library(methylKit)
+
+# --- Argument Parsing ---
+parser <- ArgumentParser()
+parser$add_argument("--lib_db_list", required = TRUE)
+parser$add_argument("--lib_id_list", required = TRUE)
+parser$add_argument("--treatment_list", required = TRUE)
+parser$add_argument("--cores", required = TRUE)
+parser$add_argument("--out_dir", required = TRUE)
+parser$add_argument("--suffix", required = TRUE)
+
+args <- parser$parse_args()
+
+lib_db_list <- unlist(strsplit(args$lib_db_list, " "))
+lib_id_list <- unlist(strsplit(args$lib_id_list, " "))
+treatment_list <- as.numeric(unlist(strsplit(args$treatment_list, " ")))
+
+stopifnot(length(lib_db_list) == length(lib_id_list),
+          length(lib_id_list) == length(treatment_list))
+
+# --- Read methylation databases ---
+merged_obj <- methRead(
+  location = as.list(lib_db_list),
+  sample.id = as.list(lib_id_list),
+  treatment = treatment_list,
+  context = "CpG",
+  assembly = "hg38",
+  dbtype = "tabix",
+  mincov = 2
+)
+
+# --- Unite ---
+meth <- unite(merged_obj,
+              destrand = FALSE,
+              chunk.size = 1e7,
+              mc.cores = as.numeric(args$cores),
+              save.db = TRUE,
+              suffix = args$suffix,
+              dbdir = args$out_dir)
+
+# --- Diff methylation ---
+diff <- calculateDiffMeth(meth,
+                          mc.cores = as.numeric(args$cores),
+                          chunk.size = 1e7,
+                          save.db = TRUE,
+                          dbdir = args$out_dir)
+#+end_src
 
 **** Dev
 :properties:
 :header-args:snakemake: :tangle no
 :end:
+***** Depth
+#+begin_src bash
+
+ls /tmp/breast/analysis/emseq/bams-merged/PRO_13_deduped.bam
+
+mosdepth \
+    --threads 8 \
+    --no-per-base \
+    --fast-mode \
+    --use-median \
+    --quantize 0:5:10:20 \
+    /tmp/breast/qc/PRO_13_emseq_mosdepth \
+    /tmp/breast/analysis/emseq/bams-merged/PRO_13_deduped.bam
+
+#+end_src
 
 ***** Biscuit index
 :PROPERTIES:
@@ -1446,141 +1597,6 @@ for bedfile in pileup_dir.glob("*_pileup.bed"):
         bismark = lambda wildcards: expand(f"{emseq_dir}/pileup/{{library_id}}_bismark_cov.bed",
                                            library = meth_map[wildcards.experiment]['libs']),
 
-#+begin_src snakemake :tangle ./workflows/em-seq.smk
-rule make_single_methylkit_obj:
-    input:
-        bismark = f"{data_dir}/analysis/emseq/pileup/{{library_id}}_bismark_cov.bed",
-    log:
-        f"{log_dir}/methylkit_{{library_id}}.log",
-    output:
-        txt = f"{emseq_dir}/dmr/tabix/{{library_id}}.txt",
-        bgz = f"{emseq_dir}/dmr/tabix/{{library_id}}.txt.bgz",
-        tbi = f"{emseq_dir}/dmr/tabix/{{library_id}}.txt.bgz.tbi",
-    params:
-        Rscript = f"{emseq_script_dir}/make_single_methylkit_obj.R",
-        out_dir = f"{emseq_dir}/dmr/tabix",
-        mincov = emseq_mincov,
-        build = emseq_build,
-        treatment = lambda wc: treatment_map[wc.library_id],
-    shell:
-        """
-        Rscript {params.Rscript} \
-          --bismark_cov_bed {input.bismark} \
-          --library_id {wildcards.library_id} \
-          --mincov {params.mincov} \
-          --out_dir {params.out_dir} \
-          --treatment {params.treatment} \
-          --build {params.build} \
-          &>> {log}
-        """
-
-#+end_src
-
-#+begin_src R :tangle ./scripts/make_single_methylkit_obj.R
-library(argparse)
-library(methylKit)
-
-parser <- ArgumentParser()
-parser$add_argument("--bismark_cov_bed", required = TRUE)
-parser$add_argument("--library_id", required = TRUE)
-parser$add_argument("--treatment", type = "integer", required = TRUE)
-parser$add_argument("--mincov", type = "integer", required = TRUE)
-parser$add_argument("--out_dir", required = TRUE)
-parser$add_argument("--build", required = TRUE)
-
-args <- parser$parse_args()
-
-myobj= methRead(args$bismark_cov_bed,
-                sample.id = args$library_id,
-                treatment = args$treatment,
-                context="CpG",
-                pipeline="bismarkCoverage",
-                mincov = args$mincov,
-                assembly=args$build,
-                dbtype = "tabix",
-                dbdir = args$out_dir)
-
-#+end_src
-
-#+begin_src snakemake :tangle ./workflows/em-seq.smk
-rule make_methylkit_diff_db:
-    input:
-        mkit_lib_db = lambda wildcards: expand(
-            f"{emseq_dir}/dmr/tabix/{{library_id}}.txt.bgz",
-            library_id = meth_map[wildcards.experiment]['libs']
-        ),
-    log:
-        f"{log_dir}/{{experiment}}_make_methylkit_diff_db.log",
-    output:
-        unite = f"{emseq_dir}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
-        diff = f"{emseq_dir}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
-    params:
-        library_id = lambda wildcards: " ".join(meth_map[wildcards.experiment]['libs']),
-        treatment_list = lambda wildcards: meth_map[wildcards.experiment]['tx'],
-        out_dir = f"{emseq_dir}/dmr/diff",
-        script = f"{emseq_script_dir}/make_methylkit_diff_db.R",
-    shell:
-        """
-        Rscript {params.script} \
-        --lib_db_list "{input.mkit_lib_db}" \
-        --lib_id_list "{params.library_id}" \
-        --treatment_list "{params.treatment_list}" \
-        --cores 8 \
-        --out_dir {params.out_dir} \
-        --suffix {wildcards.experiment} > {log} 2>&1
-        """
-#+end_src
-
-#+begin_src R :tangle ./scripts/make_methylkit_diff_db.R
-library(argparse)
-library(methylKit)
-
-# --- Argument Parsing ---
-parser <- ArgumentParser()
-parser$add_argument("--lib_db_list", required = TRUE)
-parser$add_argument("--lib_id_list", required = TRUE)
-parser$add_argument("--treatment_list", required = TRUE)
-parser$add_argument("--cores", required = TRUE)
-parser$add_argument("--out_dir", required = TRUE)
-parser$add_argument("--suffix", required = TRUE)
-
-args <- parser$parse_args()
-
-lib_db_list <- unlist(strsplit(args$lib_db_list, " "))
-lib_id_list <- unlist(strsplit(args$lib_id_list, " "))
-treatment_list <- as.numeric(unlist(strsplit(args$treatment_list, " ")))
-
-stopifnot(length(lib_db_list) == length(lib_id_list),
-          length(lib_id_list) == length(treatment_list))
-
-# --- Read methylation databases ---
-merged_obj <- methRead(
-  location = as.list(lib_db_list),
-  sample.id = as.list(lib_id_list),
-  treatment = treatment_list,
-  context = "CpG",
-  assembly = "hg38",
-  dbtype = "tabix",
-  mincov = 2
-)
-
-# --- Unite ---
-meth <- unite(merged_obj,
-              destrand = FALSE,
-              chunk.size = 1e7,
-              mc.cores = as.numeric(args$cores),
-              save.db = TRUE,
-              suffix = args$suffix,
-              dbdir = args$out_dir)
-
-# --- Diff methylation ---
-diff <- calculateDiffMeth(meth,
-                          mc.cores = as.numeric(args$cores),
-                          chunk.size = 1e7,
-                          save.db = TRUE,
-                          dbdir = args$out_dir)
-#+end_src
-
 
 #+begin_src bash
 Rscript ~/repos/emseq/scripts/make_single_methylkit_obj.R \
@@ -2091,6 +2107,67 @@ myobj = methRead("/tmp/breast/analysis/emseq/pileup/test.tsv",
                                strand.col=3,
                                freqC.col=5),
                  sample.id="test1", assembly="hg38")
+
+#+end_src
+
+
+#+begin_src R
+library(methylKit)
+library(tidyverse)
+
+meth <- methylKit:::readMethylBaseDB("/tmp/breast/analysis/emseq/dmr/tabix/methylBase_108f6516736d92.txt.bgz")
+
+meth
+
+
+
+# Get percent methylation matrix
+meth_matrix <- percMethylation(meth)
+
+head(meth_matrix)
+
+clin = data.frame(library_id = c("NH_11","NH_13","PRO_10","PRO_13"),
+           cohort = c("healthy","healthy","progressor","progressor"))
+
+# Compute global methylation (mean per sample)
+global_df <- meth_matrix %>%
+  as.data.frame() %>%
+  pivot_longer(cols = everything(), names_to = "library_id", values_to = "methylation") %>%
+  group_by(library_id) %>%
+  summarise(global_methylation = mean(methylation, na.rm = TRUE)) %>%
+  left_join(clin, by = "library_id")
+
+global_df
+
+
+
+# Violin plot (one point per library, jittered for clarity)
+ggplot(global_df, aes(x = cohort, y = global_methylation, fill = cohort)) +
+  geom_violin(width = 1.0, trim = TRUE, alpha = 0.4) +
+  geom_jitter(width = 0.1, size = 2) +
+  theme_minimal() +
+  labs(title = "Global Methylation per Library",
+       y = "Mean % Methylation",
+       x = "Group")
+
+
+# Melt to long format
+meth_df <- meth_matrix %>%
+  as.data.frame() %>%
+  rownames_to_column("CpG") %>%
+  pivot_longer(-CpG, names_to = "library_id", values_to = "methylation")
+
+head(meth_df)
+
+# Add group info
+meth_df <- left_join(meth_df, sample_metadata, by = "library_id")  # sample_metadata must have `library_id` and `group`
+
+# Violin plot
+ggplot(meth_df, aes(x = group, y = methylation, fill = group)) +
+  geom_violin(scale = "width", trim = TRUE) +
+  facet_wrap(~library_id, nrow = 1) +
+  theme_minimal() +
+  labs(title = "Global Methylation per Library", y = "% Methylation", x = "Group")
 
 #+end_src
 

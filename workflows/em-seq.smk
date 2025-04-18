@@ -126,27 +126,6 @@ rule emseq_fastqc:
         --threads {params.threads} \
         {input} &> {log}
         """
-rule emseq_multiqc:
-    input:
-        expand(f"{qc_dir}/{{library_id}}_{{processing}}_{{read}}_fastqc.zip",
-               library_id = library_ids,
-               processing = ["raw","trimmed"],
-               read = ["R1", "R2"]),
-    log:
-        f"{log_dir}/emseq_multiqc.log",
-    output:
-        f"{qc_dir}/emseq_multiqc/emseq_multiqc.html",
-    params:
-        out_dir = f"{qc_dir}/emseq_multiqc",
-        out_name = "emseq_multiqc",
-    shell:
-        """
-        multiqc \
-        {input} \
-        --force \
-        --outdir {params.out_dir} \
-        --filename {params.out_name}
-        """
 rule make_single_methylkit_obj:
     input:
         bismark = f"{data_dir}/analysis/emseq/pileup/{{library_id}}_bismark_cov.bed",

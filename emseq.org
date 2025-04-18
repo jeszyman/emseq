@@ -801,7 +801,7 @@ rule make_single_methylkit_obj:
         out_dir = f"{emseq_dir}/dmr/tabix",
         mincov = emseq_mincov,
         build = emseq_build,
-        treatment = lambda wc: treatment_map[wc.library_id],
+        treatment = 1,
     shell:
         """
         Rscript {params.Rscript} \

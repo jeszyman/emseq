@@ -1,4 +1,7 @@
 * Enzymatic Methylation Sequencing Bioinformatics Processes
+:LOGBOOK:
+- Note taken on [2025-04-30 Wed 13:41]
+:END:
 :PROPERTIES:
 :ID:       cd9489fd-c6e7-4c64-8317-e3d9a283b36c
 :header-args: :tangle-mode (identity #o555)
@@ -72,7 +75,7 @@ Directory Structure
 *** Methylation sequence processing
 :PROPERTIES:
 :ID:       c3bdbbcc-5a4c-475a-8ab1-33884ab14ef5
-:header-args:snakemake: :tangle ./workflows/em-seq.smk
+:header-args:snakemake: :tangle ./workflows/em-seq.smk :tangle-mode (identity #o555)
 :END:
 
 - Consider reference w/ decoys https://chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369
@@ -812,7 +815,7 @@ rule emseq_mosdepth:
     shell:
         """
         {params.script} \
-        {input.bam}" \
+        {input.bam} \
         {params.out_dir} \
         {wildcards.library_id} \
         "{params.quant_levels}" \
@@ -820,7 +823,7 @@ rule emseq_mosdepth:
         """
 #+end_src
 
-#+begin_src bash :tangle ./scripts/emseq_mosdepth.sh
+#+begin_src bash :tangle ./scripts/emseq_mosdepth.sh :tangle-mode (identity #o555)
 #!/usr/bin/env bash
 set -euo pipefail
 

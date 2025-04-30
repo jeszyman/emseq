@@ -148,7 +148,7 @@ rule emseq_mosdepth:
     shell:
         """
         {params.script} \
-        {input.bam}" \
+        {input.bam} \
         {params.out_dir} \
         {wildcards.library_id} \
         "{params.quant_levels}" \

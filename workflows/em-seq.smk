@@ -126,6 +126,34 @@ rule emseq_fastqc:
         --threads {params.threads} \
         {input} &> {log}
         """
+rule emseq_mosdepth:
+    input:
+        bam = f"{emseq_bam_dir}/{{library_id}}_deduped.bam",
+        index = f"{emseq_bam_dir}/{{library_id}}_deduped.bam.bai",
+    output:
+        summary = f"{qc_dir}/mosdepth_{{library_id}}.mosdepth.summary.txt",
+        global_dist = f"{qc_dir}/mosdepth_{{library_id}}.mosdepth.global.dist.txt",
+        region_dist = f"{qc_dir}/mosdepth_{{library_id}}.mosdepth.region.dist.txt",
+        regions = f"{qc_dir}/mosdepth_{{library_id}}.regions.bed.gz",
+        regions_idx = f"{qc_dir}/mosdepth_{{library_id}}.regions.bed.gz.csi",
+        quantized = f"{qc_dir}/mosdepth_{{library_id}}.quantized.bed.gz",
+        quantized_idx = f"{qc_dir}/mosdepth_{{library_id}}.quantized.bed.gz.csi",
+        thresholds = f"{qc_dir}/mosdepth_{{library_id}}.thresholds.bed.gz",
+        thresholds_idx = f"{qc_dir}/mosdepth_{{library_id}}.thresholds.bed.gz.csi",
+    params:
+        script = f"{emseq_script_dir}/emseq_mosdepth.sh",
+        quant_levels = mosdepth_quant_levels,
+        out_dir = qc_dir,
+    threads: 8
+    shell:
+        """
+        "{params.script}" \
+        "{input.bam}" \
+        "{params.out_dir}" \
+        "{wildcards.library_id}" \
+        "{params.quant_levels}" \
+        {threads}
+        """
 rule make_single_methylkit_obj:
     input:
         bismark = f"{data_dir}/analysis/emseq/pileup/{{library_id}}_bismark_cov.bed",

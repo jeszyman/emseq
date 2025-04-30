@@ -147,11 +147,11 @@ rule emseq_mosdepth:
     threads: 8
     shell:
         """
-        "{params.script}" \
-        "{input.bam}" \
-        "{params.out_dir}" \
-        "{wildcards.library_id}" \
-        "{params.quant_levels}" \
+        {params.script} \
+        {input.bam}" \
+        {params.out_dir} \
+        {wildcards.library_id} \
+        "{params.quant_levels} \
         {threads}
         """
 rule make_single_methylkit_obj:

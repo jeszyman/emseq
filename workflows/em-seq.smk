@@ -151,7 +151,7 @@ rule emseq_mosdepth:
         {input.bam}" \
         {params.out_dir} \
         {wildcards.library_id} \
-        "{params.quant_levels} \
+        "{params.quant_levels}" \
         {threads}
         """
 rule make_single_methylkit_obj:

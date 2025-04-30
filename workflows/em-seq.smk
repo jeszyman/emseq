@@ -147,7 +147,7 @@ rule emseq_mosdepth:
     threads: 8
     shell:
         """
-        bash {params.script} \
+        {params.script} \
         {input.bam}" \
         {params.out_dir} \
         {wildcards.library_id} \

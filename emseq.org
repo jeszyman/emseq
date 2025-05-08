@@ -1404,9 +1404,10 @@ plot_data[, threshold := factor(threshold, levels = threshold_levels)]
 # -------------------------------
 # Plot panels
 # -------------------------------
+print(medians)
 
 make_panel <- function(sample_id) {
-  median_val <- medians[sample == sample_id, median]
+  median_val <- medians[sample == sample_id][["median"]]
   subtitle <- sprintf("Median depth: %.1f×", median_val)
 
   ggplot(plot_data[sample == sample_id], aes(x = threshold, y = count, fill = threshold)) +

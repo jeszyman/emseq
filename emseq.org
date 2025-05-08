@@ -6,6 +6,7 @@
 :ID:       cd9489fd-c6e7-4c64-8317-e3d9a283b36c
 :header-args: :tangle-mode (identity #o555)
 :END:
+
 #+begin_src bash
 ssh jeff-ubuntu8
 
@@ -101,14 +102,12 @@ Directory Structure
 
 **** Prerequisites
 **** Change Log
-** Processes
+** Workflows
 *** Methylation sequence processing
 :PROPERTIES:
 :ID:       c3bdbbcc-5a4c-475a-8ab1-33884ab14ef5
 :header-args:snakemake: :tangle ./workflows/em-seq.smk :tangle-mode (identity #o555)
 :END:
-
-- Consider reference w/ decoys https://chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369
 **** EM-seq adapter trimming
 - Script
   #+begin_src bash :tangle ./scripts/fastp-emseq-wrapper.sh
@@ -262,7 +261,62 @@ rule emseq_fastp:
         """
 #+end_src
 
+**** Biscuit index
+#+begin_src bash
+source ~/repos/breast/config/bash-env.sh
+Y
+
+
+if [ -e "$data_dir/inputs/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz" ]; then
+    echo "File exists, skipping download."
+else
+    aria2c -c -x 10 -s 10 -m 5 -d $data_dir/inputs/ \
+	   -o Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz \
+	   https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+
+fi
+
+
+if [ -e "$data_dir/inputs/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz" ]; then
+    echo "File exists, skipping download."
+else
+    aria2c -c -x 10 -s 10 -m 5 -d $data_dir/inputs/ \
+	   -o GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz \
+	   https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
+fi
+
+#+end_src
+
+
+#+begin_src bash
+source ~/repos/breast/config/bash-env.sh
+
+# Ensembl primary assembly
+ensembl_dir="$data_dir/ref/biscuit-ensembl-hg38"
+ensembl_input="$data_dir/inputs/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz"
+ensembl_fa="$ensembl_dir/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+
+mkdir -p "$ensembl_dir"
+gunzip -c "$ensembl_input" > "$ensembl_fa"
+samtools faidx "$ensembl_fa"
+nohup biscuit index "$ensembl_fa" & disown
+
+# NCBI decoy set
+ncbi_dir="$data_dir/ref/biscuit-ncbi-decoy-hg38"
+ncbi_input="$data_dir/inputs/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz"
+ncbi_fa="$ncbi_dir/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna"
+
+mkdir -p "$ncbi_dir"
+gunzip -c "$ncbi_input" > "$ncbi_fa"
+samtools faidx "$ncbi_fa"
+#
+
+nohup biscuit index "$ncbi_fa" & disown
+#+end_src
+
+
 **** EM-seq Biscuit WGMS alignment
+- Consider reference w/ decoys https://chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369
 - [ ] check pradeeps alignment command chaudhuri-lab-bucket1/ris/work/pradeep_project/Fastq_data/Prostate_Urine_Plasma/bam/bam_allbams/PB056_C1
 - https://chatgpt.com/c/67ddfbd9-7c18-8005-bd73-89e31712eb29
 - base command test
@@ -769,186 +823,6 @@ rule emseq_post_pileup:
         && biscuit vcf2bed -c {input.vcf} > {output.bismark}
         """
 #+end_src
-**** QC
-***** FastQC
-- Snakemake, inline
-  #+begin_src snakemake
-rule emseq_fastqc:
-    input:
-        f"{emseq_fastq_dir}/{{library_id}}_{{processing}}_{{read}}.fastq.gz",
-    log:
-        f"{log_dir}/{{library_id}}_{{processing}}_{{read}}_fastqc.log",
-    output:
-        f"{qc_dir}/{{library_id}}_{{processing}}_{{read}}_fastqc.html",
-        f"{qc_dir}/{{library_id}}_{{processing}}_{{read}}_fastqc.zip",
-    params:
-        outdir = qc_dir,
-        threads = threads,
-    shell:
-        """
-        fastqc \
-        --outdir {params.outdir} \
-        --quiet \
-        --svg \
-        --threads {params.threads} \
-        {input} &> {log}
-        """
-#+end_src
-***** MultiQC
-- Snakemake, inline
-  #+begin_src snakemake :tangle no
-rule emseq_multiqc:
-    input:
-        expand(f"{qc_dir}/{{library_id}}_{{processing}}_{{read}}_fastqc.zip",
-               library_id = library_ids,
-               processing = ["raw","trimmed"],
-               read = ["R1", "R2"]),
-    log:
-        f"{log_dir}/emseq_multiqc.log",
-    output:
-        f"{qc_dir}/emseq_multiqc/emseq_multiqc.html",
-    params:
-        out_dir = f"{qc_dir}/emseq_multiqc",
-        out_name = "emseq_multiqc",
-    shell:
-        """
-        multiqc \
-        {input} \
-        --force \
-        --outdir {params.out_dir} \
-        --filename {params.out_name}
-        """
-
-
-#+end_src
-***** Depth
-#+begin_src snakemake
-# Will follow symlinks
-rule emseq_index_bam_check:
-    input:
-        bam = ancient(f"{emseq_bam_dir}/{{library_id}}_deduped.bam"),
-    output:
-        bai = f"{emseq_bam_dir}/{{library_id}}_deduped.bam.bai",
-    shell:
-        """
-        samtools index -@ 8 {input.bam} {output.bai}
-        """
-
-rule emseq_mosdepth:
-    input:
-        bam = f"{emseq_bam_dir}/{{library_id}}_deduped.bam",
-        index = f"{emseq_bam_dir}/{{library_id}}_deduped.bam.bai",
-    output:
-        summary = f"{qc_dir}/mosdepth_{{library_id}}.mosdepth.summary.txt",
-        global_dist = f"{qc_dir}/mosdepth_{{library_id}}.mosdepth.global.dist.txt",
-        region_dist = f"{qc_dir}/mosdepth_{{library_id}}.mosdepth.region.dist.txt",
-        regions = f"{qc_dir}/mosdepth_{{library_id}}.regions.bed.gz",
-        regions_idx = f"{qc_dir}/mosdepth_{{library_id}}.regions.bed.gz.csi",
-        quantized = f"{qc_dir}/mosdepth_{{library_id}}.quantized.bed.gz",
-        quantized_idx = f"{qc_dir}/mosdepth_{{library_id}}.quantized.bed.gz.csi",
-        thresholds = f"{qc_dir}/mosdepth_{{library_id}}.thresholds.bed.gz",
-        thresholds_idx = f"{qc_dir}/mosdepth_{{library_id}}.thresholds.bed.gz.csi",
-    params:
-        script = f"{emseq_script_dir}/emseq_mosdepth.sh",
-        quant_levels = mosdepth_quant_levels,
-        out_dir = qc_dir,
-    threads: 8
-    shell:
-        """
-        {params.script} \
-        {input.bam} \
-        {params.out_dir} \
-        {wildcards.library_id} \
-        "{params.quant_levels}" \
-        {threads}
-        """
-#+end_src
-
-#+begin_src bash :tangle ./scripts/emseq_mosdepth.sh :tangle-mode (identity #o555)
-#!/usr/bin/env bash
-set -euo pipefail
-
-# -----------------------------------------------------------------------------
-# mosdepth-wrapper.sh
-#
-# This script wraps the `mosdepth` tool to compute read depth over a BAM file,
-# optimized for EM-seq cfDNA data. It configures the run to:
-#   - use median depth (`--use-median`)
-#   - run in fast mode (no per-base depth)
-#   - report thresholds and quantized bins
-#   - generate output in 1000bp windows
-#
-# Output files are written using a prefix of "mosdepth_<OUT_PREFIX>" in <OUT_DIR>.
-# Designed for use in explicit I/O workflows like Snakemake or manual batch calls.
-# -----------------------------------------------------------------------------
-
-print_usage() {
-    cat <<EOF
-USAGE: mosdepth-wrapper.sh <BAM> <OUT_DIR> <OUT_PREFIX> <QUANT_LEVELS> [THREADS]
-
-DESCRIPTION:
-  Run mosdepth on a BAM file with EM-seq-appropriate settings.
-  QUANT_LEVELS is a comma-separated string of coverage cutoffs (e.g. 1,5,10,20).
-  The OUT_PREFIX will be prepended with 'mosdepth_' before being passed to mosdepth.
-  Output files (e.g. mosdepth_<OUT_PREFIX>.summary.txt) will be written to OUT_DIR.
-  THREADS is optional (default: 8).
-EOF
-}
-
-main() {
-    parse_args "$@"
-    run_mosdepth
-}
-
-parse_args() {
-    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-        print_usage
-        exit 0
-    fi
-
-    if [[ $# -lt 4 ]]; then
-        echo "Error: Missing required arguments." >&2
-        print_usage
-        exit 1
-    fi
-
-    declare -g bam_file="$1"                         # Input BAM file
-    declare -g out_dir="$2"                          # Output directory
-    declare -g user_prefix="$3"                      # Base prefix from user
-    declare -g quant_levels="$4"                     # Coverage thresholds (e.g. 1,5,10)
-    declare -g threads="${5:-8}"                     # Optional threads param (default: 8)
-
-    [[ -f "$bam_file" ]] || { echo "Error: BAM file not found: $bam_file" >&2; exit 1; }
-
-    mkdir -p "$out_dir"
-
-    declare -g out_prefix="mosdepth_${user_prefix}"  # Final output prefix
-    declare -g out_path="${out_dir%/}/${out_prefix}" # Full path to output base
-    declare -g quant_str="0:${quant_levels//,/:}"    # Convert to colon-delimited format
-}
-
-run_mosdepth() {
-    echo "[INFO] PID $$ running mosdepth on $bam_file" >&2
-    echo "[INFO] Output prefix: $out_path" >&2
-    echo "[INFO] Quantize string: $quant_str" >&2
-    echo "[INFO] Threads: $threads" >&2
-
-    mosdepth \
-        --threads "$threads" \
-        --no-per-base \
-        --fast-mode \
-        --use-median \
-        --quantize "$quant_str" \
-        --by 1000 \
-        --thresholds "$quant_levels" \
-        "$out_path" "$bam_file"
-
-    echo "[INFO] mosdepth complete for PID $$" >&2
-}
-
-main "$@"
-#+end_src
-
 **** Differential methylation
 
 #+begin_src snakemake
@@ -1086,6 +960,350 @@ diff <- calculateDiffMeth(meth,
                           dbdir = args$out_dir)
 #+end_src
 
+**** QC
+***** FastQC
+- Snakemake, inline
+  #+begin_src snakemake
+rule emseq_fastqc:
+    input:
+        f"{emseq_fastq_dir}/{{library_id}}_{{processing}}_{{read}}.fastq.gz",
+    log:
+        f"{log_dir}/{{library_id}}_{{processing}}_{{read}}_fastqc.log",
+    output:
+        f"{qc_dir}/{{library_id}}_{{processing}}_{{read}}_fastqc.html",
+        f"{qc_dir}/{{library_id}}_{{processing}}_{{read}}_fastqc.zip",
+    params:
+        outdir = qc_dir,
+        threads = threads,
+    shell:
+        """
+        fastqc \
+        --outdir {params.outdir} \
+        --quiet \
+        --svg \
+        --threads {params.threads} \
+        {input} &> {log}
+        """
+#+end_src
+***** Depth
+- Mosdepth on specific bams
+  #+begin_src snakemake
+# Will follow symlinks
+rule emseq_index_bam_check:
+    input:
+        bam = ancient(f"{emseq_bam_dir}/{{library_id}}_deduped.bam"),
+    output:
+        bai = f"{emseq_bam_dir}/{{library_id}}_deduped.bam.bai",
+    shell:
+        """
+        samtools index -@ 8 {input.bam} {output.bai}
+        """
+
+rule emseq_mosdepth:
+    input:
+        bam = f"{emseq_bam_dir}/{{library_id}}_deduped.bam",
+        index = f"{emseq_bam_dir}/{{library_id}}_deduped.bam.bai",
+    output:
+        summary = f"{qc_dir}/mosdepth_{{library_id}}.mosdepth.summary.txt",
+        global_dist = f"{qc_dir}/mosdepth_{{library_id}}.mosdepth.global.dist.txt",
+        region_dist = f"{qc_dir}/mosdepth_{{library_id}}.mosdepth.region.dist.txt",
+        regions = f"{qc_dir}/mosdepth_{{library_id}}.regions.bed.gz",
+        regions_idx = f"{qc_dir}/mosdepth_{{library_id}}.regions.bed.gz.csi",
+        quantized = f"{qc_dir}/mosdepth_{{library_id}}.quantized.bed.gz",
+        quantized_idx = f"{qc_dir}/mosdepth_{{library_id}}.quantized.bed.gz.csi",
+        thresholds = f"{qc_dir}/mosdepth_{{library_id}}.thresholds.bed.gz",
+        thresholds_idx = f"{qc_dir}/mosdepth_{{library_id}}.thresholds.bed.gz.csi",
+    params:
+        script = f"{emseq_script_dir}/emseq_mosdepth.sh",
+        quant_levels = mosdepth_quant_levels,
+        out_dir = qc_dir,
+    threads: 8
+    shell:
+        """
+        {params.script} \
+        {input.bam} \
+        {params.out_dir} \
+        {wildcards.library_id} \
+        "{params.quant_levels}" \
+        {threads}
+        """
+#+end_src
+  #+begin_src bash :tangle ./scripts/emseq_mosdepth.sh :tangle-mode (identity #o555)
+#!/usr/bin/env bash
+set -euo pipefail
+
+# -----------------------------------------------------------------------------
+# mosdepth-wrapper.sh
+#
+# This script wraps the `mosdepth` tool to compute read depth over a BAM file,
+# optimized for EM-seq cfDNA data. It configures the run to:
+#   - use median depth (`--use-median`)
+#   - run in fast mode (no per-base depth)
+#   - report thresholds and quantized bins
+#   - generate output in 1000bp windows
+#
+# Output files are written using a prefix of "mosdepth_<OUT_PREFIX>" in <OUT_DIR>.
+# Designed for use in explicit I/O workflows like Snakemake or manual batch calls.
+# -----------------------------------------------------------------------------
+
+print_usage() {
+    cat <<EOF
+USAGE: mosdepth-wrapper.sh <BAM> <OUT_DIR> <OUT_PREFIX> <QUANT_LEVELS> [THREADS]
+
+DESCRIPTION:
+  Run mosdepth on a BAM file with EM-seq-appropriate settings.
+  QUANT_LEVELS is a comma-separated string of coverage cutoffs (e.g. 1,5,10,20).
+  The OUT_PREFIX will be prepended with 'mosdepth_' before being passed to mosdepth.
+  Output files (e.g. mosdepth_<OUT_PREFIX>.summary.txt) will be written to OUT_DIR.
+  THREADS is optional (default: 8).
+EOF
+}
+
+main() {
+    parse_args "$@"
+    run_mosdepth
+}
+
+parse_args() {
+    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+        print_usage
+        exit 0
+    fi
+
+    if [[ $# -lt 4 ]]; then
+        echo "Error: Missing required arguments." >&2
+        print_usage
+        exit 1
+    fi
+
+    declare -g bam_file="$1"                         # Input BAM file
+    declare -g out_dir="$2"                          # Output directory
+    declare -g user_prefix="$3"                      # Base prefix from user
+    declare -g quant_levels="$4"                     # Coverage thresholds (e.g. 1,5,10)
+    declare -g threads="${5:-8}"                     # Optional threads param (default: 8)
+
+    [[ -f "$bam_file" ]] || { echo "Error: BAM file not found: $bam_file" >&2; exit 1; }
+
+    mkdir -p "$out_dir"
+
+    declare -g out_prefix="mosdepth_${user_prefix}"  # Final output prefix
+    declare -g out_path="${out_dir%/}/${out_prefix}" # Full path to output base
+    declare -g quant_str="0:${quant_levels//,/:}"    # Convert to colon-delimited format
+}
+
+run_mosdepth() {
+    echo "[INFO] PID $$ running mosdepth on $bam_file" >&2
+    echo "[INFO] Output prefix: $out_path" >&2
+    echo "[INFO] Quantize string: $quant_str" >&2
+    echo "[INFO] Threads: $threads" >&2
+
+    mosdepth \
+        --threads "$threads" \
+        --no-per-base \
+        --fast-mode \
+        --use-median \
+        --quantize "$quant_str" \
+        --by 1000 \
+        --thresholds "$quant_levels" \
+        "$out_path" "$bam_file"
+
+    echo "[INFO] mosdepth complete for PID $$" >&2
+}
+
+main "$@"
+#+end_src
+- Mosdepth aggregator
+  #+begin_src snakemake
+rule emseq_mosdepth_agg_plot:
+    input:
+        thresholds = expand(f"{qc_dir}/mosdepth_{{library_id}}.thresholds.bed.gz", library_id=library_ids)
+    output:
+        pdf = f"{qc_dir}/mosdepth_agg_plot.pdf"
+    params:
+        script = f"{emseq_script_dir}/emseq_mosdepth_agg_plot.R",
+        library_list = " ".join(library_ids)
+    shell:
+        """
+        Rscript {params.script} \
+        --threshold_list "{' '.join(input.thresholds)}" \
+        --library_list "{params.library_list}" \
+        --output_pdf {output.pdf}
+        """
+#+end_src
+  #+begin_src R :tangle ./scripts/emseq_mosdepth_agg_plot.R
+#!/usr/bin/env Rscript
+
+# ==============================================================================
+# Description:
+#   Parses multiple mosdepth threshold files (*.thresholds.bed.gz) and generates
+#   a single paginated PDF plot (4×6 panels per page) showing counts of bases
+#   covered at actual observed thresholds (e.g., 1X, 2X, 5X...) per sample.
+#
+#   Infers 0X bins by identifying regions where all threshold counts are zero.
+#
+# Inputs:
+#   --threshold_list   Space-separated list of mosdepth threshold files
+#   --library_list     Space-separated list of sample names (must match order)
+#   --output_pdf       Full path to output PDF file (single file, multi-page)
+# ==============================================================================
+
+suppressPackageStartupMessages({
+  suppressWarnings(library(argparse))
+  suppressWarnings(library(data.table))
+  suppressWarnings(library(ggplot2))
+  suppressWarnings(library(Cairo))
+  suppressWarnings(library(scales))
+  suppressWarnings(library(patchwork))
+})
+
+# -------------------------------
+# Argument parsing
+# -------------------------------
+
+prog <- basename(commandArgs(trailingOnly = FALSE)[1])
+
+parser <- ArgumentParser(
+  description = "Generate a paginated threshold coverage plot from mosdepth output.",
+  prog = prog
+)
+
+parser$add_argument("--threshold_list", required = TRUE,
+                    help = "Space-separated list of mosdepth threshold files (*.thresholds.bed.gz)")
+parser$add_argument("--library_list", required = TRUE,
+                    help = "Space-separated list of sample names (must match file order)")
+parser$add_argument("--output_pdf", required = TRUE,
+                    help = "Full output PDF file path (e.g., /tmp/plot.pdf)")
+
+args <- parser$parse_args()
+threshold_files <- unlist(strsplit(args$threshold_list, " "))
+library_ids <- unlist(strsplit(args$library_list, " "))
+output_pdf <- args$output_pdf
+
+if (length(threshold_files) != length(library_ids)) {
+  stop("Error: threshold_list and library_list must be the same length")
+}
+
+# -------------------------------
+# Function to parse each threshold file
+# -------------------------------
+
+read_thresholds <- function(file, sample) {
+  header <- fread(file, nrows = 0)
+  names(header)[1] <- sub("^#", "", names(header)[1])
+  threshold_cols <- setdiff(names(header), c("chrom", "start", "end", "region"))
+  df <- fread(file, skip = 1, col.names = names(header))
+  df[, sample := sample]
+  melted <- melt(df,
+    id.vars = c("chrom", "start", "end", "region", "sample"),
+    measure.vars = threshold_cols,
+    variable.name = "threshold",
+    value.name = "count"
+  )
+  list(data = melted, thresholds = threshold_cols)
+}
+
+# -------------------------------
+# Read and combine all files
+# -------------------------------
+
+parsed <- mapply(read_thresholds, threshold_files, library_ids, SIMPLIFY = FALSE)
+hist_data <- rbindlist(lapply(parsed, `[[`, "data"))
+all_thresholds <- unique(unlist(lapply(parsed, `[[`, "thresholds")))
+
+# -------------------------------
+# Infer 0X bins from zeroed rows
+# -------------------------------
+
+hist_wide <- dcast(hist_data, chrom + start + end + region + sample ~ threshold,
+                   value.var = "count", fill = 0)
+hist_wide[, is_zero := rowSums(.SD) == 0, .SDcols = all_thresholds]
+zero_counts <- hist_wide[is_zero == TRUE, .(count = .N * (end[1] - start[1])), by = sample]
+zero_counts[, threshold := "0X"]
+
+# -------------------------------
+# Aggregate and bind all data
+# -------------------------------
+
+plot_data <- hist_data[, .(count = sum(count)), by = .(sample, threshold)]
+plot_data <- rbind(plot_data, zero_counts, fill = TRUE)
+
+# Correct threshold order based on numeric prefix
+threshold_levels <- unique(plot_data$threshold)
+threshold_levels <- threshold_levels[order(as.numeric(sub("X$", "", as.character(threshold_levels))))]
+plot_data[, threshold := factor(threshold, levels = threshold_levels)]
+
+# -------------------------------
+# Panel layout and plotting
+# -------------------------------
+
+make_panel <- function(sample_id) {
+  ggplot(plot_data[sample == sample_id], aes(x = threshold, y = count, fill = threshold)) +
+    geom_col(width = 0.8) +
+    scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
+    scale_fill_brewer(palette = "Set2", guide = "none") +
+    labs(title = sample_id, x = "Coverage threshold", y = "Covered bases") +
+    theme_minimal(base_size = 10) +
+    theme(
+      axis.text = element_text(size = 8),
+      axis.title = element_text(size = 9),
+      plot.title = element_text(size = 10, hjust = 0.5),
+      panel.grid = element_line(linewidth = 0.2, colour = "grey90")
+    )
+}
+
+ncol <- 4
+nrow <- 6
+panels_per_page <- ncol * nrow
+sample_list <- unique(plot_data$sample)
+pages <- split(sample_list, ceiling(seq_along(sample_list) / panels_per_page))
+
+# -------------------------------
+# Output: single PDF with multiple pages
+# -------------------------------
+
+CairoPDF(output_pdf, width = 8.5, height = 11, onefile = TRUE)
+for (i in seq_along(pages)) {
+  plots <- lapply(pages[[i]], make_panel)
+  layout <- wrap_plots(plots, ncol = ncol, nrow = nrow) +
+    plot_annotation(
+      title = "Coverage threshold by sample",
+      theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+    )
+  print(layout)
+}
+dev.off()
+
+#+end_src
+
+***** MultiQC
+- Snakemake, inline
+  #+begin_src snakemake
+rule emseq_multiqc:
+    input:
+        fastqc = expand(f"{qc_dir}/{{library_id}}_{{processing}}_{{read}}_fastqc.zip",
+                        library_id = library_ids,
+                        processing = ["raw","trimmed"],
+                        read = ["R1", "R2"]),
+        mosdepth = expand(f"{qc_dir}/mosdepth_{{library_id}}.mosdepth.summary.txt",
+                          library_id = library_ids),
+    log:
+        f"{log_dir}/emseq_multiqc.log",
+    output:
+        f"{qc_dir}/emseq_multiqc/emseq_multiqc.html",
+    params:
+        out_dir = f"{qc_dir}/emseq_multiqc",
+        out_name = "emseq_multiqc",
+    shell:
+        """
+        multiqc \
+        {input.fastqc} {input.mosdepth} \
+        --force \
+        --outdir {params.out_dir} \
+        --filename {params.out_name}
+        """
+
+
+#+end_src
 **** Dev
 :properties:
 :header-args:snakemake: :tangle no
@@ -2415,4 +2633,17 @@ ggplot(meth_df, aes(x = group, y = methylation, fill = group)) +
 #+end_src
 
 
+**** Reference
+- Alignment reference choice
+  - discussion [[https://chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369][gtp]]
+  - see [[id:326ecd60-8cd4-4815-a389-967b2c3fef0a][Nucleic acid sequence alignment]]
+- [cite:@chauhan2024]
+- [[id:5e9e8bfa-ac9e-4103-9cc5-7123337b4e24][biscuit]]
+
+**** Ideas
+- for qc https://www.google.com/search?sca_esv=45e5c8ab8ae118cf&sxsrf=AHTn8zrPW-wtm7PgHxohfizFJXC9p5Qtlw:1742500238525&q=m-bias+plots&udm=2&fbs=ABzOT_CWdhQLP1FcmU5B0fn3xuWpA-dk4wpBWOGsoR7DG5zJBtmuEdhfywyzhendkLDnhcrUz6wxBwARHD96EKWkSbZoQZGasaHPJ9csj0AVVVUDNHqfR7gd1arUfaOpw1v5Icccwayh65rdsqdiyPvxAA9gXK95YqgoHnUzfZ5jo9jiMl2Q8DaMUR4I1U0kl1-ho1NSBjy_chexdcGuJmvrFewYJaqjljog&sa=X&ved=2ahUKEwj90vOdt5mMAxXLGlkFHdQWG7IQtKgLegQIExAB&biw=1745&bih=908&dpr=1.1
+- https://sequencing.qcfail.com/articles/mispriming-in-pbat-libraries-causes-methylation-bias-and-poor-mapping-efficiencies/
+- consider https://www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/methylKit.html#6_Frequently_Asked_Questions
+** Reference
+EM-seq protects 5mC and 5hmC from damination with TET2 enzymatic oxidation. Unprotected cytosines are deaminated to uracils.
 ** Ideas

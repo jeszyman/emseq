@@ -71,7 +71,7 @@ all_thresholds <- unique(unlist(lapply(parsed, `[[`, "thresholds")))
 
 get_autosomal_median <- function(file, sample_id) {
   df <- fread(file, col.names = c("chrom", "start", "end", "depth"))
-  df <- df[grepl("^chr?[1-9]$|^chr?1[0-9]$|^chr?2[0-2]$", chrom)]
+  df <- df[chrom %in% as.character(1:22)]
   df[, sample := sample_id]
   df[, median := median(depth)]
   df[1, .(sample, median)]

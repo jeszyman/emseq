@@ -126,6 +126,17 @@ rule emseq_fastqc:
         --threads {params.threads} \
         {input} &> {log}
         """
+# Will follow symlinks
+rule emseq_index_bam_check:
+    input:
+        bam = ancient(f"{emseq_bam_dir}/{{library_id}}_deduped.bam"),
+    output:
+        bai = f"{emseq_bam_dir}/{{library_id}}_deduped.bam.bai",
+    shell:
+        """
+        samtools index -@ 8 {input.bam} {output.bai}
+        """
+
 rule emseq_mosdepth:
     input:
         bam = f"{emseq_bam_dir}/{{library_id}}_deduped.bam",

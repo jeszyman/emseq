@@ -6,6 +6,36 @@
 :ID:       cd9489fd-c6e7-4c64-8317-e3d9a283b36c
 :header-args: :tangle-mode (identity #o555)
 :END:
+#+begin_src bash
+ssh jeff-ubuntu8
+
+source ~/repos/breast/config/bash-env.sh
+
+./scripts/emseq_mosdepth.sh
+
+./scripts/emseq_mosdepth.sh \
+    /mnt/data/projects/breast/analysis/emseq/bams-unmerged/NH_13_L1.bam \
+    /tmp \
+    NH_13_L1 \
+    "1,2,5,10,20" \
+    8
+
+
+./scripts/emseq_mosdepth.sh \
+    /mnt/data/projects/breast/analysis/emseq/bams-unmerged/NH_13_L2.bam \
+    /tmp \
+    NH_13_L2 \
+    "1,2,5,10,20" \
+    8
+
+
+Rscript ./scripts/emseq_mosdepth_agg_plot.R \
+	--threshold_list "/tmp/mosdepth_NH_13_L1.thresholds.bed.gz /tmp/mosdepth_NH_13_L2.thresholds.bed.gz" \
+	--library_list "NH_13_L1 NH_13_L2" \
+	--output_pdf "/tmp/test.pdf"
+
+#+end_src
+
 ** Repository administration
 *** Configuration
 #+begin_src yaml :tangle ./config/emseq.yaml
@@ -793,6 +823,17 @@ rule emseq_multiqc:
 #+end_src
 ***** Depth
 #+begin_src snakemake
+# Will follow symlinks
+rule emseq_index_bam_check:
+    input:
+        bam = ancient(f"{emseq_bam_dir}/{{library_id}}_deduped.bam"),
+    output:
+        bai = f"{emseq_bam_dir}/{{library_id}}_deduped.bam.bai",
+    shell:
+        """
+        samtools index -@ 8 {input.bam} {output.bai}
+        """
+
 rule emseq_mosdepth:
     input:
         bam = f"{emseq_bam_dir}/{{library_id}}_deduped.bam",

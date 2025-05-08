@@ -224,7 +224,7 @@ rule emseq_mosdepth_agg_plot:
         pdf = f"{qc_dir}/mosdepth_agg_plot.pdf"
     params:
         script = f"{emseq_script_dir}/emseq_mosdepth_agg_plot.R",
-        library_list = " ".join(library_ids)
+        library_list = " ".join(emseq_library_ids)
     shell:
         """
         Rscript {params.script} \

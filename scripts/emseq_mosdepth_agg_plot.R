@@ -1,19 +1,5 @@
 #!/usr/bin/env Rscript
 
-# ==============================================================================
-# Description:
-#   Parses multiple mosdepth threshold files (*.thresholds.bed.gz) and generates
-#   a single paginated PDF plot (4×6 panels per page) showing counts of bases
-#   covered at actual observed thresholds (e.g., 1X, 2X, 5X...) per sample.
-#
-#   Infers 0X bins by identifying regions where all threshold counts are zero.
-#
-# Inputs:
-#   --threshold_list   Space-separated list of mosdepth threshold files
-#   --library_list     Space-separated list of sample names (must match order)
-#   --output_pdf       Full path to output PDF file (single file, multi-page)
-# ==============================================================================
-
 suppressPackageStartupMessages({
   suppressWarnings(library(argparse))
   suppressWarnings(library(data.table))
@@ -21,11 +7,8 @@ suppressPackageStartupMessages({
   suppressWarnings(library(Cairo))
   suppressWarnings(library(scales))
   suppressWarnings(library(patchwork))
+  suppressWarnings(library(matrixStats))
 })
-
-
-suppressWarnings(library(matrixStats))  # at top
-
 
 # -------------------------------
 # Argument parsing
@@ -40,6 +23,8 @@ parser <- ArgumentParser(
 
 parser$add_argument("--threshold_list", required = TRUE,
                     help = "Space-separated list of mosdepth threshold files (*.thresholds.bed.gz)")
+parser$add_argument("--regions_list", required = TRUE,
+                    help = "Space-separated list of mosdepth regions files (*.regions.bed.gz)")
 parser$add_argument("--library_list", required = TRUE,
                     help = "Space-separated list of sample names (must match file order)")
 parser$add_argument("--output_pdf", required = TRUE,
@@ -47,15 +32,16 @@ parser$add_argument("--output_pdf", required = TRUE,
 
 args <- parser$parse_args()
 threshold_files <- unlist(strsplit(args$threshold_list, " "))
+regions_files <- unlist(strsplit(args$regions_list, " "))
 library_ids <- unlist(strsplit(args$library_list, " "))
 output_pdf <- args$output_pdf
 
-if (length(threshold_files) != length(library_ids)) {
-  stop("Error: threshold_list and library_list must be the same length")
+if (!all(lengths(list(threshold_files, regions_files, library_ids)) == length(library_ids))) {
+  stop("Error: threshold_list, regions_list, and library_list must all be the same length.")
 }
 
 # -------------------------------
-# Function to parse each threshold file
+# Read and melt threshold files
 # -------------------------------
 
 read_thresholds <- function(file, sample) {
@@ -73,13 +59,23 @@ read_thresholds <- function(file, sample) {
   list(data = melted, thresholds = threshold_cols)
 }
 
-# -------------------------------
-# Read and combine all files
-# -------------------------------
-
 parsed <- mapply(read_thresholds, threshold_files, library_ids, SIMPLIFY = FALSE)
 hist_data <- rbindlist(lapply(parsed, `[[`, "data"))
 all_thresholds <- unique(unlist(lapply(parsed, `[[`, "thresholds")))
+
+# -------------------------------
+# Read autosomal median from regions.bed.gz
+# -------------------------------
+
+get_autosomal_median <- function(file, sample) {
+  df <- fread(file, col.names = c("chrom", "start", "end", "depth"))
+  df <- df[grepl("^chr?[1-9]$|^chr?1[0-9]$|^chr?2[0-2]$", chrom)]
+  df[, sample := sample]
+  df[, median := median(depth)]
+  df[1, .(sample, median)]
+}
+
+medians <- rbindlist(mapply(get_autosomal_median, regions_files, library_ids, SIMPLIFY = FALSE))
 
 # -------------------------------
 # Infer 0X bins from zeroed rows
@@ -93,29 +89,18 @@ zero_counts <- zero_counts[total == 0, .(count = .N * (end[1] - start[1])), by =
 zero_counts[, threshold := "0X"]
 
 # -------------------------------
-# Compute median depth per sample
-# -------------------------------
-
-hist_data[, threshold_numeric := as.numeric(sub("X$", "", threshold))]
-medians <- hist_data[!is.na(threshold_numeric),
-  .(median = weightedMedian(threshold_numeric, w = count)),
-  by = sample]
-
-
-# -------------------------------
 # Aggregate and bind all data
 # -------------------------------
 
 plot_data <- hist_data[, .(count = sum(count)), by = .(sample, threshold)]
 plot_data <- rbind(plot_data, zero_counts, fill = TRUE)
 
-# Correct threshold order based on numeric prefix
 threshold_levels <- unique(plot_data$threshold)
 threshold_levels <- threshold_levels[order(as.numeric(sub("X$", "", as.character(threshold_levels))))]
 plot_data[, threshold := factor(threshold, levels = threshold_levels)]
 
 # -------------------------------
-# Panel layout and plotting
+# Plot panels
 # -------------------------------
 
 make_panel <- function(sample_id) {
@@ -144,7 +129,7 @@ sample_list <- unique(plot_data$sample)
 pages <- split(sample_list, ceiling(seq_along(sample_list) / panels_per_page))
 
 # -------------------------------
-# Output: single PDF with multiple pages
+# Output
 # -------------------------------
 
 CairoPDF(output_pdf, width = 8.5, height = 11, onefile = TRUE)

@@ -1119,12 +1119,12 @@ rule emseq_mosdepth_agg_plot:
         thresholds = expand(f"{qc_dir}/mosdepth_{{library_id}}.thresholds.bed.gz", library_id=emseq_library_ids),
         regions = expand(f"{qc_dir}/mosdepth_{{library_id}}.regions.bed.gz", library_id=emseq_library_ids),
     output:
-        pdf = f"{qc_dir}/mosdepth_agg_plot.pdf"
+        pdf = f"{qc_dir}/mosdepth_agg_plot.pdf",
     params:
         script = f"{emseq_script_dir}/emseq_mosdepth_agg_plot.R",
         library_list = " ".join(emseq_library_ids),
-        threshold_list = lambda wildcards, input: " ".join(input.thresholds)
-        regions_list = lambda wildcards, input: " ".join(input.regions)
+        threshold_list = lambda wildcards, input: " ".join(input.thresholds),
+        regions_list = lambda wildcards, input: " ".join(input.regions),
     shell:
         """
         Rscript {params.script} \

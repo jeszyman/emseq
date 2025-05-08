@@ -88,32 +88,47 @@ zero_counts <- hist_wide[is_zero == TRUE, .(count = .N * (end[1] - start[1])), b
 zero_counts[, threshold := "0X"]
 
 # -------------------------------
-# Aggregate and bind all data
+# Compute median depth per sample
 # -------------------------------
 
-plot_data <- hist_data[, .(count = sum(count)), by = .(sample, threshold)]
-plot_data <- rbind(plot_data, zero_counts, fill = TRUE)
+hist_data[, threshold_numeric := as.numeric(sub("X$", "", threshold))]
+medians <- hist_data[!is.na(threshold_numeric), .(
+  median = median(rep(threshold_numeric, count))
+), by = sample]
+
 
 # Correct threshold order based on numeric prefix
 threshold_levels <- unique(plot_data$threshold)
 threshold_levels <- threshold_levels[order(as.numeric(sub("X$", "", as.character(threshold_levels))))]
 plot_data[, threshold := factor(threshold, levels = threshold_levels)]
 
+
+# -------------------------------
+# Aggregate and bind all data
+# -------------------------------
+
+plot_data <- hist_data[, .(count = sum(count)), by = .(sample, threshold)]
+plot_data <- rbind(plot_data, zero_counts, fill = TRUE)
+
 # -------------------------------
 # Panel layout and plotting
 # -------------------------------
 
 make_panel <- function(sample_id) {
+  median_val <- medians[sample == sample_id, median]
+  subtitle <- sprintf("Median depth: %.1f×", median_val)
+
   ggplot(plot_data[sample == sample_id], aes(x = threshold, y = count, fill = threshold)) +
     geom_col(width = 0.8) +
     scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
     scale_fill_brewer(palette = "Set2", guide = "none") +
-    labs(title = sample_id, x = "Coverage threshold", y = "Covered bases") +
+    labs(title = sample_id, subtitle = subtitle, x = "Coverage threshold", y = "Covered bases") +
     theme_minimal(base_size = 10) +
     theme(
       axis.text = element_text(size = 8),
       axis.title = element_text(size = 9),
       plot.title = element_text(size = 10, hjust = 0.5),
+      plot.subtitle = element_text(size = 9, hjust = 0.5),
       panel.grid = element_line(linewidth = 0.2, colour = "grey90")
     )
 }

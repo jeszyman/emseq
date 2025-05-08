@@ -235,7 +235,7 @@ rule emseq_mosdepth_agg_plot:
 rule emseq_multiqc:
     input:
         fastqc = expand(f"{qc_dir}/{{library_id}}_{{processing}}_{{read}}_fastqc.zip",
-                        library_id = library_ids,
+                        library_id = emseq_library_ids,
                         processing = ["raw","trimmed"],
                         read = ["R1", "R2"]),
         mosdepth = expand(f"{qc_dir}/mosdepth_{{library_id}}.mosdepth.summary.txt",

@@ -224,11 +224,12 @@ rule emseq_mosdepth_agg_plot:
         pdf = f"{qc_dir}/mosdepth_agg_plot.pdf"
     params:
         script = f"{emseq_script_dir}/emseq_mosdepth_agg_plot.R",
-        library_list = " ".join(emseq_library_ids)
+        library_list = " ".join(emseq_library_ids),
+        threshold_list = lambda wildcards, input: " ".join(input.thresholds)
     shell:
         """
         Rscript {params.script} \
-        --threshold_list "{' '.join(input.thresholds)}" \
+        --threshold_list "{params.threshold_list}" \
         --library_list "{params.library_list}" \
         --output_pdf {output.pdf}
         """

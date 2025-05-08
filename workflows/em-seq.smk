@@ -219,7 +219,7 @@ rule emseq_mosdepth:
         """
 rule emseq_mosdepth_agg_plot:
     input:
-        thresholds = expand(f"{qc_dir}/mosdepth_{{library_id}}.thresholds.bed.gz", library_id=library_ids)
+        thresholds = expand(f"{qc_dir}/mosdepth_{{library_id}}.thresholds.bed.gz", library_id=emseq_library_ids)
     output:
         pdf = f"{qc_dir}/mosdepth_agg_plot.pdf"
     params:

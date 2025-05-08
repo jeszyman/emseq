@@ -1,0 +1,141 @@
+#!/usr/bin/env Rscript
+
+# ==============================================================================
+# Description:
+#   Parses multiple mosdepth threshold files (*.thresholds.bed.gz) and generates
+#   a single paginated PDF plot (4×6 panels per page) showing counts of bases
+#   covered at actual observed thresholds (e.g., 1X, 2X, 5X...) per sample.
+#
+#   Infers 0X bins by identifying regions where all threshold counts are zero.
+#
+# Inputs:
+#   --threshold_list   Space-separated list of mosdepth threshold files
+#   --library_list     Space-separated list of sample names (must match order)
+#   --output_pdf       Full path to output PDF file (single file, multi-page)
+# ==============================================================================
+
+suppressPackageStartupMessages({
+  suppressWarnings(library(argparse))
+  suppressWarnings(library(data.table))
+  suppressWarnings(library(ggplot2))
+  suppressWarnings(library(Cairo))
+  suppressWarnings(library(scales))
+  suppressWarnings(library(patchwork))
+})
+
+# -------------------------------
+# Argument parsing
+# -------------------------------
+
+prog <- basename(commandArgs(trailingOnly = FALSE)[1])
+
+parser <- ArgumentParser(
+  description = "Generate a paginated threshold coverage plot from mosdepth output.",
+  prog = prog
+)
+
+parser$add_argument("--threshold_list", required = TRUE,
+                    help = "Space-separated list of mosdepth threshold files (*.thresholds.bed.gz)")
+parser$add_argument("--library_list", required = TRUE,
+                    help = "Space-separated list of sample names (must match file order)")
+parser$add_argument("--output_pdf", required = TRUE,
+                    help = "Full output PDF file path (e.g., /tmp/plot.pdf)")
+
+args <- parser$parse_args()
+threshold_files <- unlist(strsplit(args$threshold_list, " "))
+library_ids <- unlist(strsplit(args$library_list, " "))
+output_pdf <- args$output_pdf
+
+if (length(threshold_files) != length(library_ids)) {
+  stop("Error: threshold_list and library_list must be the same length")
+}
+
+# -------------------------------
+# Function to parse each threshold file
+# -------------------------------
+
+read_thresholds <- function(file, sample) {
+  header <- fread(file, nrows = 0)
+  names(header)[1] <- sub("^#", "", names(header)[1])
+  threshold_cols <- setdiff(names(header), c("chrom", "start", "end", "region"))
+  df <- fread(file, skip = 1, col.names = names(header))
+  df[, sample := sample]
+  melted <- melt(df,
+    id.vars = c("chrom", "start", "end", "region", "sample"),
+    measure.vars = threshold_cols,
+    variable.name = "threshold",
+    value.name = "count"
+  )
+  list(data = melted, thresholds = threshold_cols)
+}
+
+# -------------------------------
+# Read and combine all files
+# -------------------------------
+
+parsed <- mapply(read_thresholds, threshold_files, library_ids, SIMPLIFY = FALSE)
+hist_data <- rbindlist(lapply(parsed, `[[`, "data"))
+all_thresholds <- unique(unlist(lapply(parsed, `[[`, "thresholds")))
+
+# -------------------------------
+# Infer 0X bins from zeroed rows
+# -------------------------------
+
+hist_wide <- dcast(hist_data, chrom + start + end + region + sample ~ threshold,
+                   value.var = "count", fill = 0)
+hist_wide[, is_zero := rowSums(.SD) == 0, .SDcols = all_thresholds]
+zero_counts <- hist_wide[is_zero == TRUE, .(count = .N * (end[1] - start[1])), by = sample]
+zero_counts[, threshold := "0X"]
+
+# -------------------------------
+# Aggregate and bind all data
+# -------------------------------
+
+plot_data <- hist_data[, .(count = sum(count)), by = .(sample, threshold)]
+plot_data <- rbind(plot_data, zero_counts, fill = TRUE)
+
+# Correct threshold order based on numeric prefix
+threshold_levels <- unique(plot_data$threshold)
+threshold_levels <- threshold_levels[order(as.numeric(sub("X$", "", as.character(threshold_levels))))]
+plot_data[, threshold := factor(threshold, levels = threshold_levels)]
+
+# -------------------------------
+# Panel layout and plotting
+# -------------------------------
+
+make_panel <- function(sample_id) {
+  ggplot(plot_data[sample == sample_id], aes(x = threshold, y = count, fill = threshold)) +
+    geom_col(width = 0.8) +
+    scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
+    scale_fill_brewer(palette = "Set2", guide = "none") +
+    labs(title = sample_id, x = "Coverage threshold", y = "Covered bases") +
+    theme_minimal(base_size = 10) +
+    theme(
+      axis.text = element_text(size = 8),
+      axis.title = element_text(size = 9),
+      plot.title = element_text(size = 10, hjust = 0.5),
+      panel.grid = element_line(linewidth = 0.2, colour = "grey90")
+    )
+}
+
+ncol <- 4
+nrow <- 6
+panels_per_page <- ncol * nrow
+sample_list <- unique(plot_data$sample)
+pages <- split(sample_list, ceiling(seq_along(sample_list) / panels_per_page))
+
+# -------------------------------
+# Output: single PDF with multiple pages
+# -------------------------------
+
+CairoPDF(output_pdf, width = 8.5, height = 11, onefile = TRUE)
+for (i in seq_along(pages)) {
+  plots <- lapply(pages[[i]], make_panel)
+  layout <- wrap_plots(plots, ncol = ncol, nrow = nrow) +
+    plot_annotation(
+      title = "Coverage threshold by sample",
+      theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+    )
+  print(layout)
+}
+dev.off()

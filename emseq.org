@@ -1285,7 +1285,7 @@ rule emseq_multiqc:
                         processing = ["raw","trimmed"],
                         read = ["R1", "R2"]),
         mosdepth = expand(f"{qc_dir}/mosdepth_{{library_id}}.mosdepth.summary.txt",
-                          library_id = library_ids),
+                          library_id = emseq_library_ids),
     log:
         f"{log_dir}/emseq_multiqc.log",
     output:

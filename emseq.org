@@ -1363,16 +1363,18 @@ read_thresholds <- function(file, sample) {
 
 parsed <- mapply(read_thresholds, threshold_files, library_ids, SIMPLIFY = FALSE)
 hist_data <- rbindlist(lapply(parsed, `[[`, "data"))
+hist_data[, count := as.numeric(count)]
+
 all_thresholds <- unique(unlist(lapply(parsed, `[[`, "thresholds")))
 
 # -------------------------------
 # Read autosomal median from regions.bed.gz
 # -------------------------------
 
-get_autosomal_median <- function(file, sample) {
+get_autosomal_median <- function(file, sample_id) {
   df <- fread(file, col.names = c("chrom", "start", "end", "depth"))
   df <- df[grepl("^chr?[1-9]$|^chr?1[0-9]$|^chr?2[0-2]$", chrom)]
-  df[, sample := sample]
+  df[, sample := sample_id]
   df[, median := median(depth)]
   df[1, .(sample, median)]
 }

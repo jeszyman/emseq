@@ -1158,6 +1158,10 @@ suppressPackageStartupMessages({
   suppressWarnings(library(patchwork))
 })
 
+
+suppressWarnings(library(matrixStats))  # at top
+
+
 # -------------------------------
 # Argument parsing
 # -------------------------------
@@ -1219,7 +1223,8 @@ all_thresholds <- unique(unlist(lapply(parsed, `[[`, "thresholds")))
 hist_wide <- dcast(hist_data, chrom + start + end + region + sample ~ threshold,
                    value.var = "count", fill = 0)
 hist_wide[, is_zero := rowSums(.SD) == 0, .SDcols = all_thresholds]
-zero_counts <- hist_wide[is_zero == TRUE, .(count = .N * (end[1] - start[1])), by = sample]
+zero_counts <- hist_data[, .(total = sum(count)), by = .(chrom, start, end, region, sample)]
+zero_counts <- zero_counts[total == 0, .(count = .N * (end[1] - start[1])), by = sample]
 zero_counts[, threshold := "0X"]
 
 # -------------------------------
@@ -1227,10 +1232,9 @@ zero_counts[, threshold := "0X"]
 # -------------------------------
 
 hist_data[, threshold_numeric := as.numeric(sub("X$", "", threshold))]
-medians <- hist_data[!is.na(threshold_numeric), .(
-  median = median(rep(threshold_numeric, count))
-), by = sample]
-
+medians <- hist_data[!is.na(threshold_numeric),
+  .(median = weightedMedian(threshold_numeric, w = count)),
+  by = sample]
 
 # Correct threshold order based on numeric prefix
 threshold_levels <- unique(plot_data$threshold)

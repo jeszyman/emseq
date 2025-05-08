@@ -101,11 +101,6 @@ medians <- hist_data[!is.na(threshold_numeric),
   .(median = weightedMedian(threshold_numeric, w = count)),
   by = sample]
 
-# Correct threshold order based on numeric prefix
-threshold_levels <- unique(plot_data$threshold)
-threshold_levels <- threshold_levels[order(as.numeric(sub("X$", "", as.character(threshold_levels))))]
-plot_data[, threshold := factor(threshold, levels = threshold_levels)]
-
 
 # -------------------------------
 # Aggregate and bind all data
@@ -113,6 +108,11 @@ plot_data[, threshold := factor(threshold, levels = threshold_levels)]
 
 plot_data <- hist_data[, .(count = sum(count)), by = .(sample, threshold)]
 plot_data <- rbind(plot_data, zero_counts, fill = TRUE)
+
+# Correct threshold order based on numeric prefix
+threshold_levels <- unique(plot_data$threshold)
+threshold_levels <- threshold_levels[order(as.numeric(sub("X$", "", as.character(threshold_levels))))]
+plot_data[, threshold := factor(threshold, levels = threshold_levels)]
 
 # -------------------------------
 # Panel layout and plotting

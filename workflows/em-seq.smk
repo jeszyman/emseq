@@ -169,6 +169,8 @@ rule emseq_fastqc:
     params:
         outdir = qc_dir,
         threads = threads,
+    resources:
+        concurrency=500
     shell:
         """
         fastqc \

@@ -975,9 +975,9 @@ rule emseq_fastqc:
         f"{qc_dir}/{{library_id}}_{{processing}}_{{read}}_fastqc.zip",
     params:
         outdir = qc_dir,
-        threads = threads,
+        threads = 2,
     resources:
-        concurrency=500
+        concurrency=20
     shell:
         """
         fastqc \

@@ -219,6 +219,9 @@ rule emseq_mosdepth:
         "{params.quant_levels}" \
         {threads}
         """
+print("emseq_library_ids:", emseq_library_ids)
+print("type of first item:", type(emseq_library_ids[0]))
+
 rule emseq_mosdepth_agg_plot:
     input:
         thresholds = expand(f"{qc_dir}/mosdepth_{{library_id}}.thresholds.bed.gz", library_id=emseq_library_ids),

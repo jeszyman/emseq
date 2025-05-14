@@ -27,30 +27,6 @@ rule emseq_fastp:
         --out2 {output.r2} \
         --thread {params.threads} \
         """
-rule emseq_biscuit_align:
-    input:
-        r1 = f"{emseq_fastq_dir}/{{library_id}}_trimmed_R1.fastq.gz",
-        r2 = f"{emseq_fastq_dir}/{{library_id}}_trimmed_R2.fastq.gz",
-        fasta = f"{ref_dir}/biscuit/{emseq_ref_fasta}",
-    log:
-        cmd = f"{log_dir}/{{library_id}}_emseq_biscuit_align.log",
-    output:
-        bam = f"{emseq_bam_dir}/{{library_id}}.bam",
-    resources:
-        concurrency=100
-    shell:
-        """
-        mkdir -p {data_dir}/tmp && \
-        biscuit align \
-        -@ 82 \
-        -biscuit-ref {input.fasta} \
-        {input.r1} {input.r2} \
-        | samtools sort \
-        -@ 8 \
-        -m 2G \
-        -T {data_dir}/tmp/{wildcards.library_id}_sorttmp \
-        -o {output.bam} &>> {log}
-        """
 rule emseq_dedup:
     input:
         bam = f"{emseq_bam_dir}/{{library_id}}.bam",

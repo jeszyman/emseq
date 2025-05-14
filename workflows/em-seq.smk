@@ -154,9 +154,40 @@ rule make_methylkit_diff_db:
         --lib_db_list "{input.mkit_lib_db}" \
         --lib_id_list "{params.library_id}" \
         --treatment_list "{params.treatment_list}" \
-        --cores 8 \
+        --cores 32 \
         --out_dir {params.out_dir} \
         --suffix {wildcards.experiment} > {log} 2>&1
+        """
+rule make_methylkit_diff_db:
+    input:
+        mkit_lib_db = lambda wildcards: expand(
+            f"{emseq_dir}/dmr/tabix/{{library_id}}.txt.bgz",
+            library_id = meth_map[wildcards.experiment]['libs']
+        ),
+    log:
+        f"{log_dir}/{{experiment}}_make_methylkit_diff_db.log",
+    output:
+        unite = f"{emseq_dir}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
+        diff = f"{emseq_dir}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
+    params:
+        library_id = lambda wildcards: " ".join(meth_map[wildcards.experiment]['libs']),
+        treatment_list = lambda wildcards: meth_map[wildcards.experiment]['tx'],
+        out_dir = f"{emseq_dir}/dmr/diff",
+        script = f"{emseq_script_dir}/make_methylkit_diff_db.R",
+        win_size = 1000,
+        step_size= 1000,
+    shell:
+        """
+        Rscript {params.script} \
+        --lib_db_list "{input.mkit_lib_db}" \
+        --lib_id_list "{params.library_id}" \
+        --treatment_list "{params.treatment_list}" \
+        --cores 32 \
+        --out_dir {params.out_dir} \
+        --win_size {params.win_size} \
+        --step_size {params.step_size} \
+        --suffix {wildcards.experiment} \
+        > {log} 2>&1
         """
 rule emseq_fastqc:
     input:
@@ -181,15 +212,15 @@ rule emseq_fastqc:
         {input} &> {log}
         """
 # Will follow symlinks
-rule emseq_index_bam_check:
-    input:
-        bam = ancient(f"{emseq_bam_dir}/{{library_id}}_deduped.bam"),
-    output:
-        bai = f"{emseq_bam_dir}/{{library_id}}_deduped.bam.bai",
-    shell:
-        """
-        samtools index -@ 8 {input.bam} {output.bai}
-        """
+# rule emseq_index_bam_check:
+#     input:
+#         bam = ancient(f"{emseq_bam_dir}/{{library_id}}_deduped.bam"),
+#     output:
+#         bai = f"{emseq_bam_dir}/{{library_id}}_deduped.bam.bai",
+#     shell:
+#         """
+#         samtools index -@ 8 {input.bam} {output.bai}
+#         """
 
 rule emseq_mosdepth:
     input:

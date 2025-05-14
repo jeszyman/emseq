@@ -33,7 +33,7 @@ merged_obj <- methRead(
 # --- Unite ---
 meth <- unite(merged_obj,
               destrand = FALSE,
-              chunk.size = 1e7,
+              chunk.size = 1e9,
               mc.cores = as.numeric(args$cores),
               save.db = TRUE,
               suffix = args$suffix,

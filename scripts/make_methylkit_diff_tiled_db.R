@@ -32,8 +32,9 @@ merged_obj <- methRead(
   mincov = 2
 )
 
+
 # --- Tile methylation ---
-tiled_obj <- tileMethylCounts(
+tiled_raw <- tileMethylCounts(
   merged_obj,
   win.size = as.numeric(args$win_size),
   step.size = as.numeric(args$step_size),
@@ -43,6 +44,16 @@ tiled_obj <- tileMethylCounts(
   dbdir = args$out_dir,
   sample.ids = lib_id_list,
   treatment = treatment_list,
+  mc.cores = as.numeric(args$cores)
+)
+
+# --- Unite tiled windows into methylBaseDB ---
+tiled_obj <- unite(
+  tiled_raw,
+  destrand = FALSE,
+  save.db = TRUE,
+  suffix = paste0(args$suffix, "_tiled"),
+  dbdir = args$out_dir,
   mc.cores = as.numeric(args$cores)
 )
 

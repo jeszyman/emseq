@@ -156,7 +156,7 @@ rule make_methylkit_diff_db_tiled:
             library_id = meth_map[wildcards.experiment]['libs']
         ),
     log:
-        f"{log_dir}/{{experiment}}_make_methylkit_diff_db.log",
+        f"{log_dir}/{{experiment}}_make_methylkit_diff_tiled_db.log",
     output:
         unite = f"{emseq_dir}/dmr/diff/methylBase_{{experiment}}_tiled.txt.bgz",
         diff = f"{emseq_dir}/dmr/diff/methylDiff_{{experiment}}_tiled.txt.bgz",
@@ -164,9 +164,9 @@ rule make_methylkit_diff_db_tiled:
         library_id = lambda wildcards: " ".join(meth_map[wildcards.experiment]['libs']),
         treatment_list = lambda wildcards: meth_map[wildcards.experiment]['tx'],
         out_dir = f"{emseq_dir}/dmr/diff",
-        script = f"{emseq_script_dir}/make_methylkit_diff_db.R",
-        win_size = 1000,
-        step_size= 1000,
+        script = f"{emseq_script_dir}/make_methylkit_diff_tiled_db.R",
+        win_size = 1000000,
+        step_size= 1000000,
     shell:
         """
         Rscript {params.script} \
@@ -179,6 +179,21 @@ rule make_methylkit_diff_db_tiled:
         --step_size {params.step_size} \
         --suffix {wildcards.experiment} \
         > {log} 2>&1
+        """
+rule all_experiment_tiled_methylation:
+    input:
+        f"{emseq_dir}/dmr/diff/methylBase_{{experiment}}_tiled.txt.bgz",
+    log:
+        f"{log_dir}/all_experiment_methylation_{{experiment}}_tiled.log",
+    output:
+        f"{emseq_dir}/dmr/diff/{{experiment}}_tiled_meth.tsv",
+    params:
+        script = f"{emseq_script_dir}/all_experiment_methylation.R",
+    shell:
+        """
+        Rscript {params.script} \
+        --db_file {input} \
+        --out_file {output} > {log} 2>&1
         """
 rule emseq_fastqc:
     input:

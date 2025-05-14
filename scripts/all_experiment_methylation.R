@@ -17,4 +17,7 @@ meth <- methylKit:::readMethylDB(args$db_file)
 meth_matrix <- percMethylation(meth, rowids = TRUE, chunk.size = args$chunk_size)
 
 # --- Write Output ---
-write_tsv(as.data.frame(meth_matrix), args$out_file)
+write_tsv(
+  as.data.frame(meth_matrix) %>% rownames_to_column(var = "coord"),
+  args$out_file
+)

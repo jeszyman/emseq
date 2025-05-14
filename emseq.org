@@ -6,6 +6,13 @@
 :ID:       cd9489fd-c6e7-4c64-8317-e3d9a283b36c
 :header-args: :tangle-mode (identity #o555)
 :END:
+
+cfDNA EM-seq data model
+- Biofluid volume
+- Biofluid type
+- Biofluid cfDNA concentration
+- Sequencing platform
+- ...
 https://www.pnas.org/doi/10.1073/pnas.1313995110
 https://chatgpt.com/c/681d527d-4850-8005-87cd-9d8355cf160a
 #+begin_src bash
@@ -595,7 +602,7 @@ rule emseq_biscuit_align:
         -@ 82 \
         -biscuit-ref {input.fasta} \
         {input.r1} {input.r2} \
-        | samtools sort \
+        | samtools sort -n \
         -@ 8 \
         -m 2G \
         -T {data_dir}/tmp/{wildcards.library_id}_sorttmp \
@@ -1026,7 +1033,11 @@ meth <- methylKit:::readMethylDB(args$db_file)
 meth_matrix <- percMethylation(meth, rowids = TRUE, chunk.size = args$chunk_size)
 
 # --- Write Output ---
-write_tsv(as.data.frame(meth_matrix), args$out_file)
+write_tsv(
+  as.data.frame(meth_matrix) %>% rownames_to_column(var = "coord"),
+  args$out_file
+)
+
 #+end_src
 
 ****** Tiled
@@ -1039,7 +1050,7 @@ rule make_methylkit_diff_db_tiled:
             library_id = meth_map[wildcards.experiment]['libs']
         ),
     log:
-        f"{log_dir}/{{experiment}}_make_methylkit_diff_db.log",
+        f"{log_dir}/{{experiment}}_make_methylkit_diff_tiled_db.log",
     output:
         unite = f"{emseq_dir}/dmr/diff/methylBase_{{experiment}}_tiled.txt.bgz",
         diff = f"{emseq_dir}/dmr/diff/methylDiff_{{experiment}}_tiled.txt.bgz",
@@ -1047,9 +1058,9 @@ rule make_methylkit_diff_db_tiled:
         library_id = lambda wildcards: " ".join(meth_map[wildcards.experiment]['libs']),
         treatment_list = lambda wildcards: meth_map[wildcards.experiment]['tx'],
         out_dir = f"{emseq_dir}/dmr/diff",
-        script = f"{emseq_script_dir}/make_methylkit_diff_db.R",
-        win_size = 1000,
-        step_size= 1000,
+        script = f"{emseq_script_dir}/make_methylkit_diff_tiled_db.R",
+        win_size = 1000000,
+        step_size= 1000000,
     shell:
         """
         Rscript {params.script} \
@@ -1100,8 +1111,9 @@ merged_obj <- methRead(
   mincov = 2
 )
 
+
 # --- Tile methylation ---
-tiled_obj <- tileMethylCounts(
+tiled_raw <- tileMethylCounts(
   merged_obj,
   win.size = as.numeric(args$win_size),
   step.size = as.numeric(args$step_size),
@@ -1114,6 +1126,16 @@ tiled_obj <- tileMethylCounts(
   mc.cores = as.numeric(args$cores)
 )
 
+# --- Unite tiled windows into methylBaseDB ---
+tiled_obj <- unite(
+  tiled_raw,
+  destrand = FALSE,
+  save.db = TRUE,
+  suffix = paste0(args$suffix, "_tiled"),
+  dbdir = args$out_dir,
+  mc.cores = as.numeric(args$cores)
+)
+
 # --- Diff methylation on tiles ---
 diff <- calculateDiffMeth(
   tiled_obj,
@@ -1122,8 +1144,27 @@ diff <- calculateDiffMeth(
   save.db = TRUE,
   dbdir = args$out_dir
 )
+
 #+end_src
 
+
+#+begin_src snakemake
+rule all_experiment_tiled_methylation:
+    input:
+        f"{emseq_dir}/dmr/diff/methylBase_{{experiment}}_tiled.txt.bgz",
+    log:
+        f"{log_dir}/all_experiment_methylation_{{experiment}}_tiled.log",
+    output:
+        f"{emseq_dir}/dmr/diff/{{experiment}}_tiled_meth.tsv",
+    params:
+        script = f"{emseq_script_dir}/all_experiment_methylation.R",
+    shell:
+        """
+        Rscript {params.script} \
+        --db_file {input} \
+        --out_file {output} > {log} 2>&1
+        """
+#+end_src
 
 ****** Exploratory data analysis
 

@@ -985,6 +985,50 @@ diff <- calculateDiffMeth(meth,
                           save.db = TRUE,
                           dbdir = args$out_dir)
 #+end_src
+
+
+#+begin_src snakemake
+rule all_experiment_methylation:
+    input:
+        f"{emseq_dir}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
+    log:
+        f"{log_dir}/all_experiment_methylation_{{experiment}}.log",
+    output:
+        f"{emseq_dir}/dmr/diff/{{experiment}}_pos_meth.tsv",
+    params:
+        script = f"{emseq_script_dir}/all_experiment_methylation.R",
+    shell:
+        """
+        Rscript {params.script} \
+        --db_file {input} \
+        --out_file {output} > {log} 2>&1
+        """
+#+end_src
+
+
+#+begin_src R :tangle ./scripts/all_experiment_methylation.R
+library(argparse)
+library(methylKit)
+library(tidyverse)
+
+# --- Argument Parsing ---
+parser <- ArgumentParser()
+parser$add_argument("--db_file", required = TRUE, help = "Path to tabix-indexed methylBase file")
+parser$add_argument("--out_file", required = TRUE, help = "Output TSV path for percent methylation matrix")
+parser$add_argument("--chunk_size", type = "double", default = 1e9, help = "Chunk size for methylKit operations")
+args <- parser$parse_args()
+
+# --- Check Header and Load Object ---
+methylKit:::checkTabixHeader(args$db_file)
+meth <- methylKit:::readMethylDB(args$db_file)
+
+# --- Extract Percent Methylation Matrix ---
+meth_matrix <- percMethylation(meth, rowids = TRUE, chunk.size = args$chunk_size)
+
+# --- Write Output ---
+write_tsv(as.data.frame(meth_matrix), args$out_file)
+#+end_src
+
 ****** Tiled
 
 #+begin_src snakemake
@@ -997,8 +1041,8 @@ rule make_methylkit_diff_db_tiled:
     log:
         f"{log_dir}/{{experiment}}_make_methylkit_diff_db.log",
     output:
-        unite = f"{emseq_dir}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
-        diff = f"{emseq_dir}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
+        unite = f"{emseq_dir}/dmr/diff/methylBase_{{experiment}}_tiled.txt.bgz",
+        diff = f"{emseq_dir}/dmr/diff/methylDiff_{{experiment}}_tiled.txt.bgz",
     params:
         library_id = lambda wildcards: " ".join(meth_map[wildcards.experiment]['libs']),
         treatment_list = lambda wildcards: meth_map[wildcards.experiment]['tx'],
@@ -1082,6 +1126,154 @@ diff <- calculateDiffMeth(
 
 
 ****** Exploratory data analysis
+
+#+begin_src R
+# Compute global methylation (mean per sample)
+
+library(tidyverse)
+library(methylKit)
+
+db_file = "/mnt/data/projects/breast/analysis/emseq/dmr/diff/methylBase_pro_vs_nh.txt.bgz"
+
+methylKit:::checkTabixHeader(db_file)
+
+meth = methylKit:::readMethylDB(db_file)
+
+# Extract percent methylation matrix
+meth_matrix <- percMethylation(
+  meth,
+  rowids = TRUE,
+  chunk.size = 1e+09)
+
+
+ls()
+
+global_df <- data.frame(
+  library_id = colnames(meth_matrix),
+  global_methylation = colMeans(meth_matrix, na.rm = TRUE)
+)
+
+global_df = meth_matrix %>% as.data.frame() %>% as_tibble()
+
+global_df <- meth_matrix %>%
+  as.data.frame() %>%
+  pivot_longer(cols = everything(), names_to = "library_id", values_to = "methylation") %>%
+  group_by(library_id) %>%
+  summarise(global_methylation = mean(methylation, na.rm = TRUE))
+
+global_df
+
+
+binMeth <- tileMethylCounts(
+  meth,
+  win.size = 1000,      # bin/window size in bp
+  step.size = 1000,     # step size (same as win.size for non-overlapping bins)
+  cov.bases = 5,
+  mc.cores = 4          # optional parallelization
+)
+
+binMeth <- tileMethylCounts(
+  meth,
+  win.size = 1000,
+  step.size = 1000,  # Distance shift (>win is gap, <win is overlap)
+  cov.bases = 5,                    # minimum number of CpGs per bin
+  sample.ids = meth@sample.ids,     # explicit sample IDs
+  treatment = meth@treatment,       # explicit treatment vector
+  mc.cores = 12
+)
+
+#########1#########2#########3#########4#########5#########6#########7#########8
+
+
+full = full %>% mutate(library_id = sample)
+
+full = full %>%
+  mutate(group = case_when(
+    str_starts(library_id, "NH") ~ "healthy",
+    str_starts(library_id, "PRO") ~ "cancer",
+    TRUE ~ NA_character_
+  ))
+
+global_df = global_df %>% left_join(full, by = "library_id")
+
+
+# Violin plot (one point per library, jittered for clarity)
+ggplot(global_df, aes(x = group, y = global_methylation, fill = group)) +
+  geom_violin(width = 1.0, trim = TRUE, alpha = 0.4) +
+  geom_jitter(width = 0.1, size = 2) +
+  theme_minimal() +
+  labs(title = "Global Methylation per Library",
+       y = "Mean % Methylation",
+       x = "Group")
+
+
+str(global_df)
+
+prog = global_df %>% filter(group == "cancer")
+
+prog$interval_progression
+
+ggplot(prog, aes(x = interval_progression, y = global_methylation)) + geom_point()
+
+
+#########1#########2#########3#########4#########5#########6#########7#########8
+
+library(methylKit)
+library(tidyverse)
+library(patchwork)
+
+# Load methylation data
+db_file <- "/mnt/data/projects/breast/analysis/emseq/dmr/diff/methylBase_pro_vs_nh.txt.bgz"
+meth <- methylKit:::readMethylDB(db_file)
+
+# Calculate global methylation per library
+global_df <- percMethylation(meth) %>%
+  as.data.frame() %>%
+  pivot_longer(cols = everything(), names_to = "library_id", values_to = "methylation") %>%
+  group_by(library_id) %>%
+  summarise(global_methylation = mean(methylation, na.rm = TRUE), .groups = "drop")
+
+# Annotate with metadata
+global_df <- global_df %>%
+  left_join(full %>% mutate(library_id = sample), by = "library_id") %>%
+  mutate(group = case_when(
+    str_starts(library_id, "NH") ~ "Healthy",
+    str_starts(library_id, "PRO") ~ "Cancer",
+    TRUE ~ NA_character_
+  )) %>%
+  mutate(group = factor(group, levels = c("Healthy", "Cancer")))
+
+# Plot 1: Violin plot
+p1 <- ggplot(global_df, aes(x = group, y = global_methylation, fill = group)) +
+  geom_violin(width = 0.9, alpha = 0.4, color = NA) +
+  geom_jitter(width = 0.1, size = 2, color = "black") +
+  labs(x = NULL, y = "Global % Methylation") +
+  scale_fill_manual(values = c("Healthy" = "#1B9E77", "Cancer" = "#D95F02")) +
+  theme_minimal(base_size = 16) +
+  theme(legend.position = "none")
+
+# Plot 2: Scatter vs interval_progression
+p2 <- global_df %>%
+  filter(group == "Cancer", !is.na(interval_progression)) %>%
+  ggplot(aes(x = interval_progression, y = global_methylation)) +
+  geom_point(size = 3, color = "#D95F02", stroke = 1, shape = 21, fill = "#D95F02") +
+  labs(x = "Progression-Free Survival (days)", y = "Global % Methylation") +
+  theme_minimal(base_size = 16)
+
+p2 <- global_df %>%
+  filter(group == "Cancer", !is.na(interval_progression)) %>%
+  ggplot(aes(x = interval_progression, y = global_methylation)) +
+  geom_point(size = 3, color = "#D95F02", stroke = 1, shape = 21, fill = "#D95F02") +
+  geom_smooth(method = "lm", se = FALSE, color = "black", linewidth = 1, linetype="dotted") +
+  labs(x = "Progression-Free Survival (days)", y = "Global % Methylation") +
+  theme_minimal(base_size = 16)
+
+# Combine side by side
+p1 + p2 + plot_layout(widths = c(1, 1))
+
+ggsave("/tmp/global_meth.png", p1 + p2, width = 12, height = 5, dpi = 300)
+#+end_src
+
 - global methylation
 - tiled methylation beta heatmap
 -

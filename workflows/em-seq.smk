@@ -134,6 +134,21 @@ rule make_methylkit_diff_db:
         --out_dir {params.out_dir} \
         --suffix {wildcards.experiment} > {log} 2>&1
         """
+rule all_experiment_methylation:
+    input:
+        f"{emseq_dir}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
+    log:
+        f"{log_dir}/all_experiment_methylation_{{experiment}}.log",
+    output:
+        f"{emseq_dir}/dmr/diff/{{experiment}}_pos_meth.tsv",
+    params:
+        script = f"{emseq_script_dir}/all_experiment_methylation.R",
+    shell:
+        """
+        Rscript {params.script} \
+        --db_file {input} \
+        --out_file {output} > {log} 2>&1
+        """
 rule make_methylkit_diff_db_tiled:
     input:
         mkit_lib_db = lambda wildcards: expand(
@@ -143,8 +158,8 @@ rule make_methylkit_diff_db_tiled:
     log:
         f"{log_dir}/{{experiment}}_make_methylkit_diff_db.log",
     output:
-        unite = f"{emseq_dir}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
-        diff = f"{emseq_dir}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
+        unite = f"{emseq_dir}/dmr/diff/methylBase_{{experiment}}_tiled.txt.bgz",
+        diff = f"{emseq_dir}/dmr/diff/methylDiff_{{experiment}}_tiled.txt.bgz",
     params:
         library_id = lambda wildcards: " ".join(meth_map[wildcards.experiment]['libs']),
         treatment_list = lambda wildcards: meth_map[wildcards.experiment]['tx'],

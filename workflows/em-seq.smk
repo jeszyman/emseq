@@ -158,7 +158,7 @@ rule make_methylkit_diff_db:
         --out_dir {params.out_dir} \
         --suffix {wildcards.experiment} > {log} 2>&1
         """
-rule make_methylkit_diff_db:
+rule make_methylkit_diff_db_tiled:
     input:
         mkit_lib_db = lambda wildcards: expand(
             f"{emseq_dir}/dmr/tabix/{{library_id}}.txt.bgz",

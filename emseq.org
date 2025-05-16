@@ -140,6 +140,7 @@ Typically merge post-alignment if running
 :ID:       c3bdbbcc-5a4c-475a-8ab1-33884ab14ef5
 :header-args:snakemake: :tangle ./workflows/em-seq.smk :tangle-mode (identity #o555)
 :END:
+[[file:workflows/em-seq.smk]]
 **** EM-seq adapter trimming
 - Script
   #+begin_src bash :tangle ./scripts/fastp-emseq-wrapper.sh
@@ -294,32 +295,6 @@ rule emseq_fastp:
 #+end_src
 
 **** Biscuit index
-#+begin_src bash
-source ~/repos/breast/config/bash-env.sh
-Y
-
-
-if [ -e "$data_dir/inputs/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz" ]; then
-    echo "File exists, skipping download."
-else
-    aria2c -c -x 10 -s 10 -m 5 -d $data_dir/inputs/ \
-	   -o Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz \
-	   https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
-
-fi
-
-
-if [ -e "$data_dir/inputs/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz" ]; then
-    echo "File exists, skipping download."
-else
-    aria2c -c -x 10 -s 10 -m 5 -d $data_dir/inputs/ \
-	   -o GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz \
-	   https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
-fi
-
-#+end_src
-
-
 #+begin_src bash
 source ~/repos/breast/config/bash-env.sh
 
@@ -583,7 +558,7 @@ rule emseq_biscuit_align:
         """
 #+end_src
 - snakemake, inline
-  #+begin_src snakemake :tangle no
+  #+begin_src snakemake
 rule emseq_biscuit_align:
     input:
         r1 = f"{emseq_fastq_dir}/{{library_id}}_trimmed_R1.fastq.gz",

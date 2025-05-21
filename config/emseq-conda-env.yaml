@@ -4,6 +4,7 @@ channels:
   - bioconda
 
 dependencies:
+  - samtools
   - bioconductor-genomeinfodbdata=1.2.7
   - biscuit=1.6.0.20241216=*_1
   - dupsifter=1.3.0.20241113=*_1

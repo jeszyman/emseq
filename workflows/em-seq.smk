@@ -29,7 +29,7 @@ rule emseq_fastp:
         """
 rule emseq_biscuit_align:
     conda:
-        "../config/emseq-conda-env.yaml",
+        "../config/biscuit-conda-env.yaml",
     input:
         r1 = f"{emseq_fastq_dir}/{{library_id}}_trimmed_R1.fastq.gz",
         r2 = f"{emseq_fastq_dir}/{{library_id}}_trimmed_R2.fastq.gz",
@@ -55,7 +55,7 @@ rule emseq_biscuit_align:
         """
 rule emseq_dedup:
     conda:
-        "../config/emseq-conda-env.yaml",
+        "../config/biscuit-conda-env.yaml",
     input:
         bam = f"{emseq_bam_dir}/{{library_id}}.bam",
         fasta = f"{ref_dir}/biscuit/{emseq_ref_fasta}",
@@ -78,7 +78,7 @@ rule emseq_dedup:
         """
 rule emseq_pileup:
     conda:
-        "../config/emseq-conda-env.yaml",
+        "../config/biscuit-conda-env.yaml",
     input:
         bam = f"{emseq_bam_dir}/{{library_id}}_deduped.bam",
         fasta = f"{ref_dir}/biscuit/{emseq_ref_fasta}",
@@ -99,7 +99,7 @@ rule emseq_pileup:
         """
 rule emseq_post_pileup:
     conda:
-        "../config/emseq-conda-env.yaml",
+        "../config/biscuit-conda-env.yaml",
     input:
         vcf = f"{data_dir}/analysis/emseq/pileup/{{library_id}}_pileup.vcf.gz",
     log:

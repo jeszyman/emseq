@@ -52,6 +52,8 @@ rule emseq_biscuit_align:
         -o {output.bam} &>> {log}
         """
 rule emseq_dedup:
+    conda:
+        "../config/emseq-conda-env.yaml",
     input:
         bam = f"{emseq_bam_dir}/{{library_id}}.bam",
         fasta = f"{ref_dir}/biscuit/{emseq_ref_fasta}",

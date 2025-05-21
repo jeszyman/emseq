@@ -797,6 +797,8 @@ cat /tmp/test/qc/dupsifter-dedup-stats.txt
 - snakefile, inline
   #+begin_src snakemake
 rule emseq_dedup:
+    conda:
+        "../config/emseq-conda-env.yaml",
     input:
         bam = f"{emseq_bam_dir}/{{library_id}}.bam",
         fasta = f"{ref_dir}/biscuit/{emseq_ref_fasta}",

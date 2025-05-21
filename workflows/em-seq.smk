@@ -108,6 +108,8 @@ rule emseq_post_pileup:
         && biscuit vcf2bed -c {input.vcf} > {output.bismark}
         """
 rule make_single_methylkit_obj:
+    conda:
+        f"{emseq_repo_dir}/config/methylkit-conda-env.yaml",
     input:
         bismark = f"{data_dir}/analysis/emseq/pileup/{{library_id}}_bismark_cov.bed",
     log:

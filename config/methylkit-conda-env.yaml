@@ -1,0 +1,8 @@
+name: methylkit
+channels:
+  - conda-forge
+  - bioconda
+
+dependencies:
+  - bioconductor-methylkit
+  - r-data.table=1.15.4

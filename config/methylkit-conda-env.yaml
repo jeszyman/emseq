@@ -4,5 +4,6 @@ channels:
   - bioconda
 
 dependencies:
+  - r-argparse
   - bioconductor-methylkit
   - r-data.table=1.15.4

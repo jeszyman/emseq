@@ -62,14 +62,15 @@ rule emseq_dedup:
         index = f"{emseq_bam_dir}/{{library_id}}_deduped.bam.bai",
     shell:
         """
+        rm -f {output.bam}.tmp.*.bam
         dupsifter \
         --add-mate-tags \
         --stats-output {log} \
         {input.fasta} \
         {input.bam} \
         | samtools sort \
-	-o {output.bam} \
-	-@ 8 && samtools index -@ 8 {output.bam}
+        -o {output.bam} \
+        -@ 8 && samtools index -@ 8 {output.bam}
         """
 rule emseq_pileup:
     input:

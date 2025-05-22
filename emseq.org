@@ -110,7 +110,7 @@ dependencies:
 #+end_src
 
 #+begin_src yaml :tangle ./config/biscuit-conda-env.yaml
-name: emseq
+name: biscuit
 channels:
   - conda-forge
   - bioconda

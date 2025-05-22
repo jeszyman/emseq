@@ -116,6 +116,7 @@ channels:
   - bioconda
 
 dependencies:
+  - fastp
   - samtools
   - bioconductor-genomeinfodbdata=1.2.7
   - biscuit=1.6.0.20241216=*_1

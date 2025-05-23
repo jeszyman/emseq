@@ -6,7 +6,7 @@
 :ID:       cd9489fd-c6e7-4c64-8317-e3d9a283b36c
 :header-args: :tangle-mode (identity #o555)
 :END:
-
+#+name: git-workflow-up
 #+begin_src bash
 source ~/repos/basecamp/lib/basecamp_functions.sh
 cd ~/repos/emseq
@@ -20,6 +20,11 @@ fi
 echo -e "$(date)\n$output"
 
 #+end_src
+
+elisp:(org-execute-named-block-anywhere "~/repos/org/maintenance.org" "git-update-my-org")
+
+[[elisp:(org-babel-execute-src-block nil (org-babel-lob-get-info "git-workflow-up"))
+][test]]
 
 cfDNA EM-seq data model
 - Biofluid volume
@@ -58,6 +63,8 @@ Rscript ./scripts/emseq_mosdepth_agg_plot.R \
 	--output_pdf "/tmp/test.pdf"
 
 #+end_src
+
+
 ** README
 The EM-seq repository contains modular workflows intended to be run from within a over-wrapping snakemake workflow.
 

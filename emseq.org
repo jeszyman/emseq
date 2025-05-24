@@ -6,34 +6,47 @@
 :ID:       cd9489fd-c6e7-4c64-8317-e3d9a283b36c
 :header-args: :tangle-mode (identity #o555)
 :END:
-#+name: git-workflow-up
-#+begin_src bash
-source ~/repos/basecamp/lib/basecamp_functions.sh
-cd ~/repos/emseq
-output=$(git_wkflow_up 2>&1)
-if [ $? -ne 0 ]; then
-    echo "Error running git_wkflow_up"
-    echo "$output"
-    exit 1
-fi
 
-echo -e "$(date)\n$output"
-
-#+end_src
-
-elisp:(org-execute-named-block-anywhere "~/repos/org/maintenance.org" "git-update-my-org")
-
-[[elisp:(org-babel-execute-src-block nil (org-babel-lob-get-info "git-workflow-up"))
-][test]]
-
-cfDNA EM-seq data model
-- Biofluid volume
-- Biofluid type
-- Biofluid cfDNA concentration
-- Sequencing platform
-- ...
 https://www.pnas.org/doi/10.1073/pnas.1313995110
 https://chatgpt.com/c/681d527d-4850-8005-87cd-9d8355cf160a
+
+- [cite:@chan2013meth]
+  - [cite:@liu2020]
+  - [cite:@shen2018plasma]
+    - [cite:@liang2021meth]
+    - [cite:@shen2019cfmedip]
+    - [cite:@nuzzo2020] *
+    - [cite:@nassiri2020] *
+  - [cite:@li20175hmc]
+  - [cite:@song20175hmc]
+  - [cite:@li2018meth]
+    - [cite:@liang2021meth]
+    - [cite:@hlady2019]
+    - [cite:@moss2020]
+    - [cite:@stackpole2022]
+      - [cite:@wong2023]
+      - [cite:@li2023cfdna]
+      - [cite:@melton2023]
+    - [cite:@wu2020]
+    - [cite:@delvecchio2020]
+- [cite:@vaisvila2021]
+
+https://www-pnas-org.mclibrary.idm.oclc.org/doi/full/10.1073/pnas.2017421118#sec-3
+https://www-nature-com.mclibrary.idm.oclc.org/articles/s41551-021-00746-5#Sec11
+
+https://www-nature-com.mclibrary.idm.oclc.org/articles/s41586-022-05580-6
+
+[cite:@melton2023]
+
+https://www-scopus-com.mclibrary.idm.oclc.org/results/results.uri?sort=cp-f&src=s&sid=02157e5ff2f1b8a77a24e67aeefcb07b&sot=a&sdt=a&cluster=scosubtype%2C%22ar%22%2Ct&sl=76&s=%28TITLE-ABS-KEY%28%22cell-free+DNA%22%29+AND+TITLE-ABS-KEY%28methylation%29%29+AND+NOT%28PCR%29&origin=searchadvanced&editSaveSearch=&txGid=3b8b26bec1c779cef84de4d3803c1be9&sessionSearchId=02157e5ff2f1b8a77a24e67aeefcb07b&limit=10
+
+https://www-nature-com.mclibrary.idm.oclc.org/articles/ng.3805
+
+| article             | group      | platform    | depth | tissue | target | times cited | date |
+|---------------------+------------+-------------+-------+--------+--------+-------------+------|
+| [cite:@nassiri2020] | decarvalho | cfMeDIP-seq |       | CNS    | CNS    |             |      |
+
+
 #+begin_src bash
 ssh jeff-ubuntu8
 
@@ -64,7 +77,7 @@ Rscript ./scripts/emseq_mosdepth_agg_plot.R \
 
 #+end_src
 
-
+** [[elisp:(progn (org-babel-goto-named-src-block "git-workflow-up") (org-babel-execute-src-block))][Run git workflow up]]
 ** README
 The EM-seq repository contains modular workflows intended to be run from within a over-wrapping snakemake workflow.
 
@@ -90,6 +103,25 @@ qc_dir
 emseq_dir
 
 ** Repository administration
+#+name: git-workflow-up
+#+begin_src bash :results replace
+source ~/repos/basecamp/lib/basecamp_functions.sh
+cd ~/repos/emseq
+output=$(git_wkflow_up 2>&1)
+if [ $? -ne 0 ]; then
+    echo "Error running git_wkflow_up"
+    echo "$output"
+    exit 1
+fi
+
+echo -e "$(date)\n$output"
+
+#+end_src
+
+#+RESULTS: git-workflow-up
+| Fri | May     | 23 | 07:58:46 | AM | CDT | 2025 |
+| No  | changes | to |  commit. |    |     |      |
+
 *** Configuration
 #+begin_src yaml :tangle ./config/emseq.yaml
 conda-env: emseq
@@ -168,6 +200,132 @@ Directory Structure
 
 **** Prerequisites
 **** Change Log
+** Data model
+#+begin_src yaml
+defaults:
+  required: false       # Default: fields are not required unless specified
+  primary_key: false    # Default: fields are not primary keys unless specified
+
+entities:
+  - name: subjects
+    attributes:
+      - name: subject_id
+        type: string
+        primary_key: true      # Unique identifier for each subject
+        required: true
+
+  - name: samples
+    attributes:
+      - name: sample_id
+        type: string
+        primary_key: true      # Unique ID for each sample
+        required: true
+      - name: subject_id
+        type: string
+        foreign_key: subjects.subject_id   # Link back to subject
+        required: true
+      - name: sample_type
+        type: enum
+        values: [biofluid, tissue]         # Sample subtype
+        required: true
+      - name: collection_date
+        type: datetime                         # When sample was collected
+
+  - name: biofluid
+    attributes:
+      - name: sample_id
+        type: string
+        primary_key: true
+        foreign_key: samples.sample_id     # Must match a sample of type biofluid
+        required: true
+      - name: biofluid_type
+        type: enum
+        values: [plasma, serum, csf, drain, urine, other]   # Specific fluid type
+      - name: cfdna_conc
+        type: float
+        unit: ng/uL                         # Concentration of cfDNA
+
+  - name: biofluid_derivative
+    attributes:
+      - name: aliquot_id
+        type: string
+        primary_key: true                  # Unique ID for each aliquot
+        required: true
+      - name: sample_id
+        type: string
+        foreign_key: biofluid.sample_id    # Parent biofluid sample
+        required: true
+      - name: biofluid_derivative_type
+        type: enum
+        values: [ppp, pfp, other]          # Processing method
+      - name: derivative_processing_date
+        type: date                         # When derivative was processed
+
+  - name: tissue
+    attributes:
+      - name: sample_id
+        type: string
+        primary_key: true
+        foreign_key: samples.sample_id     # Must match a sample of type tissue
+        required: true
+
+  - name: libraries
+    attributes:
+      - name: library_id
+        type: string
+        primary_key: true                  # Unique ID for each library
+        required: true
+      - name: sample_id
+        type: string
+        foreign_key: samples.sample_id     # Source sample for this library
+        required: true
+
+  - name: sequencing
+    attributes:
+      - name: seq_run_id
+        type: string
+        primary_key: true                  # Unique ID for sequencing run
+        required: true
+      - name: library_id
+        type: string
+        foreign_key: libraries.library_id  # Library used in sequencing
+        required: true
+      - name: run_date
+        type: date                         # When sequencing occurred
+      - name: read_length
+        type: integer                      # Read length (e.g. 150)
+        required: true
+      - name: paired_end
+        type: boolean                      # True if paired-end sequencing
+        required: true
+
+relationships:
+  - from: subjects
+    to: samples
+    type: one-to-many       # One subject can have many samples
+
+  - from: samples
+    to: libraries
+    type: one-to-many       # One sample can yield multiple libraries
+
+  - from: samples
+    to: biofluid
+    type: one-to-one        # A sample is either biofluid or tissue
+
+  - from: samples
+    to: tissue
+    type: one-to-one        # "
+
+  - from: biofluid
+    to: biofluid_derivative
+    type: one-to-many       # Each biofluid must have at least one aliquot
+
+  - from: libraries
+    to: sequencing
+    type: one-to-many       # A library can be sequenced multiple times
+#+end_src
+
+
 ** Workflows
 [[file:workflows/em-seq.smk]]
 Typically merge post-alignment if running

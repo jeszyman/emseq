@@ -38,13 +38,15 @@ rule emseq_biscuit_align:
         cmd = f"{log_dir}/{{library_id}}_emseq_biscuit_align.log",
     output:
         bam = f"{emseq_bam_dir}/{{library_id}}.bam",
+    params:
+        threads = config["threads"],
     resources:
         concurrency=100
     shell:
         """
         mkdir -p {data_dir}/tmp && \
         biscuit align \
-        -@ 82 \
+        -@ {params.threads} \
         -biscuit-ref {input.fasta} \
         {input.r1} {input.r2} \
         | samtools sort -n \

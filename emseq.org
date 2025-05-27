@@ -977,6 +977,33 @@ rule emseq_dedup:
         bam = f"{emseq_bam_dir}/{{library_id}}_deduped.bam",
         index = f"{emseq_bam_dir}/{{library_id}}_deduped.bam.bai",
     shell:
+        r"""
+        rm -f {output.bam}.tmp.*.bam
+        (dupsifter \
+          --add-mate-tags \
+          --stats-output {log} \
+          {input.fasta} \
+          {input.bam} || echo '[dupsifter] non-zero exit code ignored') \
+        | samtools sort \
+            -o {output.bam} \
+            -@ 8 && samtools index -@ 8 {output.bam}
+        """
+
+#+end_src
+
+  #+begin_src snakemake :tangle no
+rule emseq_dedup:
+    conda:
+        "../config/biscuit-conda-env.yaml",
+    input:
+        bam = f"{emseq_bam_dir}/{{library_id}}.bam",
+        fasta = f"{ref_dir}/biscuit/{emseq_ref_fasta}",
+    log:
+        f"{log_dir}/{{library_id}}_emseq_dedup.log",
+    output:
+        bam = f"{emseq_bam_dir}/{{library_id}}_deduped.bam",
+        index = f"{emseq_bam_dir}/{{library_id}}_deduped.bam.bai",
+    shell:
         """
         rm -f {output.bam}.tmp.*.bam
         dupsifter \

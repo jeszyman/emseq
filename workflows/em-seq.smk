@@ -67,16 +67,16 @@ rule emseq_dedup:
         bam = f"{emseq_bam_dir}/{{library_id}}_deduped.bam",
         index = f"{emseq_bam_dir}/{{library_id}}_deduped.bam.bai",
     shell:
-        """
+        r"""
         rm -f {output.bam}.tmp.*.bam
-        dupsifter \
-        --add-mate-tags \
-        --stats-output {log} \
-        {input.fasta} \
-        {input.bam} \
+        (dupsifter \
+          --add-mate-tags \
+          --stats-output {log} \
+          {input.fasta} \
+          {input.bam} || echo '[dupsifter] non-zero exit code ignored') \
         | samtools sort \
-        -o {output.bam} \
-        -@ 8 && samtools index -@ 8 {output.bam}
+            -o {output.bam} \
+            -@ 8 && samtools index -@ 8 {output.bam}
         """
 rule emseq_pileup:
     conda:

@@ -7,6 +7,14 @@
 :header-args: :tangle-mode (identity #o555)
 :END:
 
+
+Adapter and quality trimming was performed using fastp without any fixed-length end trimming. Alignment used biscuit with Ensemble hg38 primary assembly (https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz). Aligned BAMs were deduplicated using dupsifter with mate-tag annotation. Methylation pileups were generated from deduplicated BAMs using biscuit pileup, and the resulting VCFs were converted to bismark-formatted bed files. Bismark-style BEDs were converted to methylKit objects using a custom R script, and downstream differential methylation analysis was performed in methylKit.
+
+Copy number analysis was performed with ichorCNA. Deduplicated BAMs were used as input. Read counts were generated in 1 Mb windows using readCounter, filtering for base quality and including autosomes and sex chromosomes.
+
+Copy number estimation was performed using ichorCNA, specifying hg38 reference annotations, GC and mappability corrections, and the default panel of normals. The model estimated tumor fraction, ploidy, and subclonal prevalence using autosomal chromosomes for training. ichorCNA was run with package-specified low input settings including reduced copy number states, no subclonal events and initial ploidy set at diploid.
+
+
 https://www.pnas.org/doi/10.1073/pnas.1313995110
 https://chatgpt.com/c/681d527d-4850-8005-87cd-9d8355cf160a
 
@@ -965,6 +973,33 @@ cat /tmp/test/qc/dupsifter-dedup-stats.txt
 #+end_src
 - snakefile, inline
   #+begin_src snakemake
+rule emseq_dedup:
+    conda:
+        "../config/biscuit-conda-env.yaml",
+    input:
+        bam = f"{emseq_bam_dir}/{{library_id}}.bam",
+        fasta = f"{ref_dir}/biscuit/{emseq_ref_fasta}",
+    log:
+        f"{log_dir}/{{library_id}}_emseq_dedup.log",
+    output:
+        bam = f"{emseq_bam_dir}/{{library_id}}_deduped.bam",
+        index = f"{emseq_bam_dir}/{{library_id}}_deduped.bam.bai",
+    shell:
+        r"""
+        rm -f {output.bam}.tmp.*.bam
+        samtools view -h -f 0x2 {input.bam} \
+        | samtools sort -n -@ 4 -O BAM -o /dev/stdout \
+        | dupsifter \
+            --add-mate-tags \
+            --stats-output {log} \
+            {input.fasta} - \
+        | samtools sort -@ 8 -o {output.bam}
+        samtools index -@ 8 {output.bam}
+        """
+
+#+end_src
+
+  #+begin_src snakemake :tangle no
 rule emseq_dedup:
     conda:
         "../config/biscuit-conda-env.yaml",

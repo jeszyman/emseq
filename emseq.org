@@ -129,8 +129,11 @@ echo -e "$(date)\n$output"
 #+end_src
 
 #+RESULTS: git-workflow-up
-| Fri | May     | 23 | 07:58:46 | AM | CDT | 2025 |
-| No  | changes | to |  commit. |    |     |      |
+| Thu              | May                           | 29       | 02:53:36 | PM             | CDT |         2025 |
+| [master          | 8131204]                      | .        |          |                |     |              |
+| 2                | files                         | changed, |       64 | insertions(+), |  64 | deletions(-) |
+| To               | github.com:jeszyman/emseq.git |          |          |                |     |              |
+| 792a21e..8131204 | master                        | ->       |   master |                |     |              |
 
 *** Configuration
 #+begin_src yaml :tangle ./config/emseq.yaml
@@ -972,6 +975,7 @@ cat /tmp/test/qc/dupsifter-dedup-stats.txt
 
 #+end_src
 - snakefile, inline
+  #+name: emseq-dedup
   #+begin_src snakemake
 rule emseq_dedup:
     conda:
@@ -1053,6 +1057,7 @@ rule emseq_dedup:
 #+end_src
 **** Make methylation position calls
 - snakemake, inline
+  #+name: emseq-pileup
   #+begin_src snakemake
 rule emseq_pileup:
     conda:
@@ -1077,6 +1082,7 @@ rule emseq_pileup:
         """
 #+end_src
 - snakemake, inline
+  #+name: emseq-post-pileup
   #+begin_src snakemake
 rule emseq_post_pileup:
     conda:
@@ -3430,7 +3436,17 @@ ggplot(meth_df, aes(x = group, y = methylation, fill = group)) +
 :PROPERTIES:
 :ID:       aa6630c4-d35c-4e71-b2d8-2971e9d6b8de
 :END:
-*** Workflow 2: Post-alignment Processing, Alignment QC,
+*** Workflow 2: Post-alignment Processing, Alignment QC
+:PROPERTIES:
+:ID:       0063769e-67d9-45c1-a03e-ade92641b127
+:header-args:snakemake: :tangle ./workflows/workflow2.smk
+:END:
+#+begin_src snakemake
+<#emseq-dedup#>
+<#emseq-pileup#>
+<#emseq-post-pileup#>
+#+end_src
+
 ** Reference
 EM-seq protects 5mC and 5hmC from damination with TET2 enzymatic oxidation. Unprotected cytosines are deaminated to uracils.
 ** Ideas

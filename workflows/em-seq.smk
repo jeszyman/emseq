@@ -27,34 +27,34 @@ rule emseq_fastp:
         --out2 {output.r2} \
         --thread {params.threads} \
         """
-# rule emseq_biscuit_align:
-#     conda:
-#         "../config/biscuit-conda-env.yaml",
-#     input:
-#         r1 = f"{emseq_fastq_dir}/{{library_id}}_trimmed_R1.fastq.gz",
-#         r2 = f"{emseq_fastq_dir}/{{library_id}}_trimmed_R2.fastq.gz",
-#         fasta = f"{ref_dir}/biscuit/{emseq_ref_fasta}",
-#     log:
-#         cmd = f"{log_dir}/{{library_id}}_emseq_biscuit_align.log",
-#     output:
-#         bam = f"{emseq_bam_dir}/{{library_id}}.bam",
-#     params:
-#         threads = config["threads"],
-#     resources:
-#         concurrency=100
-#     shell:
-#         """
-#         mkdir -p {data_dir}/tmp && \
-#         biscuit align \
-#         -@ {params.threads} \
-#         -biscuit-ref {input.fasta} \
-#         {input.r1} {input.r2} \
-#         | samtools sort -n \
-#         -@ 8 \
-#         -m 2G \
-#         -T {data_dir}/tmp/{wildcards.library_id}_sorttmp \
-#         -o {output.bam} &>> {log}
-#         """
+rule emseq_biscuit_align:
+    conda:
+        "../config/biscuit-conda-env.yaml",
+    input:
+        r1 = f"{emseq_fastq_dir}/{{library_id}}_trimmed_R1.fastq.gz",
+        r2 = f"{emseq_fastq_dir}/{{library_id}}_trimmed_R2.fastq.gz",
+        fasta = f"{ref_dir}/biscuit/{emseq_ref_fasta}",
+    log:
+        cmd = f"{log_dir}/{{library_id}}_emseq_biscuit_align.log",
+    output:
+        bam = f"{emseq_bam_dir}/{{library_id}}.bam",
+    params:
+        threads = config["threads"],
+    resources:
+        concurrency=100
+    shell:
+        """
+        mkdir -p {data_dir}/tmp && \
+        biscuit align \
+        -@ {params.threads} \
+        -biscuit-ref {input.fasta} \
+        {input.r1} {input.r2} \
+        | samtools sort -n \
+        -@ 8 \
+        -m 2G \
+        -T {data_dir}/tmp/{wildcards.library_id}_sorttmp \
+        -o {output.bam} &>> {log}
+        """
 rule emseq_dedup:
     conda:
         "../config/biscuit-conda-env.yaml",
@@ -69,14 +69,14 @@ rule emseq_dedup:
     shell:
         r"""
         rm -f {output.bam}.tmp.*.bam
-        (dupsifter \
-          --add-mate-tags \
-          --stats-output {log} \
-          {input.fasta} \
-          {input.bam} || echo '[dupsifter] non-zero exit code ignored') \
-        | samtools sort \
-            -o {output.bam} \
-            -@ 8 && samtools index -@ 8 {output.bam}
+        samtools view -h -f 0x2 {input.bam} \
+        | samtools sort -n -@ 4 -O BAM -o /dev/stdout \
+        | dupsifter \
+            --add-mate-tags \
+            --stats-output {log} \
+            {input.fasta} - \
+        | samtools sort -@ 8 -o {output.bam}
+        samtools index -@ 8 {output.bam}
         """
 rule emseq_pileup:
     conda:

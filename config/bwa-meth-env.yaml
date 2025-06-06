@@ -1,0 +1,10 @@
+name: bwa_mem
+channels:
+  - conda-forge
+  - bioconda
+
+dependencies:
+  - samtools
+  - bwa
+  - bwameth
+  - methyldackel

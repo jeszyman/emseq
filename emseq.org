@@ -6,106 +6,77 @@
 :ID:       cd9489fd-c6e7-4c64-8317-e3d9a283b36c
 :header-args: :tangle-mode (identity #o555)
 :END:
-https://pmc.ncbi.nlm.nih.gov/articles/PMC10072131/
+- [cite:@chauhan2024]
+** [[elisp:(progn (org-babel-goto-named-src-block "git-workflow-up") (org-babel-execute-src-block))][Run git workflow up]]
+** Example wrapper
 
-#+begin_src yaml
+#+begin_src yaml :tangle ./config/example-config.yaml
+data_dir: /mnt/data/projects/breast
+emseq_ref_assemblies:
+  ncbi_decoy_hg38:
+    url: https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
+    name: ncbi_decoy_hg38
+    input: GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fa.gz
 
-biscuit_reference:
   ensembl_hg38:
     url: https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
     name: ensembl_hg38
+    input: Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
 
+  unmeth_lambda:
+    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/lambdafsa.txt?rev=c0c6669b9bd340ddb674ebfd9d55c691&hash=7E6375924CFF9457D0157D0D87C9AC19
+    name: unmeth_lambda
+    input: Lambda_NEB.fa.gz
+
+  puc19:
+    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/puc19fsa.txt?rev=6e10f4c4a4234d638e401cd2f4578ef0&hash=E71970068EEA191C175B3458DB99D7BB
+    name: puc19
+    input: pUC19.fa.gz
 #+end_src
-
-#+begin_src snakemake
-data_dir
-biscuit_ref = config["biscuit_reference"]["ensembl_hg38"]
-#+end_src
-
-A master data dir, emseq_dir directs outputs
-Outside of emseq_dir, BISCUIT index is genrated in data_dir/ref/biscuit
-
-
-Adapter and quality trimming was performed using fastp without any fixed-length end trimming. Alignment used biscuit with Ensemble hg38 primary assembly (https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz). Aligned BAMs were deduplicated using dupsifter with mate-tag annotation. Methylation pileups were generated from deduplicated BAMs using biscuit pileup, and the resulting VCFs were converted to bismark-formatted bed files. Bismark-style BEDs were converted to methylKit objects using a custom R script, and downstream differential methylation analysis was performed in methylKit.
-
-Copy number analysis was performed with ichorCNA. Deduplicated BAMs were used as input. Read counts were generated in 1 Mb windows using readCounter, filtering for base quality and including autosomes and sex chromosomes.
-
-Copy number estimation was performed using ichorCNA, specifying hg38 reference annotations, GC and mappability corrections, and the default panel of normals. The model estimated tumor fraction, ploidy, and subclonal prevalence using autosomal chromosomes for training. ichorCNA was run with package-specified low input settings including reduced copy number states, no subclonal events and initial ploidy set at diploid.
-
-
-https://www.pnas.org/doi/10.1073/pnas.1313995110
-https://chatgpt.com/c/681d527d-4850-8005-87cd-9d8355cf160a
-
-- [cite:@chan2013meth]
-  - [cite:@liu2020]
-  - [cite:@shen2018plasma]
-    - [cite:@liang2021meth]
-    - [cite:@shen2019cfmedip]
-    - [cite:@nuzzo2020] *
-    - [cite:@nassiri2020] *
-  - [cite:@li20175hmc]
-  - [cite:@song20175hmc]
-  - [cite:@li2018meth]
-    - [cite:@liang2021meth]
-    - [cite:@hlady2019]
-    - [cite:@moss2020]
-    - [cite:@stackpole2022]
-      - [cite:@wong2023]
-      - [cite:@li2023cfdna]
-      - [cite:@melton2023]
-    - [cite:@wu2020]
-    - [cite:@delvecchio2020]
-- [cite:@vaisvila2021]
-
-
-- [cite:@bie2023]
-https://www-pnas-org.mclibrary.idm.oclc.org/doi/full/10.1073/pnas.2017421118#sec-3
-https://www-nature-com.mclibrary.idm.oclc.org/articles/s41551-021-00746-5#Sec11
-
-https://www-nature-com.mclibrary.idm.oclc.org/articles/s41586-022-05580-6
-
-[cite:@melton2023]
-
-https://www-scopus-com.mclibrary.idm.oclc.org/results/results.uri?sort=cp-f&src=s&sid=02157e5ff2f1b8a77a24e67aeefcb07b&sot=a&sdt=a&cluster=scosubtype%2C%22ar%22%2Ct&sl=76&s=%28TITLE-ABS-KEY%28%22cell-free+DNA%22%29+AND+TITLE-ABS-KEY%28methylation%29%29+AND+NOT%28PCR%29&origin=searchadvanced&editSaveSearch=&txGid=3b8b26bec1c779cef84de4d3803c1be9&sessionSearchId=02157e5ff2f1b8a77a24e67aeefcb07b&limit=10
-
-https://www-nature-com.mclibrary.idm.oclc.org/articles/ng.3805
-
-| article             | group      | platform    | depth | tissue | target | times cited | date |
-|---------------------+------------+-------------+-------+--------+--------+-------------+------|
-| [cite:@nassiri2020] | decarvalho | cfMeDIP-seq |       | CNS    | CNS    |             |      |
-
 
 #+begin_src bash
-ssh jeff-ubuntu8
+conda activate biotools
 
-source ~/repos/breast/config/bash-env.sh
+cd ~/repos/emseq
+data_dir=/mnt/data/projects/breast
 
-./scripts/emseq_mosdepth.sh
-
-./scripts/emseq_mosdepth.sh \
-    /mnt/data/projects/breast/analysis/emseq/bams-unmerged/NH_13_L1.bam \
-    /tmp \
-    NH_13_L1 \
-    "1,2,5,10,20" \
-    8
+url=$(yqgo '.emseq_ref_assemblies.puc19.url' ./config/example-config.yaml) && \
+outfile=$(yqgo '.emseq_ref_assemblies.puc19.input' ./config/example-config.yaml) && \
+wget -O - --user-agent="Mozilla/5.0" --referer="https://www.neb.com" "$url" | \
+  gzip > "$data_dir/inputs/$outfile"
 
 
-./scripts/emseq_mosdepth.sh \
-    /mnt/data/projects/breast/analysis/emseq/bams-unmerged/NH_13_L2.bam \
-    /tmp \
-    NH_13_L2 \
-    "1,2,5,10,20" \
-    8
+url=$(yqgo '.emseq_ref_assemblies.unmeth_lambda.url' ./config/example-config.yaml) && \
+outfile=$(yqgo '.emseq_ref_assemblies.unmeth_lambda.input' ./config/example-config.yaml) && \
+wget -O - --user-agent="Mozilla/5.0" --referer="https://www.neb.com" "$url" | \
+  gzip > "$data_dir/inputs/$outfile"
 
 
-Rscript ./scripts/emseq_mosdepth_agg_plot.R \
-	--threshold_list "/tmp/mosdepth_NH_13_L1.thresholds.bed.gz /tmp/mosdepth_NH_13_L2.thresholds.bed.gz" \
-	--library_list "NH_13_L1 NH_13_L2" \
-	--output_pdf "/tmp/test.pdf"
+url=$(yqgo '.emseq_ref_assemblies.ncbi_decoy_hg38.url' ./config/example-config.yaml) && \
+outfile=$(yqgo '.emseq_ref_assemblies.ncbi_decoy_hg38.input' ./config/example-config.yaml) && \
+wget -O "$data_dir/inputs/$outfile" "$url"
+
 
 #+end_src
 
-** [[elisp:(progn (org-babel-goto-named-src-block "git-workflow-up") (org-babel-execute-src-block))][Run git workflow up]]
+
+#+begin_src snakemake :tangle ./workflows/test-wrap.smk
+
+repo = "~/repos/emseq"
+data_dir=config["data_dir"]
+
+# Explicitly select which references to build
+index_targets = ["unmeth_lambda", "puc19"]
+
+rule all:
+    input:
+        expand(f"{data_dir}/ref/{{name}}.fa.bwameth.c2t", name=index_targets)
+
+
+include: f"{repo}/workflows/dev.smk"
+
+#+end_src
+
 ** README
 The EM-seq repository contains modular workflows intended to be run from within a over-wrapping snakemake workflow.
 
@@ -166,6 +137,7 @@ sourced-conda-envs:
 #+end_src
 *** Conda
 **** Environmental YAMLs
+***** MethylKit
 #+begin_src yaml :tangle ./config/methylkit-conda-env.yaml
 name: methylkit
 channels:
@@ -178,9 +150,9 @@ dependencies:
   - r-data.table=1.15.4
 
 #+end_src
-
-#+begin_src yaml :tangle ./config/biscuit-conda-env.yaml
-name: biscuit
+***** EM-seq
+#+begin_src yaml :tangle ./config/emseq-conda-env.yaml
+name: emseq
 channels:
   - conda-forge
   - bioconda
@@ -191,7 +163,26 @@ dependencies:
   - bioconductor-genomeinfodbdata=1.2.7
   - biscuit=1.6.0.20241216=*_1
   - dupsifter=1.3.0.20241113=*_1
+  - bwa
+  - bwameth
+  - methyldackel
+
+
 #+end_src
+***** bwa-meth
+#+begin_src yaml :tangle ./config/bwa-meth-env.yaml
+name: bwa_mem
+channels:
+  - conda-forge
+  - bioconda
+
+dependencies:
+  - samtools
+  - bwa
+  - bwameth
+  - methyldackel
+#+end_src
+
 **** Testing
 #+begin_src bash
 cd ~/repos/emseq
@@ -217,6 +208,16 @@ mamba env update --name "$ENV_NAME" --file ./config/emseq-conda-env.yaml
 
 *** Snakemake
 *** README
+A master data dir, emseq_dir directs outputs
+Outside of emseq_dir, BISCUIT index is genrated in data_dir/ref/biscuit
+
+
+Adapter and quality trimming was performed using fastp without any fixed-length end trimming. Alignment used biscuit with Ensemble hg38 primary assembly (https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz). Aligned BAMs were deduplicated using dupsifter with mate-tag annotation. Methylation pileups were generated from deduplicated BAMs using biscuit pileup, and the resulting VCFs were converted to bismark-formatted bed files. Bismark-style BEDs were converted to methylKit objects using a custom R script, and downstream differential methylation analysis was performed in methylKit.
+
+Copy number analysis was performed with ichorCNA. Deduplicated BAMs were used as input. Read counts were generated in 1 Mb windows using readCounter, filtering for base quality and including autosomes and sex chromosomes.
+
+Copy number estimation was performed using ichorCNA, specifying hg38 reference annotations, GC and mappability corrections, and the default panel of normals. The model estimated tumor fraction, ploidy, and subclonal prevalence using autosomal chromosomes for training. ichorCNA was run with package-specified low input settings including reduced copy number states, no subclonal events and initial ploidy set at diploid.
+
 Directory Structure
 #+begin_example
 -- Main
@@ -231,7 +232,7 @@ Directory Structure
 
 **** Prerequisites
 **** Change Log
-** Data model
+** Input data model
 #+begin_src yaml
 defaults:
   required: false       # Default: fields are not required unless specified
@@ -310,6 +311,10 @@ entities:
         type: string
         foreign_key: samples.sample_id     # Source sample for this library
         required: true
+      - name: pcr_cycltes
+        type: integer
+      - name: expected_coverage
+        type: integer
 
   - name: sequencing
     attributes:
@@ -357,6 +362,7 @@ relationships:
 #+end_src
 ** Workflows
 [[file:workflows/em-seq.smk]]
+https://github.com/semenko/serpent-methylation-pipeline
 Typically merge post-alignment if running
 *** Methylation sequence processing
 :PROPERTIES:
@@ -1180,6 +1186,7 @@ myobj= methRead(args$bismark_cov_bed,
                 dbdir = args$out_dir)
 
 #+end_src
+
 ***** Grouped objects and differential methylation
 ****** Per-position
 #+begin_src snakemake
@@ -4259,6 +4266,8 @@ rule emseq_post_pileup:
         """
 #+end_src
 **** methylKit per experiment
+https://chatgpt.com/c/681d527d-4850-8005-87cd-9d8355cf160a
+
 ***** Per-library, make positional methylation object
 #+begin_src snakemake
 rule make_single_methylkit_obj:
@@ -4751,6 +4760,36 @@ rule emseq_fastqc:
         """
 #+end_src
 ***** Depth
+#+begin_src bash
+ssh jeff-ubuntu8
+
+source ~/repos/breast/config/bash-env.sh
+
+./scripts/emseq_mosdepth.sh
+
+./scripts/emseq_mosdepth.sh \
+    /mnt/data/projects/breast/analysis/emseq/bams-unmerged/NH_13_L1.bam \
+    /tmp \
+    NH_13_L1 \
+    "1,2,5,10,20" \
+    8
+
+
+./scripts/emseq_mosdepth.sh \
+    /mnt/data/projects/breast/analysis/emseq/bams-unmerged/NH_13_L2.bam \
+    /tmp \
+    NH_13_L2 \
+    "1,2,5,10,20" \
+    8
+
+
+Rscript ./scripts/emseq_mosdepth_agg_plot.R \
+	--threshold_list "/tmp/mosdepth_NH_13_L1.thresholds.bed.gz /tmp/mosdepth_NH_13_L2.thresholds.bed.gz" \
+	--library_list "NH_13_L1 NH_13_L2" \
+	--output_pdf "/tmp/test.pdf"
+
+#+end_src
+
 - Mosdepth on specific bams
   #+begin_src snakemake
 # Will follow symlinks
@@ -6601,7 +6640,552 @@ ggplot(meth_df, aes(x = group, y = methylation, fill = group)) +
 <#emseq-pileup#>
 <#emseq-post-pileup#>
 #+end_src
+*** Dev
+:PROPERTIES:
+:ID:       c5b37e92-1e28-4cfc-8678-b830ac836d57
+:header-args:snakemake: :tangle ./workflows/dev.smk
+:END:
+[[file:workflows/dev.smk]]
+#+begin_src snakemake :tangle no
 
+# Development snakemake to test
+
+repo = "~/repos/emseq"
+data_dir=config["data_dir"]
+emseq_script_dir = "~/repos/emseq/scripts"
+log_dir = f"{data_dir}/logs"
+
+emseq_mincov = 2
+emseq_build = "hg38"
+
+# Explicitly select which references to build
+index_targets = ["unmeth_lambda", "puc19"]
+
+library_ids = ["NH_15_L3", "PRO_6_L2"]
+
+spike_ref_names = ["unmeth_lambda"]
+
+ref_names = ["ncbi_decoy_hg38"]
+
+align_methods = ["bwa_meth"]
+
+
+meth_map = {
+    "test": {
+        "build": "hg38",
+        "mincov": "5",
+        "libs": library_ids,
+        "tx": "0,1"
+}
+}
+
+rule all:
+    input:
+        # FASTQs
+        expand(f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_{{processing}}_{{read}}.fastq.gz",
+               library_id = library_ids,
+               processing = ["raw","trimmed"],
+               read = ["R1","R2"]),
+
+        expand(f"{data_dir}/qc/{{library_id}}_{{processing}}_{{read}}_fastqc.{{suffix}}",
+               library_id = library_ids,
+               processing = ["raw","trimmed"],
+               read = ["R1","R2"],
+               suffix = ["zip","html"]),
+
+        # Spike-ins
+        expand(f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.bwa_meth.coorsorted.bam",
+               library_id = library_ids,
+               ref_name = spike_ref_names,
+               align_method = "bwa_meth"),
+
+        expand(f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
+               library_id=library_ids,
+               ref_name=spike_ref_names,
+               align_method= "bwa_meth"),
+
+        # Quick bwa-meth alignment
+
+        expand(f"{data_dir}/analysis/emseq/bams/{{library_id}}.{{ref_name}}.bwa_meth.coorsorted.bam",
+               library_id = library_ids,
+               ref_name = ref_names,
+               align_method = "bwa_meth"),
+
+        expand(f"{data_dir}/analysis/emseq/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
+               library_id = library_ids,
+               ref_name = ref_names,
+               align_method = "bwa_meth"),
+
+        expand(f"{data_dir}/analysis/emseq/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.txt",
+               library_id = library_ids,
+               ref_name = ref_names,
+               align_method = "bwa_meth"),
+
+
+#+end_src
+
+**** Common steps
+***** Fastp
+#+begin_src snakemake
+rule emseq_fastp:
+    input:
+        r1 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_raw_R1.fastq.gz",
+        r2 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_raw_R2.fastq.gz",
+    log:
+        cmd = f"{log_dir}/{{library_id}}-emseq-fastp.log",
+        json = f"{log_dir}/{{library_id}}-emseq-fastp.json",
+        html = f"{log_dir}/{{library_id}}-emseq-fastp.html",
+    output:
+        r1 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_trimmed_R1.fastq.gz",
+        r2 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_trimmed_R2.fastq.gz",
+        failed = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_failed.fastq.gz",
+    params:
+        script = f"{emseq_script_dir}/fastp-emseq-wrapper.sh",
+        threads = 16,
+    shell:
+        """
+        fastp \
+        --detect_adapter_for_pe \
+        --disable_quality_filtering \
+        --failed_out {output.failed} \
+        --in1 {input.r1} \
+        --in2 {input.r2} \
+        --json {log.json} \
+        --html {log.html} \
+        --out1 {output.r1} \
+        --out2 {output.r2} \
+        --thread {params.threads} \
+        """
+
+#+end_src
+***** FastQC
+#+begin_src snakemake
+rule emseq_fastqc:
+    input:
+        f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_{{processing}}_{{read}}.fastq.gz",
+    log:
+        f"{data_dir}/logs/{{library_id}}_{{processing}}_{{read}}_fastqc.log",
+    output:
+        f"{data_dir}/qc/{{library_id}}_{{processing}}_{{read}}_fastqc.html",
+        f"{data_dir}/qc/{{library_id}}_{{processing}}_{{read}}_fastqc.zip",
+    params:
+        outdir = f"{data_dir}/qc",
+        threads = 2,
+    resources:
+        concurrency=20
+    shell:
+        """
+        fastqc \
+        --outdir {params.outdir} \
+        --quiet \
+        --svg \
+        --threads {params.threads} \
+        {input} &> {log}
+        """
+#+end_src
+
+**** BWA-Meth
+
+BWA-meth alignment is much faster than biscuit.
+
+The BWA-meth workflow requires a reference gzipped fasta in $data_dir/inputs, specified in the config yaml like:
+#+begin_src yaml
+emseq_ref_assemblies:
+  ensembl_hg38:
+    url: https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+    name: ensembl_hg38
+    input: Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+#+end_src
+
+This will be indexed and used for alignment.
+
+BWA-meth output is a duplicated, coordinate sorted BAM. This is de-duplicated during methylation calls by methyldackel.
+
+Reference
+- https://github.com/brentp/bwa-meth
+
+***** Index
+
+#+begin_src snakemake
+rule bwa_meth_index:
+    conda:
+        "../config/emseq-conda-env.yaml"
+    input:
+        lambda wildcards: f"{data_dir}/inputs/{config['emseq_ref_assemblies'][wildcards.name]['input']}"
+    output:
+        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t",
+        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.0123",
+        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.amb",
+        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.ann",
+        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.bwt.2bit.64",
+        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.pac",
+        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa",
+    params:
+        fasta_target = lambda wildcards: f"{data_dir}/ref/bwa_meth/{wildcards.name}/{wildcards.name}.fa"
+    log:
+        f"{log_dir}/{{name}}_bwa_meth_index.log"
+    shell:
+        """
+        mkdir -p $(dirname {params.fasta_target}) && \
+        zcat {input} > {params.fasta_target} && \
+        samtools faidx -@ 8 {params.fasta_target} && \
+        bwameth.py index-mem2 {params.fasta_target} > {log} 2>&1
+        """
+
+#+end_src
+
+***** Align
+
+#+begin_src snakemake
+rule emseq_align_bwameth:
+    conda:
+        "../config/emseq-conda-env.yaml"
+    input:
+        r1 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_trimmed_R1.fastq.gz",
+        r2 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_trimmed_R2.fastq.gz",
+        ref = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa",
+        c2t = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa.bwameth.c2t",
+    output:
+        bam = f"{data_dir}/analysis/emseq/bams/{{library_id}}.{{ref_name}}.bwa_meth.coorsorted.bam"
+    threads: 16
+    params:
+        temp_prefix = lambda wildcards: f"{data_dir}/tmp/{wildcards.library_id}.{wildcards.ref_name}",
+    log:
+        f"{log_dir}/{{library_id}}.{{ref_name}}.bwameth.log"
+    shell:
+        """
+        bwameth.py --threads {threads} \
+            --reference {input.ref} \
+            {input.r1} {input.r2} 2> {log} | \
+        samtools view -u - | \
+        samtools sort -@ {threads} -T {params.temp_prefix} -o {output.bam}
+        """
+
+#+end_src
+
+***** Post-align
+
+#+begin_src snakemake
+rule emseq_methyldackel_dedup:
+    conda:
+        "../config/emseq-conda-env.yaml",
+    input:
+        bam = f"{data_dir}/analysis/emseq/bams/{{library_id}}.{{ref_name}}.bwa_meth.coorsorted.bam",
+        fasta = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa",
+    output:
+        bed = f"{data_dir}/analysis/emseq/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
+    log:
+        f"{log_dir}/{{library_id}}_{{ref_name}}_{{align_method}}_emseq_methyldackel_dedup.log",
+    params:
+        out_prefix = f"{data_dir}/analysis/emseq/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel",
+        threads = 36,
+    shell:
+        """
+        MethylDackel extract \
+        -@ {params.threads} \
+        --methylKit \
+        {input.fasta} \
+        {input.bam} \
+        -o {params.out_prefix} > {log} 2>&1
+        """
+
+#+end_src
+
+#+begin_src snakemake
+rule make_single_methylkit_amp_obj:
+    conda:
+        "../config/methylkit-conda-env.yaml",
+    input:
+        amp = f"{data_dir}/analysis/emseq/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
+    log:
+        f"{log_dir}/{{library_id}}.{{ref_name}}.{{align_method}}_single_methylkit_amp.log",
+    output:
+        txt = f"{data_dir}/analysis/emseq/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.txt",
+        bgz = f"{data_dir}/analysis/emseq/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.txt.bgz",
+        tbi = f"{data_dir}/analysis/emseq/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.txt.bgz.tbi",
+    params:
+        Rscript = f"{emseq_script_dir}/make_single_amp_methylkit_obj.R",
+        out_dir = f"{data_dir}/analysis/emseq/dmr/tabix",
+        mincov = emseq_mincov,
+        build = emseq_build,
+        treatment = 1,
+    shell:
+        """
+        Rscript {params.Rscript} \
+          --amp_file {input.amp} \
+          --library_id "{wildcards.library_id}.{wildcards.ref_name}.{wildcards.align_method}" \
+          --mincov {params.mincov} \
+          --out_dir {params.out_dir} \
+          --treatment {params.treatment} \
+          --build {params.build} \
+          &>> {log}
+        """
+
+#+end_src
+
+#+begin_src R :tangle ./scripts/make_single_amp_methylkit_obj.R
+library(argparse)
+library(methylKit)
+
+parser <- ArgumentParser()
+parser$add_argument("--amp_file", required = TRUE)
+parser$add_argument("--library_id", required = TRUE)
+parser$add_argument("--treatment", type = "integer", required = TRUE)
+parser$add_argument("--mincov", required = TRUE)
+parser$add_argument("--build", required = TRUE)
+parser$add_argument("--out_dir", required = TRUE)
+
+args <- parser$parse_args()
+
+obj <- methRead(
+  location = args$amp_file,
+  sample.id = args$library_id,
+  assembly = args$build,
+  treatment = args$treatment,
+  pipeline = "amp",
+  context = "CpG",
+  resolution = "base",
+  header = TRUE,
+  mincov = args$mincov,
+  dbtype = "tabix",
+  dbdir = args$out_dir
+)
+
+#+end_src
+**** Spike workflow
+
+The EM-seq kit includes two control DNA spike-ins, unmethylated Lambda and CpG methylated pUC19.
+
+"Regardless of sequencing depth, a minimum of 5,000 paired end reads with a read length of 76 bases, for unmethylated Lambda DNA, and 500 paired end reads with a read length of 76 bases, for CpG methylated pUC19, are needed to give enough coverage for accurate conversion estimates." [cite:@emseq2023manual].
+
+We expect Lambda methylation rates below 1% as shown in [cite:@vaisvila2021]
+[[file:./resources/vaisvila2021figs7b.png][vaisvila2021figs7b.png]]
+and we expect above 90% methylation of exclusively CpG sites for pUC19
+[[file:./resources/vaisvila2021figs7c.png][vaisvila2021figs7c.png]]
+
+
+The spike workflow uses bwa-meth to quickly align to phage reference genomes. Coordinate-sorted BAM output is limited to only reads matching the phage index (-F 4). CpG methylation is called in methyldackel, allowing duplicates,
+
+- [cite:@vaisvila2021]
+- [cite:@chauhan2024]
+- [cite:@emseq2023manual]
+#+begin_src snakemake
+rule emseq_align_bwameth_spike:
+    conda:
+        "../config/emseq-conda-env.yaml"
+    input:
+        r1 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_trimmed_R1.fastq.gz",
+        r2 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_trimmed_R2.fastq.gz",
+        ref = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa"
+    output:
+        bam = f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.bwa_meth.coorsorted.bam"
+    threads: 48
+    log:
+        f"{log_dir}/{{library_id}}.{{ref_name}}.emseq_align_bwameth_spike.log"
+    params:
+        temp_prefix = lambda wildcards: f"{data_dir}/tmp/{wildcards.library_id}.{wildcards.ref_name}"
+    shell:
+        """
+        bwameth.py --threads {threads} \
+            --reference {input.ref} \
+            {input.r1} {input.r2} 2> {log} | \
+        samtools view -u -F 4 - | \
+        samtools sort -@ {threads} -T {params.temp_prefix} -o {output.bam}
+        """
+
+#+end_src
+
+#+begin_src snakemake
+rule emseq_methyldackel_spike:
+    conda:
+        "../config/emseq-conda-env.yaml"
+    input:
+        bam = f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.bwa_meth.coorsorted.bam",
+        fasta = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa",
+    output:
+        bed = f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
+    log:
+        f"{log_dir}/{{library_id}}_{{ref_name}}_{{align_method}}_methyldackel.log",
+    params:
+        out_prefix = f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel",
+    shell:
+        """
+        MethylDackel extract \
+        --methylKit \
+        {input.fasta} \
+        {input.bam} \
+        -o {params.out_prefix} > {log} 2>&1
+        """
+#+end_src
+
+
+**** Biscuit
+:properties:
+:header-args:snakemake: :tangle no
+:end:
+#+begin_src snakemake
+rule emseq_dupsifter:
+    conda:
+        "../config/biscuit-conda-env.yaml",
+    input:
+        bam = f"{data_dir}/analysis/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.namesorted.bam",
+        fasta = f"{data_dir}/ref/{{align_method}}/{{ref_name}}/{{ref_name}}.fa",
+    log:
+        f"{log_dir}/{{library_id}}_{{ref_name}}_{{align_method}}_emseq_dedup.log",
+    output:
+        bam = f"{data_dir}/analysis/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.dedup.coordsort.bam",
+        index = f"{data_dir}/analysis/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.dedup.coordsort.bam.bai",
+    shell:
+        r"""
+        rm -f {output.bam}.tmp.*.bam
+        samtools view -h -f 0x2 {input.bam} \
+        | samtools sort -n -@ 4 -O BAM -o /dev/stdout \
+        | dupsifter \
+            --add-mate-tags \
+            --stats-output {log} \
+            {input.fasta} - \
+        | samtools sort -@ 8 -o {output.bam}
+        samtools index -@ 8 {output.bam}
+        """
+
+#+end_src
+
+***** Index
+#+begin_src snakemake
+rule emseq_biscuit_index:
+    conda:
+        "../config/emseq-conda-env.yaml"
+    input:
+        lambda wildcards: f"{data_dir}/inputs/{config['emseq_ref_assemblies'][wildcards.name]['input']}"
+    output:
+        fasta = f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa",
+        fai = f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa.fai",
+        biscuit_index_done = f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa.biscuit.index.done"
+    log:
+        f"{log_dir}/{{name}}_biscuit_index.log"
+    shell:
+        """
+        mkdir -p $(dirname {output.fasta}) && \
+        zcat {input} > {output.fasta} && \
+        samtools faidx {output.fasta} && \
+        biscuit index {output.fasta} > {log} 2>&1 && \
+        touch {output.biscuit_index_done}
+        """
+
+#+end_src
+
+***** Align
+#+begin_src snakemake
+rule emseq_align_biscuit:
+    conda:
+        "../config/emseq-conda-env.yaml",
+    input:
+        r1 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_trimmed_R1.fastq.gz",
+        r2 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_trimmed_R2.fastq.gz",
+        fasta = f"{data_dir}/ref/biscuit/{{ref_name}}/{{ref_name}}.fa",
+    log:
+        cmd = f"{data_dir}/logs/{{library_id}}.{{ref_name}}.biscuit.namesorted.bam",
+    output:
+        bam = f"{data_dir}/analysis/emseq/bams/{{library_id}}.{{ref_name}}.biscuit.namesorted.bam",
+    params:
+        threads = config["threads"],
+    resources:
+        concurrency=100
+    shell:
+        """
+        mkdir -p {data_dir}/tmp && \
+        biscuit align \
+        -@ {params.threads} \
+        -biscuit-ref {input.fasta} \
+        {input.r1} {input.r2} \
+        | samtools sort -n \
+        -@ 8 \
+        -m 2G \
+        -T {data_dir}/tmp/{wildcards.library_id}_sorttmp \
+        -o {output.bam} &>> {log}
+        """
+
+#+end_src
+
+***** Post-align
+#+begin_src snakemake
+rule emseq_biscuit_pileup:
+    conda:
+        "../config/biscuit-conda-env.yaml",
+    input:
+        bam = f"{data_dir}/analysis/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.dedup.coordsort.bam",
+        fasta = f"{data_dir}/ref/{{align_method}}/{{ref_name}}/{{ref_name}}.fa",
+    log:
+        f"{log_dir}/{{library_id}}_{{ref_name}}_{{align_method}}_emseq_pileup.log",
+    output:
+        vcf = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}.{{align_method}}_pileup.vcf.gz",
+        tsv = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}.{{align_method}}_pileup.vcf_meth_average.tsv",
+    params:
+        out_base = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}.{{align_method}}_pileup.vcf",
+    shell:
+        """
+        biscuit pileup \
+        -d 1 \
+        -b 0 \
+        -m 0 \
+        -@ 8 \
+        -o {params.out_base} \
+        {input.fasta} {input.bam} \
+        && bgzip -@ 8 {params.out_base}
+        """
+
+
+
+#+end_src
+
+dedup as bisuit?
 ** Reference
+https://github.com/semenko/serpent-methylation-pipeline
 EM-seq protects 5mC and 5hmC from damination with TET2 enzymatic oxidation. Unprotected cytosines are deaminated to uracils.
+- cfDNA WGBS hypomethylation and CNAs as a general cancer marker [cite:@chan2013meth]
+- [cite:@chan2013meth]
+  - [cite:@liu2020]
+  - [cite:@shen2018plasma]
+    - [cite:@liang2021meth]
+    - [cite:@shen2019cfmedip]
+    - [cite:@nuzzo2020] *
+    - [cite:@nassiri2020] *
+  - [cite:@li20175hmc]
+  - [cite:@song20175hmc]
+  - [cite:@li2018meth]
+    - [cite:@liang2021meth]
+    - [cite:@hlady2019]
+    - [cite:@moss2020]
+    - [cite:@stackpole2022]
+      - [cite:@wong2023]
+      - [cite:@li2023cfdna]
+      - [cite:@melton2023]
+    - [cite:@wu2020]
+    - [cite:@delvecchio2020]
+
+
+- [cite:@bie2023]
+https://www-pnas-org.mclibrary.idm.oclc.org/doi/full/10.1073/pnas.2017421118#sec-3
+https://www-nature-com.mclibrary.idm.oclc.org/articles/s41551-021-00746-5#Sec11
+
+https://www-nature-com.mclibrary.idm.oclc.org/articles/s41586-022-05580-6
+
+[cite:@melton2023]
+
+https://www-scopus-com.mclibrary.idm.oclc.org/results/results.uri?sort=cp-f&src=s&sid=02157e5ff2f1b8a77a24e67aeefcb07b&sot=a&sdt=a&cluster=scosubtype%2C%22ar%22%2Ct&sl=76&s=%28TITLE-ABS-KEY%28%22cell-free+DNA%22%29+AND+TITLE-ABS-KEY%28methylation%29%29+AND+NOT%28PCR%29&origin=searchadvanced&editSaveSearch=&txGid=3b8b26bec1c779cef84de4d3803c1be9&sessionSearchId=02157e5ff2f1b8a77a24e67aeefcb07b&limit=10
+
+https://www-nature-com.mclibrary.idm.oclc.org/articles/ng.3805
+
+| article             | group      | platform    | depth | tissue | target | times cited | date |
+|---------------------+------------+-------------+-------+--------+--------+-------------+------|
+| [cite:@nassiri2020] | decarvalho | cfMeDIP-seq |       | CNS    | CNS    |             |      |
+
+Original EM-seq methods paper - [cite:@vaisvila2021]. Code is in the repo at [[file:resources/EM-seq-master/]]
+
+
+EM-seq and WGBS are not compatible- have different unique methylated CpGs at 8x [[/home/jeszyman/repos/emseq/emseq.org_20250605_135724.png][./resources/vaisvila2021fig4c.png]]
 ** Ideas
+[cite:@vaisvila2021]
+[[/home/jeszyman/repos/emseq/emseq.org_20250605_135404.png][emseq.org_20250605_135404.png]]
+*** variant calling
+- https://pmc.ncbi.nlm.nih.gov/articles/PMC10072131/

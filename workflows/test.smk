@@ -8,6 +8,11 @@ log_dir = f"{data_dir}/logs"
 emseq_mincov = 2
 emseq_build = "hg38"
 
+threads = 80
+# We specify em-seq bam directory directly to allow for workflows that merge at the bam level:
+emseq_bam_dir = f"{data_dir}/analysis/emseq/bams"
+
+
 # Explicitly select which references to build
 index_targets = ["unmeth_lambda", "puc19"]
 
@@ -45,7 +50,7 @@ rule all:
                suffix = ["zip","html"]),
 
         # Spike-ins
-        expand(f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.bwa_meth.coorsorted.bam",
+        expand(f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam",
                library_id = library_ids,
                ref_name = spike_ref_names,
                align_method = "bwa_meth"),
@@ -55,30 +60,66 @@ rule all:
                ref_name=spike_ref_names,
                align_method= "bwa_meth"),
 
-        # Quick bwa-meth alignment
+        # Biscuit 1 steps
+        ## Index
+        expand(f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa.fai",
+               name = "ncbi_decoy_hg38"),
 
-        expand(f"{data_dir}/analysis/emseq/bams/{{library_id}}.{{ref_name}}.bwa_meth.coorsorted.bam",
+        ## Align
+        expand(f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.biscuit.coorsort.bam",
                library_id = library_ids,
-               ref_name = ref_names,
-               align_method = "bwa_meth"),
+               ref_name = ref_names),
 
-        # Deduplicate
-        expand(f"{data_dir}/analysis/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
-               library_id = library_ids,
-               ref_name = ref_names,
-               align_method = "bwa_meth"),
+        # BWA-meth
+        # ## Index
+        # expand(f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t",
+        #        name = ref_names),
 
+        # ## Align
 
-        # expand(f"{data_dir}/analysis/emseq/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
+        # expand(f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam",
         #        library_id = library_ids,
         #        ref_name = ref_names,
         #        align_method = "bwa_meth"),
 
-        # expand(f"{data_dir}/analysis/emseq/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.txt",
+        ## COMMON DEDUP HERE
+
+        ## Pileup
+        # expand(f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}.biscuit_pileup.{{suffix}}",
         #        library_id = library_ids,
         #        ref_name = ref_names,
-        #        align_method = "bwa_meth"),
+        #        suffix = ["vcf.gz","vcf_meth_average.tsv"]),
 
+        # ## Make per-library methylkit objects
+        # expand(f"{data_dir}/analysis/emseq/post-biscuit/{{library_id}}.{{ref_name}}_biscuit.{{suffix}}",
+        #        library_id = library_ids,
+        #        ref_name = ref_names,
+        #        suffix = ["txt", "txt.bgz", "txt.bgz.tbi"]),
+
+        # Common post-alignment per-library steps
+        ## Deduplicate
+        expand(f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
+               library_id = library_ids,
+               ref_name = ref_names,
+               align_method = ["biscuit","bwa_meth"]),
+
+        ## Depth
+        expand(f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.summary.txt",
+               library_id = library_ids,
+               ref_name = ref_names,
+               align_method = ["biscuit","bwa_meth"]),
+
+        ## Call methylation
+        expand(f"{data_dir}/analysis/emseq/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
+               library_id = library_ids,
+               ref_name = ref_names,
+               align_method = ["biscuit", "bwa_meth"]),
+
+        ## Create per-library methylkit objects
+        expand(f"{data_dir}/analysis/emseq/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.txt",
+               library_id = library_ids,
+               ref_name = ref_names,
+               align_method = "bwa_meth"),
 
 
 include: "./dev.smk"

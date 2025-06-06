@@ -19,3 +19,6 @@ emseq_ref_assemblies:
     url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/puc19fsa.txt?rev=6e10f4c4a4234d638e401cd2f4578ef0&hash=E71970068EEA191C175B3458DB99D7BB
     name: puc19
     input: pUC19.fa.gz
+
+
+mosdepth-quant-levels: "1,5,10,20,30"

@@ -49,6 +49,66 @@ rule emseq_fastqc:
         --threads {params.threads} \
         {input} &> {log}
         """
+# Will follow symlinks
+# rule emseq_index_bam_check:
+#     input:
+#         bam = ancient(f"{emseq_bam_dir}/{{library_id}}_deduped.bam"),
+#     output:
+#         bai = f"{emseq_bam_dir}/{{library_id}}_deduped.bam.bai",
+#     shell:
+#         """
+#         samtools index -@ 8 {input.bam} {output.bai}
+#         """
+rule emseq_mosdepth:
+    input:
+        bam = f"{data_dir}/analysis/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
+        index = f"{data_dir}/analysis/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
+    output:
+        summary = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.summary.txt",
+        global_dist = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.global.dist.txt",
+        region_dist = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.region.dist.txt",
+        regions = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.regions.bed.gz",
+        regions_idx = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.regions.bed.gz.csi",
+        quantized = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.quantized.bed.gz",
+        quantized_idx = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.quantized.bed.gz.csi",
+        thresholds = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.thresholds.bed.gz",
+        thresholds_idx = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.thresholds.bed.gz.csi",
+    params:
+        script = f"{emseq_script_dir}/emseq_mosdepth.sh",
+        quant_levels = mosdepth_quant_levels,
+        out_dir = f"{data_dir}/qc",
+    threads: 8
+    shell:
+        """
+        {params.script} \
+        {input.bam} \
+        {params.out_dir} \
+        {wildcards.library_id}.{wildcards.ref_name}.{wildcards.align_method} \
+        "{params.quant_levels}" \
+        {threads}
+        """
+print("emseq_library_ids:", emseq_library_ids)
+print("type of first item:", type(emseq_library_ids[0]))
+
+rule emseq_mosdepth_agg_plot:
+    input:
+        thresholds = expand(f"{data_dir}/qc/mosdepth_{{library_id}}.thresholds.bed.gz", library_id=emseq_library_ids),
+        regions = expand(f"{data_dir}/qc/mosdepth_{{library_id}}.regions.bed.gz", library_id=emseq_library_ids),
+    output:
+        pdf = f"{data_dir}/qc/mosdepth_agg_plot.pdf",
+    params:
+        script = f"{emseq_script_dir}/emseq_mosdepth_agg_plot.R",
+        library_list = " ".join(emseq_library_ids),
+        threshold_list = lambda wildcards, input: " ".join(input.thresholds),
+        regions_list = lambda wildcards, input: " ".join(input.regions),
+    shell:
+        """
+        Rscript {params.script} \
+        --threshold_list "{params.threshold_list}" \
+        --regions_list "{params.regions_list}" \
+        --library_list "{params.library_list}" \
+        --output_pdf {output.pdf}
+        """
 rule bwa_meth_index:
     conda:
         "../config/emseq-conda-env.yaml"
@@ -95,6 +155,38 @@ rule emseq_align_bwameth:
             {input.r1} {input.r2} 2> {log} | \
         samtools view -u - | \
         samtools sort -@ {threads} -T {params.temp_prefix} -o {output.bam}
+        """
+rule emseq_dedup_bwameth:
+    conda:
+        "../config/emseq-conda-env.yaml",
+    input:
+        bam = f"{data_dir}/analysis/emseq/bams/{{library_id}}.{{ref_name}}.bwa_meth.coorsorted.bam",
+        fasta = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa",
+    log:
+        f"{data_dir}/logs/{{library_id}}.{{ref_name}}.emseq_dedup_bwameth.log",
+    output:
+        bam = f"{data_dir}/analysis/emseq/bams/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.deduped.bam",
+        index = f"{data_dir}/analysis/emseq/bams/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.deduped.bam.bai",
+    params:
+        temp_prefix = lambda wildcards: f"{data_dir}/tmp/{wildcards.library_id}.{wildcards.ref_name}.namesort",
+    shell:
+        r"""
+        set -eo pipefail
+
+        # Extract only properly paired reads (-f 0x2), include header (-h)
+        # Name-sort BAM using samtools; output to stdout
+        # Deduplicate using dupsifter, using reference FASTA and streaming input from stdin
+        # Coordinate-sort deduplicated BAM for downstream tools
+        # Index final BAM
+
+        samtools view -h -f 0x2 {input.bam} \
+        | samtools sort -n -@ 4 -O BAM -T {params.temp_prefix} -o - \
+        | dupsifter \
+            --add-mate-tags \
+            --stats-output {log} \
+            {input.fasta} - \
+        | samtools sort -@ 8 -o {output.bam}
+        samtools index -@ 8 {output.bam}
         """
 rule emseq_methyldackel_dedup:
     conda:

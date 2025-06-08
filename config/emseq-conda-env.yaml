@@ -13,3 +13,10 @@ dependencies:
   - bwameth
   - methyldackel
   - mosdepth
+  - r-argparse
+  - r-data.table
+  - r-ggplot2
+  - r-cairo
+  - r-scales
+  - r-patchwork
+  - r-matrixstats

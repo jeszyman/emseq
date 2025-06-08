@@ -35,6 +35,15 @@ meth_map = {
 }
 }
 
+
+mosdepth_map = {
+    "tests": {
+        "library_ids": ["NH_15_L3", "PRO_6_L2"],
+        "ref_name": "ncbi_decoy_hg38",
+        "align_method": "bwa_meth"
+    }
+}
+
 rule all:
     input:
         # FASTQs
@@ -120,6 +129,9 @@ rule all:
                library_id = library_ids,
                ref_name = ref_names,
                align_method = "bwa_meth"),
+
+        expand(f"{data_dir}/qc/{{experiment}}.emseq_mosdepth_agg_plot.pdf",
+               experiment = mosdepth_map.keys())
 
 
 include: "./dev.smk"

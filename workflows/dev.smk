@@ -91,6 +91,37 @@ rule emseq_mosdepth:
         '{params.quant_levels}' \
         {threads}
         """
+rule emseq_mosdepth_agg_plot:
+    conda:
+        "../config/emseq-conda-env.yaml",
+    input:
+        thresholds = lambda wildcards: expand(
+            f"{data_dir}/qc/mosdepth_{{library_id}}.{mosdepth_map[wildcards.experiment]['ref_name']}."
+            f"{mosdepth_map[wildcards.experiment]['align_method']}.thresholds.bed.gz",
+            library_id=mosdepth_map[wildcards.experiment]['library_ids']
+        ),
+        regions = lambda wildcards: expand(
+            f"{data_dir}/qc/mosdepth_{{library_id}}.{mosdepth_map[wildcards.experiment]['ref_name']}."
+            f"{mosdepth_map[wildcards.experiment]['align_method']}.regions.bed.gz",
+            library_id=mosdepth_map[wildcards.experiment]['library_ids']
+        )
+    output:
+        pdf = f"{data_dir}/qc/{{experiment}}.emseq_mosdepth_agg_plot.pdf",
+        tsv = f"{data_dir}/qc/{{experiment}}.emseq_mosdepth_agg.tsv",
+    params:
+        script = f"{emseq_script_dir}/emseq_mosdepth_agg_plot.R",
+        library_list = lambda wildcards: " ".join(mosdepth_map[wildcards.experiment]['library_ids']),
+        threshold_list = lambda wildcards, input: " ".join(input.thresholds),
+        regions_list = lambda wildcards, input: " ".join(input.regions),
+    shell:
+        """
+        Rscript {params.script} \
+        --threshold_list "{params.threshold_list}" \
+        --regions_list "{params.regions_list}" \
+        --library_list "{params.library_list}" \
+        --output_pdf {output.pdf} \
+        --output_tsv {output.tsv}
+        """
 rule emseq_mbias:
     conda:
         "../config/emseq-conda-env.yaml",
@@ -159,6 +190,7 @@ rule emseq_align_bwameth_spike:
         temp_prefix = lambda wildcards: f"{data_dir}/tmp/{wildcards.library_id}.{wildcards.ref_name}"
     shell:
         """
+        mkdir -p
         bwameth.py --threads {threads} \
             --reference {input.ref} \
             {input.r1} {input.r2} 2> {log} | \
@@ -226,6 +258,7 @@ rule emseq_align_bwameth:
         f"{log_dir}/{{library_id}}.{{ref_name}}.bwameth.log"
     shell:
         """
+        mkdir -p $(dirname {params.temp_prefix})
         bwameth.py --threads {threads} \
             --reference {input.ref} \
             {input.r1} {input.r2} 2> {log} | \

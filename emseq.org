@@ -285,6 +285,13 @@ dependencies:
   - bwameth
   - methyldackel
   - mosdepth
+  - r-argparse
+  - r-data.table
+  - r-ggplot2
+  - r-cairo
+  - r-scales
+  - r-patchwork
+  - r-matrixstats
 
 #+end_src
 ***** bwa-meth
@@ -2082,7 +2089,7 @@ for (i in seq_along(pages)) {
 dev.off()
 
 #+end_src
-  #+begin_src R :tangle ./scripts/emseq_mosdepth_agg_plot.R
+  #+begin_src R :tangle no
 #!/usr/bin/env Rscript
 
 suppressPackageStartupMessages({
@@ -2231,6 +2238,162 @@ for (i in seq_along(pages)) {
   print(layout)
 }
 dev.off()
+#+end_src
+  #+begin_src R :tangle ./scripts/emseq_mosdepth_agg_plot.R
+#!/usr/bin/env Rscript
+
+suppressPackageStartupMessages({
+  suppressWarnings(library(argparse))
+  suppressWarnings(library(data.table))
+  suppressWarnings(library(ggplot2))
+  suppressWarnings(library(Cairo))
+  suppressWarnings(library(scales))
+  suppressWarnings(library(patchwork))
+  suppressWarnings(library(matrixStats))
+})
+
+# -------------------------------
+# Argument parsing
+# -------------------------------
+
+prog <- basename(commandArgs(trailingOnly = FALSE)[1])
+
+parser <- ArgumentParser(
+  description = "Generate a paginated threshold coverage plot from mosdepth output.",
+  prog = prog
+)
+
+parser$add_argument("--threshold_list", required = TRUE,
+                    help = "Space-separated list of mosdepth threshold files (*.thresholds.bed.gz)")
+parser$add_argument("--regions_list", required = TRUE,
+                    help = "Space-separated list of mosdepth regions files (*.regions.bed.gz)")
+parser$add_argument("--library_list", required = TRUE,
+                    help = "Space-separated list of sample names (must match file order)")
+parser$add_argument("--output_pdf", required = TRUE,
+                    help = "Full output PDF file path (e.g., /tmp/plot.pdf)")
+parser$add_argument("--output_tsv", required = TRUE,
+                    help = "Prefix path for tabular output (no extension)")
+
+args <- parser$parse_args()
+threshold_files <- unlist(strsplit(args$threshold_list, " "))
+regions_files <- unlist(strsplit(args$regions_list, " "))
+library_ids <- unlist(strsplit(args$library_list, " "))
+output_pdf <- args$output_pdf
+
+if (!all(lengths(list(threshold_files, regions_files, library_ids)) == length(library_ids))) {
+  stop("Error: threshold_list, regions_list, and library_list must all be the same length.")
+}
+
+# -------------------------------
+# Read and melt threshold files
+# -------------------------------
+
+read_thresholds <- function(file, sample) {
+  header <- fread(file, nrows = 0)
+  names(header)[1] <- sub("^#", "", names(header)[1])
+  threshold_cols <- setdiff(names(header), c("chrom", "start", "end", "region"))
+  df <- fread(file, skip = 1, col.names = names(header))
+  df[, sample := sample]
+  melted <- melt(df,
+    id.vars = c("chrom", "start", "end", "region", "sample"),
+    measure.vars = threshold_cols,
+    variable.name = "threshold",
+    value.name = "count"
+  )
+  list(data = melted, thresholds = threshold_cols)
+}
+
+parsed <- mapply(read_thresholds, threshold_files, library_ids, SIMPLIFY = FALSE)
+hist_data <- rbindlist(lapply(parsed, `[[`, "data"))
+hist_data[, count := as.numeric(count)]
+
+all_thresholds <- unique(unlist(lapply(parsed, `[[`, "thresholds")))
+
+# -------------------------------
+# Read autosomal median from regions.bed.gz
+# -------------------------------
+
+get_autosomal_median <- function(file, sample_id) {
+  df <- fread(file, col.names = c("chrom", "start", "end", "depth"))
+  df <- df[chrom %in% as.character(1:22)]
+  df[, sample := sample_id]
+  df[, median := median(depth)]
+  df[1, .(sample, median)]
+}
+
+medians <- rbindlist(mapply(get_autosomal_median, regions_files, library_ids, SIMPLIFY = FALSE))
+
+# -------------------------------
+# Infer 0X bins from zeroed rows
+# -------------------------------
+
+hist_wide <- dcast(hist_data, chrom + start + end + region + sample ~ threshold,
+                   value.var = "count", fill = 0)
+hist_wide[, is_zero := rowSums(.SD) == 0, .SDcols = all_thresholds]
+zero_counts <- hist_data[, .(total = sum(count)), by = .(chrom, start, end, region, sample)]
+zero_counts <- zero_counts[total == 0, .(count = .N * (end[1] - start[1])), by = sample]
+zero_counts[, threshold := "0X"]
+
+# -------------------------------
+# Aggregate and bind all data
+# -------------------------------
+
+plot_data <- hist_data[, .(count = sum(count)), by = .(sample, threshold)]
+plot_data <- rbind(plot_data, zero_counts, fill = TRUE)
+
+threshold_levels <- unique(plot_data$threshold)
+threshold_levels <- threshold_levels[order(as.numeric(sub("X$", "", as.character(threshold_levels))))]
+plot_data[, threshold := factor(threshold, levels = threshold_levels)]
+
+# -------------------------------
+# Plot panels
+# -------------------------------
+print(medians)
+
+make_panel <- function(sample_id) {
+  median_val <- medians[sample == sample_id][["median"]]
+  subtitle <- sprintf("Median depth: %.1f×", median_val)
+
+  ggplot(plot_data[sample == sample_id], aes(x = threshold, y = count, fill = threshold)) +
+    geom_col(width = 0.8) +
+    scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
+    scale_fill_brewer(palette = "Set2", guide = "none") +
+    labs(title = sample_id, subtitle = subtitle, x = "Coverage threshold", y = "Covered bases") +
+    theme_minimal(base_size = 10) +
+    theme(
+      axis.text = element_text(size = 8),
+      axis.title = element_text(size = 9),
+      plot.title = element_text(size = 10, hjust = 0.5),
+      plot.subtitle = element_text(size = 9, hjust = 0.5),
+      panel.grid = element_line(linewidth = 0.2, colour = "grey90")
+    )
+}
+
+ncol <- 4
+nrow <- 6
+panels_per_page <- ncol * nrow
+sample_list <- unique(plot_data$sample)
+pages <- split(sample_list, ceiling(seq_along(sample_list) / panels_per_page))
+
+# -------------------------------
+# Output
+# -------------------------------
+
+CairoPDF(output_pdf, width = 8.5, height = 11, onefile = TRUE)
+for (i in seq_along(pages)) {
+  plots <- lapply(pages[[i]], make_panel)
+  layout <- wrap_plots(plots, ncol = ncol, nrow = nrow) +
+    plot_annotation(
+      title = "Coverage threshold by sample",
+      theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+    )
+  print(layout)
+}
+dev.off()
+
+fwrite(plot_data, file = paste0(args$output_tsv, "_threshold_counts.tsv"), sep = "\t")
+fwrite(medians,   file = paste0(args$output_tsv, "_medians.tsv"), sep = "\t")
+
 #+end_src
 
 **** Dev
@@ -3760,6 +3923,571 @@ run_mosdepth() {
 
 main "$@"
 #+end_src
+
+- Mosdepth aggregator
+  #+begin_src snakemake :tangle no
+print("emseq_library_ids:", emseq_library_ids)
+print("type of first item:", type(emseq_library_ids[0]))
+
+rule emseq_mosdepth_agg_plot:
+    input:
+        thresholds = expand(f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.thresholds.bed.gz",
+                            library_id=emseq_library_ids),
+        regions = expand(f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.regions.bed.gz",
+                         library_id=emseq_library_ids),
+    output:
+        pdf = f"{qc_dir}/emseq_mosdepth_agg_plot.pdf",
+        tsv = f"{qc_dir}/emseq_mosdepth_agg.tsv",
+    params:
+        script = f"{emseq_script_dir}/emseq_mosdepth_agg_plot.R",
+        library_list = " ".join(emseq_library_ids),
+        threshold_list = lambda wildcards, input: " ".join(input.thresholds),
+        regions_list = lambda wildcards, input: " ".join(input.regions),
+    shell:
+        """
+        Rscript {params.script} \
+        --threshold_list "{params.threshold_list}" \
+        --regions_list "{params.regions_list}" \
+        --library_list "{params.library_list}" \
+        --output_pdf {output.pdf} \
+        --output_tsv {output.tsv}
+        """
+
+#+end_src
+  #+begin_src snakemake :tangle no
+
+def flatten(x):
+    return [item for sublist in x for item in (sublist if isinstance(sublist, list) else [sublist])]
+
+print("emseq_library_ids:", emseq_library_ids)
+print("type of first item:", type(emseq_library_ids[0]))
+
+rule emseq_mosdepth_agg_plot:
+    input:
+        threshold_list = lambda wildcards, input: " ".join(flatten(input.thresholds)),
+        regions_list = lambda wildcards, input: " ".join(flatten(input.regions)),
+    output:
+        pdf = f"{qc_dir}/mosdepth_agg_plot.pdf",
+    params:
+        script = f"{emseq_script_dir}/emseq_mosdepth_agg_plot.R",
+        library_list = " ".join(emseq_library_ids),
+        threshold_list = lambda wildcards, input: " ".join(input.thresholds),
+        regions_list = lambda wildcards, input: " ".join(input.regions),
+    shell:
+        """
+        Rscript {params.script} \
+        --threshold_list "{params.threshold_list}" \
+        --regions_list "{params.regions_list}" \
+        --library_list "{params.library_list}" \
+        --output_pdf {output.pdf}
+        """
+
+#+end_src
+
+  #+begin_src snakemake
+rule emseq_mosdepth_agg_plot:
+    conda:
+        "../config/emseq-conda-env.yaml",
+    input:
+        thresholds = lambda wildcards: expand(
+            f"{data_dir}/qc/mosdepth_{{library_id}}.{mosdepth_map[wildcards.experiment]['ref_name']}."
+            f"{mosdepth_map[wildcards.experiment]['align_method']}.thresholds.bed.gz",
+            library_id=mosdepth_map[wildcards.experiment]['library_ids']
+        ),
+        regions = lambda wildcards: expand(
+            f"{data_dir}/qc/mosdepth_{{library_id}}.{mosdepth_map[wildcards.experiment]['ref_name']}."
+            f"{mosdepth_map[wildcards.experiment]['align_method']}.regions.bed.gz",
+            library_id=mosdepth_map[wildcards.experiment]['library_ids']
+        )
+    output:
+        pdf = f"{data_dir}/qc/{{experiment}}.emseq_mosdepth_agg_plot.pdf",
+        tsv = f"{data_dir}/qc/{{experiment}}.emseq_mosdepth_agg.tsv",
+    params:
+        script = f"{emseq_script_dir}/emseq_mosdepth_agg_plot.R",
+        library_list = lambda wildcards: " ".join(mosdepth_map[wildcards.experiment]['library_ids']),
+        threshold_list = lambda wildcards, input: " ".join(input.thresholds),
+        regions_list = lambda wildcards, input: " ".join(input.regions),
+    shell:
+        """
+        Rscript {params.script} \
+        --threshold_list "{params.threshold_list}" \
+        --regions_list "{params.regions_list}" \
+        --library_list "{params.library_list}" \
+        --output_pdf {output.pdf} \
+        --output_tsv {output.tsv}
+        """
+
+#+end_src
+
+  #+begin_src R
+#!/usr/bin/env Rscript
+
+# ==============================================================================
+# Description:
+#   Parses multiple mosdepth threshold files (*.thresholds.bed.gz) and generates
+#   a single paginated PDF plot (4×6 panels per page) showing counts of bases
+#   covered at actual observed thresholds (e.g., 1X, 2X, 5X...) per sample.
+#
+#   Infers 0X bins by identifying regions where all threshold counts are zero.
+#
+# Inputs:
+#   --threshold_list   Space-separated list of mosdepth threshold files
+#   --library_list     Space-separated list of sample names (must match order)
+#   --output_pdf       Full path to output PDF file (single file, multi-page)
+# ==============================================================================
+
+suppressPackageStartupMessages({
+  suppressWarnings(library(argparse))
+  suppressWarnings(library(data.table))
+  suppressWarnings(library(ggplot2))
+  suppressWarnings(library(Cairo))
+  suppressWarnings(library(scales))
+  suppressWarnings(library(patchwork))
+})
+
+
+suppressWarnings(library(matrixStats))  # at top
+
+
+# -------------------------------
+# Argument parsing
+# -------------------------------
+
+prog <- basename(commandArgs(trailingOnly = FALSE)[1])
+
+parser <- ArgumentParser(
+  description = "Generate a paginated threshold coverage plot from mosdepth output.",
+  prog = prog
+)
+
+parser$add_argument("--threshold_list", required = TRUE,
+                    help = "Space-separated list of mosdepth threshold files (*.thresholds.bed.gz)")
+parser$add_argument("--library_list", required = TRUE,
+                    help = "Space-separated list of sample names (must match file order)")
+parser$add_argument("--output_pdf", required = TRUE,
+                    help = "Full output PDF file path (e.g., /tmp/plot.pdf)")
+
+args <- parser$parse_args()
+threshold_files <- unlist(strsplit(args$threshold_list, " "))
+library_ids <- unlist(strsplit(args$library_list, " "))
+output_pdf <- args$output_pdf
+
+if (length(threshold_files) != length(library_ids)) {
+  stop("Error: threshold_list and library_list must be the same length")
+}
+
+# -------------------------------
+# Function to parse each threshold file
+# -------------------------------
+
+read_thresholds <- function(file, sample) {
+  header <- fread(file, nrows = 0)
+  names(header)[1] <- sub("^#", "", names(header)[1])
+  threshold_cols <- setdiff(names(header), c("chrom", "start", "end", "region"))
+  df <- fread(file, skip = 1, col.names = names(header))
+  df[, sample := sample]
+  melted <- melt(df,
+    id.vars = c("chrom", "start", "end", "region", "sample"),
+    measure.vars = threshold_cols,
+    variable.name = "threshold",
+    value.name = "count"
+  )
+  list(data = melted, thresholds = threshold_cols)
+}
+
+# -------------------------------
+# Read and combine all files
+# -------------------------------
+
+parsed <- mapply(read_thresholds, threshold_files, library_ids, SIMPLIFY = FALSE)
+hist_data <- rbindlist(lapply(parsed, `[[`, "data"))
+all_thresholds <- unique(unlist(lapply(parsed, `[[`, "thresholds")))
+
+# -------------------------------
+# Infer 0X bins from zeroed rows
+# -------------------------------
+
+hist_wide <- dcast(hist_data, chrom + start + end + region + sample ~ threshold,
+                   value.var = "count", fill = 0)
+hist_wide[, is_zero := rowSums(.SD) == 0, .SDcols = all_thresholds]
+zero_counts <- hist_data[, .(total = sum(count)), by = .(chrom, start, end, region, sample)]
+zero_counts <- zero_counts[total == 0, .(count = .N * (end[1] - start[1])), by = sample]
+zero_counts[, threshold := "0X"]
+
+# -------------------------------
+# Compute median depth per sample
+# -------------------------------
+
+hist_data[, threshold_numeric := as.numeric(sub("X$", "", threshold))]
+medians <- hist_data[!is.na(threshold_numeric),
+  .(median = weightedMedian(threshold_numeric, w = count)),
+  by = sample]
+
+
+# -------------------------------
+# Aggregate and bind all data
+# -------------------------------
+
+plot_data <- hist_data[, .(count = sum(count)), by = .(sample, threshold)]
+plot_data <- rbind(plot_data, zero_counts, fill = TRUE)
+
+# Correct threshold order based on numeric prefix
+threshold_levels <- unique(plot_data$threshold)
+threshold_levels <- threshold_levels[order(as.numeric(sub("X$", "", as.character(threshold_levels))))]
+plot_data[, threshold := factor(threshold, levels = threshold_levels)]
+
+# -------------------------------
+# Panel layout and plotting
+# -------------------------------
+
+make_panel <- function(sample_id) {
+  median_val <- medians[sample == sample_id, median]
+  subtitle <- sprintf("Median depth: %.1f×", median_val)
+
+  ggplot(plot_data[sample == sample_id], aes(x = threshold, y = count, fill = threshold)) +
+    geom_col(width = 0.8) +
+    scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
+    scale_fill_brewer(palette = "Set2", guide = "none") +
+    labs(title = sample_id, subtitle = subtitle, x = "Coverage threshold", y = "Covered bases") +
+    theme_minimal(base_size = 10) +
+    theme(
+      axis.text = element_text(size = 8),
+      axis.title = element_text(size = 9),
+      plot.title = element_text(size = 10, hjust = 0.5),
+      plot.subtitle = element_text(size = 9, hjust = 0.5),
+      panel.grid = element_line(linewidth = 0.2, colour = "grey90")
+    )
+}
+
+ncol <- 4
+nrow <- 6
+panels_per_page <- ncol * nrow
+sample_list <- unique(plot_data$sample)
+pages <- split(sample_list, ceiling(seq_along(sample_list) / panels_per_page))
+
+# -------------------------------
+# Output: single PDF with multiple pages
+# -------------------------------
+
+CairoPDF(output_pdf, width = 8.5, height = 11, onefile = TRUE)
+for (i in seq_along(pages)) {
+  plots <- lapply(pages[[i]], make_panel)
+  layout <- wrap_plots(plots, ncol = ncol, nrow = nrow) +
+    plot_annotation(
+      title = "Coverage threshold by sample",
+      theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+    )
+  print(layout)
+}
+dev.off()
+
+#+end_src
+  #+begin_src R :tangle no
+#!/usr/bin/env Rscript
+
+suppressPackageStartupMessages({
+  suppressWarnings(library(argparse))
+  suppressWarnings(library(data.table))
+  suppressWarnings(library(ggplot2))
+  suppressWarnings(library(Cairo))
+  suppressWarnings(library(scales))
+  suppressWarnings(library(patchwork))
+  suppressWarnings(library(matrixStats))
+})
+
+# -------------------------------
+# Argument parsing
+# -------------------------------
+
+prog <- basename(commandArgs(trailingOnly = FALSE)[1])
+
+parser <- ArgumentParser(
+  description = "Generate a paginated threshold coverage plot from mosdepth output.",
+  prog = prog
+)
+
+parser$add_argument("--threshold_list", required = TRUE,
+                    help = "Space-separated list of mosdepth threshold files (*.thresholds.bed.gz)")
+parser$add_argument("--regions_list", required = TRUE,
+                    help = "Space-separated list of mosdepth regions files (*.regions.bed.gz)")
+parser$add_argument("--library_list", required = TRUE,
+                    help = "Space-separated list of sample names (must match file order)")
+parser$add_argument("--output_pdf", required = TRUE,
+                    help = "Full output PDF file path (e.g., /tmp/plot.pdf)")
+
+args <- parser$parse_args()
+threshold_files <- unlist(strsplit(args$threshold_list, " "))
+regions_files <- unlist(strsplit(args$regions_list, " "))
+library_ids <- unlist(strsplit(args$library_list, " "))
+output_pdf <- args$output_pdf
+
+if (!all(lengths(list(threshold_files, regions_files, library_ids)) == length(library_ids))) {
+  stop("Error: threshold_list, regions_list, and library_list must all be the same length.")
+}
+
+# -------------------------------
+# Read and melt threshold files
+# -------------------------------
+
+read_thresholds <- function(file, sample) {
+  header <- fread(file, nrows = 0)
+  names(header)[1] <- sub("^#", "", names(header)[1])
+  threshold_cols <- setdiff(names(header), c("chrom", "start", "end", "region"))
+  df <- fread(file, skip = 1, col.names = names(header))
+  df[, sample := sample]
+  melted <- melt(df,
+    id.vars = c("chrom", "start", "end", "region", "sample"),
+    measure.vars = threshold_cols,
+    variable.name = "threshold",
+    value.name = "count"
+  )
+  list(data = melted, thresholds = threshold_cols)
+}
+
+parsed <- mapply(read_thresholds, threshold_files, library_ids, SIMPLIFY = FALSE)
+hist_data <- rbindlist(lapply(parsed, `[[`, "data"))
+hist_data[, count := as.numeric(count)]
+
+all_thresholds <- unique(unlist(lapply(parsed, `[[`, "thresholds")))
+
+# -------------------------------
+# Read autosomal median from regions.bed.gz
+# -------------------------------
+
+get_autosomal_median <- function(file, sample_id) {
+  df <- fread(file, col.names = c("chrom", "start", "end", "depth"))
+  df <- df[chrom %in% as.character(1:22)]
+  df[, sample := sample_id]
+  df[, median := median(depth)]
+  df[1, .(sample, median)]
+}
+
+medians <- rbindlist(mapply(get_autosomal_median, regions_files, library_ids, SIMPLIFY = FALSE))
+
+# -------------------------------
+# Infer 0X bins from zeroed rows
+# -------------------------------
+
+hist_wide <- dcast(hist_data, chrom + start + end + region + sample ~ threshold,
+                   value.var = "count", fill = 0)
+hist_wide[, is_zero := rowSums(.SD) == 0, .SDcols = all_thresholds]
+zero_counts <- hist_data[, .(total = sum(count)), by = .(chrom, start, end, region, sample)]
+zero_counts <- zero_counts[total == 0, .(count = .N * (end[1] - start[1])), by = sample]
+zero_counts[, threshold := "0X"]
+
+# -------------------------------
+# Aggregate and bind all data
+# -------------------------------
+
+plot_data <- hist_data[, .(count = sum(count)), by = .(sample, threshold)]
+plot_data <- rbind(plot_data, zero_counts, fill = TRUE)
+
+threshold_levels <- unique(plot_data$threshold)
+threshold_levels <- threshold_levels[order(as.numeric(sub("X$", "", as.character(threshold_levels))))]
+plot_data[, threshold := factor(threshold, levels = threshold_levels)]
+
+# -------------------------------
+# Plot panels
+# -------------------------------
+print(medians)
+
+make_panel <- function(sample_id) {
+  median_val <- medians[sample == sample_id][["median"]]
+  subtitle <- sprintf("Median depth: %.1f×", median_val)
+
+  ggplot(plot_data[sample == sample_id], aes(x = threshold, y = count, fill = threshold)) +
+    geom_col(width = 0.8) +
+    scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
+    scale_fill_brewer(palette = "Set2", guide = "none") +
+    labs(title = sample_id, subtitle = subtitle, x = "Coverage threshold", y = "Covered bases") +
+    theme_minimal(base_size = 10) +
+    theme(
+      axis.text = element_text(size = 8),
+      axis.title = element_text(size = 9),
+      plot.title = element_text(size = 10, hjust = 0.5),
+      plot.subtitle = element_text(size = 9, hjust = 0.5),
+      panel.grid = element_line(linewidth = 0.2, colour = "grey90")
+    )
+}
+
+ncol <- 4
+nrow <- 6
+panels_per_page <- ncol * nrow
+sample_list <- unique(plot_data$sample)
+pages <- split(sample_list, ceiling(seq_along(sample_list) / panels_per_page))
+
+# -------------------------------
+# Output
+# -------------------------------
+
+CairoPDF(output_pdf, width = 8.5, height = 11, onefile = TRUE)
+for (i in seq_along(pages)) {
+  plots <- lapply(pages[[i]], make_panel)
+  layout <- wrap_plots(plots, ncol = ncol, nrow = nrow) +
+    plot_annotation(
+      title = "Coverage threshold by sample",
+      theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+    )
+  print(layout)
+}
+dev.off()
+#+end_src
+  #+begin_src R :tangle ./scripts/emseq_mosdepth_agg_plot.R
+#!/usr/bin/env Rscript
+
+suppressPackageStartupMessages({
+  suppressWarnings(library(argparse))
+  suppressWarnings(library(data.table))
+  suppressWarnings(library(ggplot2))
+  suppressWarnings(library(Cairo))
+  suppressWarnings(library(scales))
+  suppressWarnings(library(patchwork))
+  suppressWarnings(library(matrixStats))
+})
+
+# -------------------------------
+# Argument parsing
+# -------------------------------
+
+prog <- basename(commandArgs(trailingOnly = FALSE)[1])
+
+parser <- ArgumentParser(
+  description = "Generate a paginated threshold coverage plot from mosdepth output.",
+  prog = prog
+)
+
+parser$add_argument("--threshold_list", required = TRUE,
+                    help = "Space-separated list of mosdepth threshold files (*.thresholds.bed.gz)")
+parser$add_argument("--regions_list", required = TRUE,
+                    help = "Space-separated list of mosdepth regions files (*.regions.bed.gz)")
+parser$add_argument("--library_list", required = TRUE,
+                    help = "Space-separated list of sample names (must match file order)")
+parser$add_argument("--output_pdf", required = TRUE,
+                    help = "Full output PDF file path (e.g., /tmp/plot.pdf)")
+parser$add_argument("--output_tsv", required = TRUE,
+                    help = "Path for tabular output")
+
+args <- parser$parse_args()
+threshold_files <- unlist(strsplit(args$threshold_list, " "))
+regions_files <- unlist(strsplit(args$regions_list, " "))
+library_ids <- unlist(strsplit(args$library_list, " "))
+output_pdf <- args$output_pdf
+
+if (!all(lengths(list(threshold_files, regions_files, library_ids)) == length(library_ids))) {
+  stop("Error: threshold_list, regions_list, and library_list must all be the same length.")
+}
+
+# -------------------------------
+# Read and melt threshold files
+# -------------------------------
+
+read_thresholds <- function(file, sample) {
+  header <- fread(file, nrows = 0)
+  names(header)[1] <- sub("^#", "", names(header)[1])
+  threshold_cols <- setdiff(names(header), c("chrom", "start", "end", "region"))
+  df <- fread(file, skip = 1, col.names = names(header))
+  df[, sample := sample]
+  melted <- melt(df,
+    id.vars = c("chrom", "start", "end", "region", "sample"),
+    measure.vars = threshold_cols,
+    variable.name = "threshold",
+    value.name = "count"
+  )
+  list(data = melted, thresholds = threshold_cols)
+}
+
+parsed <- mapply(read_thresholds, threshold_files, library_ids, SIMPLIFY = FALSE)
+hist_data <- rbindlist(lapply(parsed, `[[`, "data"))
+hist_data[, count := as.numeric(count)]
+
+all_thresholds <- unique(unlist(lapply(parsed, `[[`, "thresholds")))
+
+# -------------------------------
+# Read autosomal median from regions.bed.gz
+# -------------------------------
+
+get_autosomal_median <- function(file, sample_id) {
+  df <- fread(file, col.names = c("chrom", "start", "end", "depth"))
+  df <- df[chrom %in% as.character(1:22)]
+  df[, sample := sample_id]
+  df[, median := median(depth)]
+  df[1, .(sample, median)]
+}
+
+medians <- rbindlist(mapply(get_autosomal_median, regions_files, library_ids, SIMPLIFY = FALSE))
+
+# -------------------------------
+# Infer 0X bins from zeroed rows
+# -------------------------------
+
+hist_wide <- dcast(hist_data, chrom + start + end + region + sample ~ threshold,
+                   value.var = "count", fill = 0)
+hist_wide[, is_zero := rowSums(.SD) == 0, .SDcols = all_thresholds]
+zero_counts <- hist_data[, .(total = sum(count)), by = .(chrom, start, end, region, sample)]
+zero_counts <- zero_counts[total == 0, .(count = .N * (end[1] - start[1])), by = sample]
+zero_counts[, threshold := "0X"]
+
+# -------------------------------
+# Aggregate and bind all data
+# -------------------------------
+
+plot_data <- hist_data[, .(count = sum(count)), by = .(sample, threshold)]
+plot_data <- rbind(plot_data, zero_counts, fill = TRUE)
+
+threshold_levels <- unique(plot_data$threshold)
+threshold_levels <- threshold_levels[order(as.numeric(sub("X$", "", as.character(threshold_levels))))]
+plot_data[, threshold := factor(threshold, levels = threshold_levels)]
+
+# -------------------------------
+# Plot panels
+# -------------------------------
+print(medians)
+
+make_panel <- function(sample_id) {
+  median_val <- medians[sample == sample_id][["median"]]
+  subtitle <- sprintf("Median depth: %.1f×", median_val)
+
+  ggplot(plot_data[sample == sample_id], aes(x = threshold, y = count, fill = threshold)) +
+    geom_col(width = 0.8) +
+    scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
+    scale_fill_brewer(palette = "Set2", guide = "none") +
+    labs(title = sample_id, subtitle = subtitle, x = "Coverage threshold", y = "Covered bases") +
+    theme_minimal(base_size = 10) +
+    theme(
+      axis.text = element_text(size = 8),
+      axis.title = element_text(size = 9),
+      plot.title = element_text(size = 10, hjust = 0.5),
+      plot.subtitle = element_text(size = 9, hjust = 0.5),
+      panel.grid = element_line(linewidth = 0.2, colour = "grey90")
+    )
+}
+
+ncol <- 4
+nrow <- 6
+panels_per_page <- ncol * nrow
+sample_list <- unique(plot_data$sample)
+pages <- split(sample_list, ceiling(seq_along(sample_list) / panels_per_page))
+
+# -------------------------------
+# Output
+# -------------------------------
+
+CairoPDF(output_pdf, width = 8.5, height = 11, onefile = TRUE)
+for (i in seq_along(pages)) {
+  plots <- lapply(pages[[i]], make_panel)
+  layout <- wrap_plots(plots, ncol = ncol, nrow = nrow) +
+    plot_annotation(
+      title = "Coverage threshold by sample",
+      theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+    )
+  print(layout)
+}
+dev.off()
+
+fwrite(medians,   file = args$output_tsv, sep = "\t")
+
+#+end_src
+
 ***** M-bias
 #+begin_src snakemake
 rule emseq_mbias:
@@ -3859,6 +4587,7 @@ rule emseq_align_bwameth_spike:
         temp_prefix = lambda wildcards: f"{data_dir}/tmp/{wildcards.library_id}.{wildcards.ref_name}"
     shell:
         """
+        mkdir -p
         bwameth.py --threads {threads} \
             --reference {input.ref} \
             {input.r1} {input.r2} 2> {log} | \
@@ -3962,6 +4691,7 @@ rule emseq_align_bwameth:
         f"{log_dir}/{{library_id}}.{{ref_name}}.bwameth.log"
     shell:
         """
+        mkdir -p $(dirname {params.temp_prefix})
         bwameth.py --threads {threads} \
             --reference {input.ref} \
             {input.r1} {input.r2} 2> {log} | \
@@ -4346,6 +5076,15 @@ meth_map = {
 }
 }
 
+
+mosdepth_map = {
+    "tests": {
+        "library_ids": ["NH_15_L3", "PRO_6_L2"],
+        "ref_name": "ncbi_decoy_hg38",
+        "align_method": "bwa_meth"
+    }
+}
+
 rule all:
     input:
         # FASTQs
@@ -4431,6 +5170,9 @@ rule all:
                library_id = library_ids,
                ref_name = ref_names,
                align_method = "bwa_meth"),
+
+        expand(f"{data_dir}/qc/{{experiment}}.emseq_mosdepth_agg_plot.pdf",
+               experiment = mosdepth_map.keys())
 
 
 include: "./dev.smk"

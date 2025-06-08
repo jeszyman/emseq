@@ -4439,6 +4439,7 @@ include: "./dev.smk"
 #+end_src
 
 ** Reference
+- https://www-nature-com.mclibrary.idm.oclc.org/articles/s41587-022-01652-0
 - Alignment reference choice
   - discussion [[https://chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369][gtp]]
   - see [[id:326ecd60-8cd4-4815-a389-967b2c3fef0a][Nucleic acid sequence alignment]]

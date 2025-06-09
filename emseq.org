@@ -7,85 +7,6 @@
 :header-args: :tangle-mode (identity #o555)
 :END:
 ** [[elisp:(progn (org-babel-goto-named-src-block "git-workflow-up") (org-babel-execute-src-block))][Run git workflow up]]
-** Example wrapper
-
-#+begin_src yaml :tangle ./config/example-config.yaml
-data_dir: /mnt/data/projects/breast
-emseq_ref_assemblies:
-  ncbi_decoy_hg38:
-    url: https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
-    name: ncbi_decoy_hg38
-    input: GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fa.gz
-
-  ensembl_hg38:
-    url: https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
-    name: ensembl_hg38
-    input: Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
-
-  unmeth_lambda:
-    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/lambdafsa.txt?rev=c0c6669b9bd340ddb674ebfd9d55c691&hash=7E6375924CFF9457D0157D0D87C9AC19
-    name: unmeth_lambda
-    input: Lambda_NEB.fa.gz
-
-  puc19:
-    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/puc19fsa.txt?rev=6e10f4c4a4234d638e401cd2f4578ef0&hash=E71970068EEA191C175B3458DB99D7BB
-    name: puc19
-    input: pUC19.fa.gz
-
-
-mosdepth-quant-levels: "1,5,10,20,30"
-
-#+end_src
-
-#+begin_src bash
-conda activate biotools
-
-cd ~/repos/emseq
-data_dir=/mnt/data/projects/nf1
-
-mkdir -p $data_dir/inputs
-
-config_yaml=config/test.yaml
-
-config_yaml=config/example-config.yaml
-
-url=$(yqgo '.emseq_ref_assemblies.puc19.url' "$config_yaml") && \
-outfile=$(yqgo '.emseq_ref_assemblies.puc19.input' "$config_yaml") && \
-wget -O - --user-agent="Mozilla/5.0" --referer="https://www.neb.com" "$url" | \
-  gzip > "$data_dir/inputs/$outfile"
-
-
-url=$(yqgo '.emseq_ref_assemblies.unmeth_lambda.url' "$config_yaml") && \
-outfile=$(yqgo '.emseq_ref_assemblies.unmeth_lambda.input' "$config_yaml") && \
-wget -O - --user-agent="Mozilla/5.0" --referer="https://www.neb.com" "$url" | \
-  gzip > "$data_dir/inputs/$outfile"
-
-
-url=$(yqgo '.emseq_ref_assemblies.ncbi_decoy_hg38.url' "$config_yaml") && \
-outfile=$(yqgo '.emseq_ref_assemblies.ncbi_decoy_hg38.input' "$config_yaml") && \
-wget -O "$data_dir/inputs/$outfile" "$url"
-
-
-#+end_src
-
-
-#+begin_src snakemake :tangle ./workflows/test-wrap.smk
-
-repo = "~/repos/emseq"
-data_dir=config["data_dir"]
-
-# Explicitly select which references to build
-index_targets = ["unmeth_lambda", "puc19"]
-
-rule all:
-    input:
-        expand(f"{data_dir}/ref/{{name}}.fa.bwameth.c2t", name=index_targets)
-
-
-include: f"{repo}/workflows/dev.smk"
-
-#+end_src
-
 ** README
 The EM-seq repository contains modular workflows intended to be run from within a over-wrapping snakemake workflow.
 *** Conda
@@ -221,40 +142,6 @@ For example, so data_dir=/mnt/data/projects/nf1 and we run the pipeline for samp
 Alignments to spiked DNA references are specialized for fast accurate global methylation counts for these small references.
 
 ** Repository administration
-*** Git
-#+name: git-workflow-up
-#+begin_src bash :results replace
-source ~/repos/basecamp/lib/basecamp_functions.sh
-cd ~/repos/emseq
-output=$(git_wkflow_up 2>&1)
-if [ $? -ne 0 ]; then
-    echo "Error running git_wkflow_up"
-    echo "$output"
-    exit 1
-fi
-
-echo -e "$(date)\n$output"
-
-#+end_src
-
-#+RESULTS: git-workflow-up
-| Thu              | May                           | 29       | 02:53:36 | PM             | CDT |         2025 |
-| [master          | 8131204]                      | .        |          |                |     |              |
-| 2                | files                         | changed, |       64 | insertions(+), |  64 | deletions(-) |
-| To               | github.com:jeszyman/emseq.git |          |          |                |     |              |
-| 792a21e..8131204 | master                        | ->       |   master |                |     |              |
-*** Configuration
-#+begin_src yaml :tangle ./config/emseq.yaml
-conda-env: emseq
-
-sourced-conda-envs:
-  - name: biotools
-    version: 1.0.1
-  - name: basecamp
-    version: 1.1.0
-
-
-#+end_src
 *** Conda
 **** Environmental YAMLs
 ***** MethylKit
@@ -291,6 +178,7 @@ dependencies:
   - r-data.table
   - r-ggplot2
   - r-cairo
+  - libjpeg-turbo=2.0.4  # provides libjpeg.so.9
   - r-scales
   - r-patchwork
   - r-matrixstats
@@ -333,6 +221,40 @@ done
 mamba env update --name "$ENV_NAME" --file ./config/emseq-conda-env.yaml
 #+end_src
 
+*** Git
+#+name: git-workflow-up
+#+begin_src bash :results replace raw
+source ~/repos/basecamp/lib/basecamp_functions.sh
+cd ~/repos/emseq
+output=$(git_wkflow_up 2>&1)
+if [ $? -ne 0 ]; then
+    echo "Error running git_wkflow_up"
+    echo "$output"
+    exit 1
+fi
+
+echo -e "$(date)\n$output"
+
+#+end_src
+
+#+RESULTS: git-workflow-up
+| Mon              | Jun                           | 9        | 08:31:29 | AM             | CDT |         2025 |
+| [master          | 1f42191]                      | .        |          |                |     |              |
+| 2                | files                         | changed, |        2 | insertions(+), |   2 | deletions(-) |
+| To               | github.com:jeszyman/emseq.git |          |          |                |     |              |
+| db0943c..1f42191 | master                        | ->       |   master |                |     |              |
+*** Configuration
+#+begin_src yaml :tangle ./config/emseq.yaml
+conda-env: emseq
+
+sourced-conda-envs:
+  - name: biotools
+    version: 1.0.1
+  - name: basecamp
+    version: 1.1.0
+
+
+#+end_src
 *** Snakemake
 *** README
 A master data dir, emseq_dir directs outputs
@@ -5179,6 +5101,85 @@ rule all:
 
 include: "./dev.smk"
 
+
+#+end_src
+
+**** Example wrapper
+
+#+begin_src yaml :tangle ./config/example-config.yaml
+data_dir: /mnt/data/projects/breast
+emseq_ref_assemblies:
+  ncbi_decoy_hg38:
+    url: https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
+    name: ncbi_decoy_hg38
+    input: GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fa.gz
+
+  ensembl_hg38:
+    url: https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+    name: ensembl_hg38
+    input: Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+
+  unmeth_lambda:
+    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/lambdafsa.txt?rev=c0c6669b9bd340ddb674ebfd9d55c691&hash=7E6375924CFF9457D0157D0D87C9AC19
+    name: unmeth_lambda
+    input: Lambda_NEB.fa.gz
+
+  puc19:
+    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/puc19fsa.txt?rev=6e10f4c4a4234d638e401cd2f4578ef0&hash=E71970068EEA191C175B3458DB99D7BB
+    name: puc19
+    input: pUC19.fa.gz
+
+
+mosdepth-quant-levels: "1,5,10,20,30"
+
+#+end_src
+
+#+begin_src bash
+conda activate biotools
+
+cd ~/repos/emseq
+data_dir=/mnt/data/projects/nf1
+
+mkdir -p $data_dir/inputs
+
+config_yaml=config/test.yaml
+
+config_yaml=config/example-config.yaml
+
+url=$(yqgo '.emseq_ref_assemblies.puc19.url' "$config_yaml") && \
+outfile=$(yqgo '.emseq_ref_assemblies.puc19.input' "$config_yaml") && \
+wget -O - --user-agent="Mozilla/5.0" --referer="https://www.neb.com" "$url" | \
+  gzip > "$data_dir/inputs/$outfile"
+
+
+url=$(yqgo '.emseq_ref_assemblies.unmeth_lambda.url' "$config_yaml") && \
+outfile=$(yqgo '.emseq_ref_assemblies.unmeth_lambda.input' "$config_yaml") && \
+wget -O - --user-agent="Mozilla/5.0" --referer="https://www.neb.com" "$url" | \
+  gzip > "$data_dir/inputs/$outfile"
+
+
+url=$(yqgo '.emseq_ref_assemblies.ncbi_decoy_hg38.url' "$config_yaml") && \
+outfile=$(yqgo '.emseq_ref_assemblies.ncbi_decoy_hg38.input' "$config_yaml") && \
+wget -O "$data_dir/inputs/$outfile" "$url"
+
+
+#+end_src
+
+
+#+begin_src snakemake :tangle ./workflows/test-wrap.smk
+
+repo = "~/repos/emseq"
+data_dir=config["data_dir"]
+
+# Explicitly select which references to build
+index_targets = ["unmeth_lambda", "puc19"]
+
+rule all:
+    input:
+        expand(f"{data_dir}/ref/{{name}}.fa.bwameth.c2t", name=index_targets)
+
+
+include: f"{repo}/workflows/dev.smk"
 
 #+end_src
 

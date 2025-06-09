@@ -17,6 +17,7 @@ dependencies:
   - r-data.table
   - r-ggplot2
   - r-cairo
+  - libjpeg-turbo=2.0.4  # provides libjpeg.so.9
   - r-scales
   - r-patchwork
   - r-matrixstats

@@ -310,7 +310,7 @@ rule make_single_methylkit_amp_obj:
         """
         Rscript {params.Rscript} \
           --amp_file {input} \
-          --library_id "{wildcards.library_id}.{wildcards.ref_name}.{wildcards.align_method}" \
+          --library_id "{wildcards.library_id}.{wildcards.ref_name}.{wildcards.align_method}.methyldackel" \
           --mincov {params.mincov} \
           --out_dir {params.out_dir} \
           --treatment {params.treatment} \

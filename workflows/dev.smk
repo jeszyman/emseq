@@ -190,7 +190,7 @@ rule emseq_align_bwameth_spike:
         temp_prefix = lambda wildcards: f"{data_dir}/tmp/{wildcards.library_id}.{wildcards.ref_name}"
     shell:
         """
-        mkdir -p
+        mkdir -p $(dirname {params.temp_prefix})
         bwameth.py --threads {threads} \
             --reference {input.ref} \
             {input.r1} {input.r2} 2> {log} | \

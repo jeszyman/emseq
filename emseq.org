@@ -47,6 +47,8 @@ mkdir -p $data_dir/inputs
 
 config_yaml=config/test.yaml
 
+config_yaml=config/example-config.yaml
+
 url=$(yqgo '.emseq_ref_assemblies.puc19.url' "$config_yaml") && \
 outfile=$(yqgo '.emseq_ref_assemblies.puc19.input' "$config_yaml") && \
 wget -O - --user-agent="Mozilla/5.0" --referer="https://www.neb.com" "$url" | \
@@ -4587,7 +4589,7 @@ rule emseq_align_bwameth_spike:
         temp_prefix = lambda wildcards: f"{data_dir}/tmp/{wildcards.library_id}.{wildcards.ref_name}"
     shell:
         """
-        mkdir -p
+        mkdir -p $(dirname {params.temp_prefix})
         bwameth.py --threads {threads} \
             --reference {input.ref} \
             {input.r1} {input.r2} 2> {log} | \

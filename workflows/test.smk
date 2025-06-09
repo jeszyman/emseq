@@ -131,7 +131,34 @@ rule all:
                align_method = "bwa_meth"),
 
         expand(f"{data_dir}/qc/{{experiment}}.emseq_mosdepth_agg_plot.pdf",
-               experiment = mosdepth_map.keys())
+               experiment = mosdepth_map.keys()),
 
+        f"{data_dir}/qc/emseq_multiqc/emseq_multiqc.html",
+
+
+
+rule emseq_multiqc:
+    input:
+        fastqc = expand(f"{data_dir}/qc/{{library_id}}_{{processing}}_{{read}}_fastqc.zip",
+                        library_id = emseq_library_ids,
+                        processing = ["raw","trimmed"],
+                        read = ["R1", "R2"]),
+#        mosdepth = expand(f"{qc_dir}/mosdepth_{{library_id}}.mosdepth.summary.txt",
+#                          library_id = emseq_library_ids),
+    log:
+        f"{log_dir}/emseq_multiqc.log",
+    output:
+        f"{data_dir}/qc/emseq_multiqc/emseq_multiqc.html",
+    params:
+        out_dir = f"{data_dir}/qc/emseq_multiqc",
+        out_name = "emseq_multiqc",
+    shell:
+        """
+        multiqc \
+        {input} \
+        --force \
+        --outdir {params.out_dir} \
+        --filename {params.out_name}
+        """
 
 include: "./dev.smk"

@@ -1,22 +1,18 @@
-name: emseq
+name: mosdepth
 channels:
   - conda-forge
   - bioconda
 
 dependencies:
-  - fastp
   - samtools
   - bioconductor-genomeinfodbdata=1.2.7
-  - biscuit=1.6.0.20241216=*_1
-  - dupsifter=1.3.0.20241113=*_1
-  - bwa
-  - bwameth
-  - methyldackel
   - mosdepth
   - r-argparse
   - r-data.table
   - r-ggplot2
   - r-cairo
+  - jpeg
   - r-scales
   - r-patchwork
   - r-matrixstats
+  - r-r.utils

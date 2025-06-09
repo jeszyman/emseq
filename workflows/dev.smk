@@ -93,7 +93,7 @@ rule emseq_mosdepth:
         """
 rule emseq_mosdepth_agg_plot:
     conda:
-        "../config/emseq-conda-env.yaml",
+        "../config/mosdepth-conda-env.yaml",
     input:
         thresholds = lambda wildcards: expand(
             f"{data_dir}/qc/mosdepth_{{library_id}}.{mosdepth_map[wildcards.experiment]['ref_name']}."

@@ -4621,9 +4621,9 @@ rule emseq_align_biscuit:
         fasta = f"{data_dir}/ref/biscuit/{{ref_name}}/{{ref_name}}.fa",
         index = f"{data_dir}/ref/biscuit/{{ref_name}}/{{ref_name}}.fa.par.sa",
     log:
-        cmd = f"{data_dir}/logs/{{library_id}}.{{ref_name}}.biscuit.coorsorted.bam",
+        cmd = f"{data_dir}/logs/{{library_id}}.{{ref_name}}.biscuit.coorsort.bam",
     output:
-        bam = f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.biscuit.coorsorted.bam",
+        bam = f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.biscuit.coorsort.bam",
     params:
         threads = 80,
     resources:

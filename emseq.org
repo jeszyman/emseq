@@ -6,6 +6,11 @@
 :ID:       cd9489fd-c6e7-4c64-8317-e3d9a283b36c
 :header-args: :tangle-mode (identity #o555)
 :END:
+state fit for methylation like hyper /hypo of bins
+https://bioconductor.org/packages/devel/bioc/vignettes/annotatr/inst/doc/annotatr-vignette.html
+https://pubmed.ncbi.nlm.nih.gov/24191000/
+https://deeptools.readthedocs.io/en/stable/content/tools/plotProfile.html
+https://pmc.ncbi.nlm.nih.gov/articles/PMC7849414/
 ** [[elisp:(progn (org-babel-goto-named-src-block "git-workflow-up") (org-babel-execute-src-block))][Run git workflow up]]
 ** README
 The EM-seq repository contains modular workflows intended to be run from within a over-wrapping snakemake workflow.

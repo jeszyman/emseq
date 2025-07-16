@@ -5094,14 +5094,10 @@ include: f"{repo}/workflows/dev.smk"
   - discussion [[https://chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369][gtp]]
   - see [[id:326ecd60-8cd4-4815-a389-967b2c3fef0a][Nucleic acid sequence alignment]]
 - [cite:@vaisvila2021]
-
 - [cite:@chauhan2024]
 - [[id:5e9e8bfa-ac9e-4103-9cc5-7123337b4e24][biscuit]]
-
-- [cite:@chauhan2024]
-
-https://github.com/semenko/serpent-methylation-pipeline
-EM-seq protects 5mC and 5hmC from damination with TET2 enzymatic oxidation. Unprotected cytosines are deaminated to uracils.
+- https://github.com/semenko/serpent-methylation-pipeline
+- EM-seq protects 5mC and 5hmC from damination with TET2 enzymatic oxidation. Unprotected cytosines are deaminated to uracils.
 - cfDNA WGBS hypomethylation and CNAs as a general cancer marker [cite:@chan2013meth]
 - [cite:@chan2013meth]
   - [cite:@liu2020]

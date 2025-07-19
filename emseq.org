@@ -479,9 +479,9 @@ rule emseq_fastp:
         json = f"{data_dir}/logs/{{library_id}}-emseq-fastp.json",
         html = f"{data_dir}/logs/{{library_id}}-emseq-fastp.html",
     output:
-        r1 = f"{data_dir}/emseq/fastqs/{{library_id}}_trimmed_R1.fastq.gz",
-        r2 = f"{data_dir}/emseq/fastqs/{{library_id}}_trimmed_R2.fastq.gz",
-        failed = f"{data_dir}/emseq/fastqs/{{library_id}}_failed.fastq.gz",
+        r1 = f"{data_dir}/emseq/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
+        r2 = f"{data_dir}/emseq/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
+        failed = f"{data_dir}/emseq/fastqs/{{library_id}}.failed.fastq.gz",
     params:
         script = f"{emseq_script_dir}/fastp-emseq-wrapper.sh",
         threads = 8,

@@ -198,8 +198,8 @@ rule emseq_align_bwameth_spike:
     conda:
         "../config/emseq-conda-env.yaml"
     input:
-        r1 = f"{data_dir}/emseq/fastqs/{{library_id}}_trimmed_R1.fastq.gz",
-        r2 = f"{data_dir}/emseq/fastqs/{{library_id}}_trimmed_R2.fastq.gz",
+        r1 = f"{data_dir}/emseq/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
+        r2 = f"{data_dir}/emseq/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
         ref = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa"
     output:
         bam = f"{data_dir}/emseq/spike/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam"
@@ -265,8 +265,8 @@ rule emseq_align_bwameth:
     conda:
         "../config/emseq-conda-env.yaml"
     input:
-        r1 = f"{data_dir}/emseq/fastqs/{{library_id}}_trimmed_R1.fastq.gz",
-        r2 = f"{data_dir}/emseq/fastqs/{{library_id}}_trimmed_R2.fastq.gz",
+        r1 = f"{data_dir}/emseq/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
+        r2 = f"{data_dir}/emseq/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
         ref = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa",
         c2t = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa.bwameth.c2t",
     output:
@@ -359,8 +359,8 @@ rule emseq_align_biscuit:
     conda:
         "../config/emseq-conda-env.yaml",
     input:
-        r1 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_trimmed_R1.fastq.gz",
-        r2 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_trimmed_R2.fastq.gz",
+        r1 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
+        r2 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
         fasta = f"{data_dir}/ref/biscuit/{{ref_name}}/{{ref_name}}.fa",
         index = f"{data_dir}/ref/biscuit/{{ref_name}}/{{ref_name}}.fa.par.sa",
     log:

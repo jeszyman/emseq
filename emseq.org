@@ -188,6 +188,7 @@ channels:
 
 dependencies:
   - fastp
+  - fastqc
   - samtools
   - bioconductor-genomeinfodbdata=1.2.7
   - biscuit=1.6.0.20241216=*_1
@@ -443,21 +444,44 @@ relationships:
 :header-args:snakemake: :tangle ./workflows/em-seq.smk :tangle-mode (identity #o555)
 :END:
 [[file:workflows/em-seq.smk]]
+**** Preamble
+#+begin_src snakemake
+############################
+###   EM-Seq Snakefile   ###
+############################
+
+#########1#########2#########3#########4#########5#########6#########7#########8
+#
+# A snakefile for basic processing of EM-seq sequencing data
+
+# ---   Dependencies   --- #
+# ------------------------ #
+
+# ./config/emseq-conda-env.yaml, a conda environment file called from certain rules
+# Scripts from within ./scripts
+
+# ---   Configuration Variables   --- #
+# ----------------------------------- #
+
+#+end_src
+
 **** Common steps
 ***** Fastp
 #+begin_src snakemake
 rule emseq_fastp:
+    conda:
+        "../config/emseq-conda-env.yaml"
     input:
-        r1 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_raw_R1.fastq.gz",
-        r2 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_raw_R2.fastq.gz",
+        r1 = f"{data_dir}/emseq/fastqs/{{library_id}}_raw_R1.fastq.gz",
+        r2 = f"{data_dir}/emseq/fastqs/{{library_id}}_raw_R2.fastq.gz",
     log:
-        cmd = f"{log_dir}/{{library_id}}-emseq-fastp.log",
-        json = f"{log_dir}/{{library_id}}-emseq-fastp.json",
-        html = f"{log_dir}/{{library_id}}-emseq-fastp.html",
+        cmd = f"{data_dir}/logs/{{library_id}}-emseq-fastp.log",
+        json = f"{data_dir}/logs/{{library_id}}-emseq-fastp.json",
+        html = f"{data_dir}/logs/{{library_id}}-emseq-fastp.html",
     output:
-        r1 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_trimmed_R1.fastq.gz",
-        r2 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_trimmed_R2.fastq.gz",
-        failed = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_failed.fastq.gz",
+        r1 = f"{data_dir}/emseq/fastqs/{{library_id}}_trimmed_R1.fastq.gz",
+        r2 = f"{data_dir}/emseq/fastqs/{{library_id}}_trimmed_R2.fastq.gz",
+        failed = f"{data_dir}/emseq/fastqs/{{library_id}}_failed.fastq.gz",
     params:
         script = f"{emseq_script_dir}/fastp-emseq-wrapper.sh",
         threads = 8,
@@ -480,15 +504,17 @@ rule emseq_fastp:
 ***** FastQC
 #+begin_src snakemake
 rule emseq_fastqc:
+    conda:
+        "../config/emseq-conda-env.yaml"
     input:
-        f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_{{processing}}_{{read}}.fastq.gz",
+        f"{data_dir}/emseq/fastqs/{{library_id}}_{{processing}}_{{read}}.fastq.gz",
     log:
-        f"{data_dir}/logs/{{library_id}}_{{processing}}_{{read}}_fastqc.log",
+        f"{data_dir}/logs/{{library_id}}_{{processing}}_{{read}}_emseq_fastqc.log",
     output:
-        f"{data_dir}/qc/{{library_id}}_{{processing}}_{{read}}_fastqc.html",
-        f"{data_dir}/qc/{{library_id}}_{{processing}}_{{read}}_fastqc.zip",
+        f"{data_dir}/emseq/qc/{{library_id}}_{{processing}}_{{read}}_fastqc.html",
+        f"{data_dir}/emseq/qc/{{library_id}}_{{processing}}_{{read}}_fastqc.zip",
     params:
-        outdir = f"{data_dir}/qc",
+        outdir = f"{data_dir}/emseq/qc",
         threads = 2,
     resources:
         concurrency = 25,
@@ -509,9 +535,9 @@ rule emseq_fastqc:
 # Will follow symlinks
 # rule emseq_index_bam_check:
 #     input:
-#         bam = ancient(f"{emseq_bam_dir}/{{library_id}}_deduped.bam"),
+#         bam = ancient(f"{data_dir}/emseq/bams/{{library_id}}_deduped.bam"),
 #     output:
-#         bai = f"{emseq_bam_dir}/{{library_id}}_deduped.bam.bai",
+#         bai = f"{data_dir}/emseq/bams/{{library_id}}_deduped.bam.bai",
 #     shell:
 #         """
 #         samtools index -@ 8 {input.bam} {output.bai}
@@ -520,22 +546,22 @@ rule emseq_mosdepth:
     conda:
         "../config/emseq-conda-env.yaml",
     input:
-        bam = f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
-        index = f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
+        bam = f"{data_dir}/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
+        index = f"{data_dir}/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
     output:
-        summary = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.summary.txt",
-        global_dist = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.global.dist.txt",
-        region_dist = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.region.dist.txt",
-        regions = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.regions.bed.gz",
-        regions_idx = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.regions.bed.gz.csi",
-        quantized = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.quantized.bed.gz",
-        quantized_idx = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.quantized.bed.gz.csi",
-        thresholds = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.thresholds.bed.gz",
-        thresholds_idx = f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.thresholds.bed.gz.csi",
+        summary = f"{data_dir}/emseq/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.summary.txt",
+        global_dist = f"{data_dir}/emseq/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.global.dist.txt",
+        region_dist = f"{data_dir}/emseq/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.region.dist.txt",
+        regions = f"{data_dir}/emseq/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.regions.bed.gz",
+        regions_idx = f"{data_dir}/emseq/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.regions.bed.gz.csi",
+        quantized = f"{data_dir}/emseq/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.quantized.bed.gz",
+        quantized_idx = f"{data_dir}/emseq/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.quantized.bed.gz.csi",
+        thresholds = f"{data_dir}/emseq/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.thresholds.bed.gz",
+        thresholds_idx = f"{data_dir}/emseq/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.thresholds.bed.gz.csi",
     params:
         script = f"{emseq_script_dir}/emseq_mosdepth.sh",
-        quant_levels = mosdepth_quant_levels,
-        out_dir = f"{data_dir}/qc",
+        quant_levels = config["mosdepth-quant-levels"],
+        out_dir = f"{data_dir}/emseq/qc",
     threads: 8,
     resources:
         concurrency = 20,
@@ -1208,7 +1234,7 @@ rule emseq_mbias:
     conda:
         "../config/emseq-conda-env.yaml",
     input:
-        bam = f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.{{align_method}}.coorsorted.deduped.bam",
+        bam = f"{data_dir}/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsorted.deduped.bam",
         fasta = f"{data_dir}/ref/{{align_method}}/{{ref_name}}/{{ref_name}}.fa",
     log:
         f"{data_dir}/logs/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_mbias.log",
@@ -1232,13 +1258,13 @@ rule emseq_dedup:
     conda:
         "../config/emseq-conda-env.yaml",
     input:
-        bam = f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.bam",
+        bam = f"{data_dir}/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.bam",
         fasta = f"{data_dir}/ref/{{align_method}}/{{ref_name}}/{{ref_name}}.fa",
     log:
         f"{data_dir}/logs/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_dedup.log",
     output:
-        bam = f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
-        index = f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
+        bam = f"{data_dir}/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
+        index = f"{data_dir}/emseq/bams//{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
     params:
         temp_prefix = lambda wildcards: f"{data_dir}/tmp/{wildcards.library_id}.{wildcards.ref_name}.{wildcards.align_method}.coorsort",
     resources:
@@ -1284,19 +1310,20 @@ The spike workflow uses bwa-meth to quickly align to phage reference genomes. Co
 - [cite:@vaisvila2021]
 - [cite:@chauhan2024]
 - [cite:@emseq2023manual]
+
 #+begin_src snakemake
 rule emseq_align_bwameth_spike:
     conda:
         "../config/emseq-conda-env.yaml"
     input:
-        r1 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_trimmed_R1.fastq.gz",
-        r2 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_trimmed_R2.fastq.gz",
+        r1 = f"{data_dir}/emseq/fastqs/{{library_id}}_trimmed_R1.fastq.gz",
+        r2 = f"{data_dir}/emseq/fastqs/{{library_id}}_trimmed_R2.fastq.gz",
         ref = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa"
     output:
-        bam = f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam"
+        bam = f"{data_dir}/emseq/spike/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam"
     threads: 48
     log:
-        f"{log_dir}/{{library_id}}.{{ref_name}}.emseq_align_bwameth_spike.log"
+        f"{data_dir}/emseq/logs/{{library_id}}.{{ref_name}}.emseq_align_bwameth_spike.log"
     params:
         temp_prefix = lambda wildcards: f"{data_dir}/tmp/{wildcards.library_id}.{wildcards.ref_name}"
     shell:
@@ -1321,7 +1348,7 @@ rule emseq_methyldackel_spike:
     output:
         bed = f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
     log:
-        f"{log_dir}/{{library_id}}_{{ref_name}}_{{align_method}}_methyldackel.log",
+        f"{data_dir}/emseq/logs/{{library_id}}_{{ref_name}}_{{align_method}}_methyldackel.log",
     params:
         out_prefix = f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel",
     shell:
@@ -1374,7 +1401,7 @@ rule bwa_meth_index:
     params:
         fasta_target = lambda wildcards: f"{data_dir}/ref/bwa_meth/{wildcards.name}/{wildcards.name}.fa"
     log:
-        f"{log_dir}/{{name}}_bwa_meth_index.log"
+        f"{data_dir}/emseq/logs/{{name}}_bwa_meth_index.log"
     shell:
         """
         mkdir -p $(dirname {params.fasta_target}) && \
@@ -1392,17 +1419,17 @@ rule emseq_align_bwameth:
     conda:
         "../config/emseq-conda-env.yaml"
     input:
-        r1 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_trimmed_R1.fastq.gz",
-        r2 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_trimmed_R2.fastq.gz",
+        r1 = f"{data_dir}/emseq/fastqs/{{library_id}}_trimmed_R1.fastq.gz",
+        r2 = f"{data_dir}/emseq/fastqs/{{library_id}}_trimmed_R2.fastq.gz",
         ref = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa",
         c2t = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa.bwameth.c2t",
     output:
-        bam = f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam"
+        bam = f"{data_dir}/emseq/bams/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam"
     threads: 16
     params:
         temp_prefix = lambda wildcards: f"{data_dir}/tmp/{wildcards.library_id}.{wildcards.ref_name}",
     log:
-        f"{log_dir}/{{library_id}}.{{ref_name}}.bwameth.log"
+        f"{data_dir}/emseq/logs/{{library_id}}.{{ref_name}}.bwameth.log"
     shell:
         """
         mkdir -p $(dirname {params.temp_prefix})
@@ -1423,14 +1450,14 @@ rule emseq_methyldackel:
     conda:
         "../config/emseq-conda-env.yaml",
     input:
-        bam = f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
+        bam = f"{data_dir}/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
         fasta = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa",
     output:
-        f"{data_dir}/analysis/emseq/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
+        f"{data_dir}/emseq/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
     log:
-        f"{log_dir}/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_methyldackel_dedup.log",
+        f"{data_dir}/emseq/logs/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_methyldackel_dedup.log",
     params:
-        out_prefix = f"{data_dir}/analysis/emseq/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel",
+        out_prefix = f"{data_dir}/emseq/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel",
         threads = 20,
     resources:
         concurrency = 25,
@@ -1451,16 +1478,15 @@ rule make_single_methylkit_amp_obj:
     conda:
         "../config/methylkit-conda-env.yaml",
     input:
-        f"{data_dir}/analysis/emseq/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
+        f"{data_dir}/emseq/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
     log:
-        f"{log_dir}/{{library_id}}.{{ref_name}}.{{align_method}}_single_methylkit_amp.log",
+        f"{data_dir}/emseq/logs/{{library_id}}.{{ref_name}}.{{align_method}}_single_methylkit_amp.log",
     output:
-        txt = f"{data_dir}/analysis/emseq/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.methyldackel.txt",
-        bgz = f"{data_dir}/analysis/emseq/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.methyldackel.txt.bgz",
-        tbi = f"{data_dir}/analysis/emseq/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.methyldackel.txt.bgz.tbi",
+        bgz = f"{data_dir}/emseq/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.methyldackel.txt.bgz",
+        tbi = f"{data_dir}/emseq/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.methyldackel.txt.bgz.tbi",
     params:
         Rscript = f"{emseq_script_dir}/make_single_amp_methylkit_obj.R",
-        out_dir = f"{data_dir}/analysis/emseq/dmr/tabix",
+        out_dir = f"{data_dir}/emseq/dmr/tabix",
         mincov = emseq_mincov,
         build = emseq_build,
         treatment = 1,
@@ -1520,7 +1546,7 @@ rule emseq_biscuit_index:
         fai = f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa.fai",
         biscuit_index_done = f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa.biscuit.index.done"
     log:
-        f"{log_dir}/{{name}}_biscuit_index.log"
+        f"{data_dir}/emseq/logs/{{name}}_biscuit_index.log"
     shell:
         """
         mkdir -p $(dirname {output.fasta}) && \
@@ -1545,7 +1571,7 @@ rule emseq_align_biscuit:
     log:
         cmd = f"{data_dir}/logs/{{library_id}}.{{ref_name}}.biscuit.coorsort.bam",
     output:
-        bam = f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.biscuit.coorsort.bam",
+        bam = f"{data_dir}/emseq/bams/{{library_id}}.{{ref_name}}.biscuit.coorsort.bam",
     params:
         threads = 80,
     resources:
@@ -1572,7 +1598,7 @@ rule emseq_biscuit_pileup:
     conda:
         "../config/emseq-conda-env.yaml",
     input:
-        bam = f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.biscuit.coorsort.deduped.bam",
+        bam = f"{data_dir}/emseq/bams/{{library_id}}.{{ref_name}}.biscuit.coorsort.deduped.bam",
         fasta = f"{data_dir}/ref/biscuit/{{ref_name}}/{{ref_name}}.fa",
     log:
         f"{data_dir}/logs/{{library_id}}.{{ref_name}}.biscuit_emseq_pileup.log",

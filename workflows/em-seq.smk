@@ -18,8 +18,8 @@ rule emseq_fastp:
     conda:
         "../config/emseq-conda-env.yaml"
     input:
-        r1 = f"{data_dir}/emseq/fastqs/{{library_id}}_raw_R1.fastq.gz",
-        r2 = f"{data_dir}/emseq/fastqs/{{library_id}}_raw_R2.fastq.gz",
+        r1 = f"{data_dir}/emseq/fastqs/{{library_id}}.raw_R1.fastq.gz",
+        r2 = f"{data_dir}/emseq/fastqs/{{library_id}}.raw_R2.fastq.gz",
     log:
         cmd = f"{data_dir}/logs/{{library_id}}-emseq-fastp.log",
         json = f"{data_dir}/logs/{{library_id}}-emseq-fastp.json",
@@ -49,12 +49,12 @@ rule emseq_fastqc:
     conda:
         "../config/emseq-conda-env.yaml"
     input:
-        f"{data_dir}/emseq/fastqs/{{library_id}}_{{processing}}_{{read}}.fastq.gz",
+        f"{data_dir}/emseq/fastqs/{{library_id}}.{{processing}}_{{read}}.fastq.gz",
     log:
-        f"{data_dir}/logs/{{library_id}}_{{processing}}_{{read}}_emseq_fastqc.log",
+        f"{data_dir}/logs/{{library_id}}.{{processing}}_{{read}}_emseq_fastqc.log",
     output:
-        f"{data_dir}/emseq/qc/{{library_id}}_{{processing}}_{{read}}_fastqc.html",
-        f"{data_dir}/emseq/qc/{{library_id}}_{{processing}}_{{read}}_fastqc.zip",
+        f"{data_dir}/emseq/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.html",
+        f"{data_dir}/emseq/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.zip",
     params:
         outdir = f"{data_dir}/emseq/qc",
         threads = 2,
@@ -202,7 +202,7 @@ rule emseq_align_bwameth_spike:
         r2 = f"{data_dir}/emseq/fastqs/{{library_id}}_trimmed_R2.fastq.gz",
         ref = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa"
     output:
-        bam = f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam"
+        bam = f"{data_dir}/emseq/spike/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam"
     threads: 48
     log:
         f"{data_dir}/emseq/logs/{{library_id}}.{{ref_name}}.emseq_align_bwameth_spike.log"

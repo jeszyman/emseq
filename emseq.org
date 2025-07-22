@@ -5110,6 +5110,8 @@ include: f"{repo}/workflows/dev.smk"
 #+end_src
 
 ** Reference
+- Alternative cfDNA WGMS profiling
+  - TET-Assisted Pyridine Borane Sequencing (TAPS) [cite:@vavoulis2025]
 - https://www-nature-com.mclibrary.idm.oclc.org/articles/s41587-022-01652-0
 - Alignment reference choice
   - discussion [[https://chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369][gtp]]

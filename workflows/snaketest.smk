@@ -24,6 +24,7 @@ rule emseq_fastp:
         {log.html} \
         {params.threads}
         """
+
 rule emseq_biscuit_align:
     input:
         r1 = f"{emseq_trimmed_fastq_dir}/{{libid}}_R1.fastq.gz",

@@ -151,7 +151,7 @@ rule emseq_mbias:
     conda:
         "../config/emseq-conda-env.yaml",
     input:
-        bam = f"{data_dir}/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsorted.deduped.bam",
+        bam = f"{data_dir}/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
         fasta = f"{data_dir}/ref/{{align_method}}/{{ref_name}}/{{ref_name}}.fa",
     log:
         f"{data_dir}/logs/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_mbias.log",
@@ -162,7 +162,7 @@ rule emseq_mbias:
         MethylDackel mbias \
         -@ 10 \
         --noSVG \
-        {input.fasta} {input.bam} > {ouput}
+        {input.fasta} {input.bam} > {output}
         """
 
 rule emseq_dedup:
@@ -229,14 +229,14 @@ rule emseq_methyldackel_spike:
     conda:
         "../config/emseq-conda-env.yaml"
     input:
-        bam = f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam",
+        bam = f"{data_dir}/emseq/spike/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam",
         fasta = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa",
     output:
-        bed = f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
+        bed = f"{data_dir}/emseq/spike/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
     log:
         f"{data_dir}/emseq/logs/{{library_id}}_{{ref_name}}_{{align_method}}_methyldackel.log",
     params:
-        out_prefix = f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel",
+        out_prefix = f"{data_dir}/emseq/spike/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel",
     shell:
         """
         MethylDackel extract \
@@ -461,4 +461,35 @@ rule make_single_biscuit_methylkit_obj:
           --library_id {wildcards.library_id} \
           --out_dir {params.out_dir} \
           &> {log}
+        """
+
+rule make_methylkit_diff_db:
+    input:
+        mkit_lib_db = lambda wildcards: expand(
+            f"{data_dir}/emseq/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.{{meth_caller}}.txt.bgz",
+            library_id = meth_map[wildcards.experiment]['libs'],
+            ref_name = meth_map[wildcards.experiment]['ref_name'],
+            align_method = meth_map[wildcards.experiment]['align_method'],
+            meth_caller = meth_map[wildcards.experiment]['meth_caller']),
+    log:
+        f"{data_dir}/logs/{{experiment}}.make_methylkit_diff_db.log",
+    output:
+        unite = f"{data_dir}/emseq/diff/methylBase_{{experiment}}.txt.bgz",
+        diff = f"{data_dir}/emseq/diff/methylDiff_{{experiment}}.txt.bgz",
+    params:
+        library_id = lambda wildcards: " ".join(meth_map[wildcards.experiment]['libs']),
+        treatment_list = lambda wildcards: meth_map[wildcards.experiment]['tx'],
+        mincov = lambda wildcards: meth_map[wildcards.experiment]['mincov'],
+        assembly = lambda wildcards: meth_map[wildcards.experiment]['assembly'],
+        out_dir = f"{data_dir}/emseq/diff",
+        script = f"{emseq_script_dir}/make_methylkit_diff_db.R",
+    shell:
+        """
+        Rscript {params.script} \
+        --lib_db_list "{input.mkit_lib_db}" \
+        --lib_id_list "{params.library_id}" \
+        --treatment_list "{params.treatment_list}" \
+        --cores 32 \
+        --out_dir {params.out_dir} \
+        --suffix {wildcards.experiment} > {log} 2>&1
         """

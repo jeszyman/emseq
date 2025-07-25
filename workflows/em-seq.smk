@@ -464,6 +464,8 @@ rule make_single_biscuit_methylkit_obj:
         """
 
 rule make_methylkit_diff_db:
+    conda:
+        "../config/methylkit-conda-env.yaml"
     input:
         mkit_lib_db = lambda wildcards: expand(
             f"{data_dir}/emseq/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.{{meth_caller}}.txt.bgz",

@@ -430,6 +430,7 @@ relationships:
 :PROPERTIES:
 :ID:       c5b37e92-1e28-4cfc-8678-b830ac836d57
 :END:
+push methmap to config
 **** Preamble
 #+begin_src snakemake
 ############################
@@ -3060,6 +3061,8 @@ https:/www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/m
 
 #+begin_src snakemake
 rule make_methylkit_diff_db:
+    conda:
+        "../config/methylkit-conda-env.yaml"
     input:
         mkit_lib_db = lambda wildcards: expand(
             f"{data_dir}/emseq/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.{{meth_caller}}.txt.bgz",

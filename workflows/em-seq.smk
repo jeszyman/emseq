@@ -175,7 +175,7 @@ rule emseq_dedup:
         f"{data_dir}/logs/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_dedup.log",
     output:
         bam = f"{data_dir}/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
-        index = f"{data_dir}/emseq/bams//{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
+        index = f"{data_dir}/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
     params:
         temp_prefix = lambda wildcards: f"{data_dir}/tmp/{wildcards.library_id}.{wildcards.ref_name}.{wildcards.align_method}.coorsort",
     resources:
@@ -250,7 +250,7 @@ rule bwa_meth_index:
     conda:
         "../config/emseq-conda-env.yaml"
     input:
-        lambda wildcards: f"{data_dir}/inputs/{config['emseq_ref_assemblies'][wildcards.name]['input']}"
+        lambda wildcards: f"{data_dir}/inputs/{config['ref_assemblies'][wildcards.name]['input']}"
     output:
         f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t",
         f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.0123",
@@ -353,7 +353,7 @@ rule emseq_biscuit_index:
     conda:
         "../config/emseq-conda-env.yaml"
     input:
-        lambda wildcards: f"{data_dir}/inputs/{config['emseq_ref_assemblies'][wildcards.name]['input']}"
+        lambda wildcards: f"{data_dir}/inputs/{config['ref_assemblies'][wildcards.name]['input']}"
     output:
         fasta = f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa",
         fai = f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa.fai",

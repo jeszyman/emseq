@@ -234,7 +234,7 @@ mapfile -t CONDA_ENVS < <(yqgo e -N '.sourced-conda-envs[] | .name + ":" + .vers
 for entry in "${CONDA_ENVS[@]}"; do
   name="${entry%%:*}"
   version="${entry##*:}"
-  url="https://raw.githubusercontent.com/jeszyman/${name}/v${version}/${name}_env.yaml"
+  url="https:/raw.githubusercontent.com/jeszyman/${name}/v${version}/${name}_env.yaml"
   dest="/tmp/${name}_env.yaml"
   curl -fsSL -o "$dest" "$url" \
     && mamba env update --name "$ENV_NAME" --file "$dest"
@@ -288,7 +288,7 @@ A master data dir, emseq_dir directs outputs
 Outside of emseq_dir, BISCUIT index is genrated in data_dir/ref/biscuit
 
 
-Adapter and quality trimming was performed using fastp without any fixed-length end trimming. Alignment used biscuit with Ensemble hg38 primary assembly (https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz). Aligned BAMs were deduplicated using dupsifter with mate-tag annotation. Methylation pileups were generated from deduplicated BAMs using biscuit pileup, and the resulting VCFs were converted to bismark-formatted bed files. Bismark-style BEDs were converted to methylKit objects using a custom R script, and downstream differential methylation analysis was performed in methylKit.
+Adapter and quality trimming was performed using fastp without any fixed-length end trimming. Alignment used biscuit with Ensemble hg38 primary assembly (https:/ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz). Aligned BAMs were deduplicated using dupsifter with mate-tag annotation. Methylation pileups were generated from deduplicated BAMs using biscuit pileup, and the resulting VCFs were converted to bismark-formatted bed files. Bismark-style BEDs were converted to methylKit objects using a custom R script, and downstream differential methylation analysis was performed in methylKit.
 
 Copy number analysis was performed with ichorCNA. Deduplicated BAMs were used as input. Read counts were generated in 1 Mb windows using readCounter, filtering for base quality and including autosomes and sex chromosomes.
 
@@ -1781,6 +1781,26 @@ diff <- calculateDiffMeth(meth,
 :header-args:snakemake: :tangle ./workflows/em-seq.smk :tangle-mode (identity #o555)
 :END:
 [[file:workflows/em-seq.smk]]
+#+begin_src python :results output replace
+import re
+from pathlib import Path
+
+snakefile = Path("./workflows/emseq.smk").read_text()
+
+# Matches: config["..."] or config['...']
+matches = re.findall(r"config\[['\"]([^'\"]+)['\"]\]", snakefile)
+
+# Deduplicate and sort
+unique_keys = sorted(set(matches))
+
+print("Config keys required:")
+for key in unique_keys:
+    print(f"- {key}")
+
+#+end_src
+
+#+RESULTS:
+
 **** Preamble
 #+begin_src snakemake
 ############################
@@ -1973,7 +1993,7 @@ parse_args() {
 
     declare -g out_prefix="mosdepth_${user_prefix}"  # Final output prefix
     declare -g out_path="${out_dir%/}/${out_prefix}" # Full path to output base
-    declare -g quant_str="0:${quant_levels//,/:}"    # Convert to colon-delimited format
+    declare -g quant_str="0:${quant_levels/,/:}"    # Convert to colon-delimited format
 }
 
 run_mosdepth() {
@@ -2601,7 +2621,7 @@ rule emseq_dedup:
         f"{data_dir}/logs/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_dedup.log",
     output:
         bam = f"{data_dir}/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
-        index = f"{data_dir}/emseq/bams//{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
+        index = f"{data_dir}/emseq/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
     params:
         temp_prefix = lambda wildcards: f"{data_dir}/tmp/{wildcards.library_id}.{wildcards.ref_name}.{wildcards.align_method}.coorsort",
     resources:
@@ -2705,9 +2725,9 @@ BWA-meth alignment is much faster than biscuit.
 
 The BWA-meth workflow requires a reference gzipped fasta in $data_dir/inputs, specified in the config yaml like:
 #+begin_src yaml
-emseq_ref_assemblies:
+ref_assemblies:
   ensembl_hg38:
-    url: https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+    url: https:/ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
     name: ensembl_hg38
     input: Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
 #+end_src
@@ -2717,7 +2737,7 @@ This will be indexed and used for alignment.
 BWA-meth output is a duplicated, coordinate sorted BAM. This is de-duplicated during methylation calls by methyldackel.
 
 Reference
-- https://github.com/brentp/bwa-meth
+- https:/github.com/brentp/bwa-meth
 
 ***** Index
 
@@ -2726,7 +2746,7 @@ rule bwa_meth_index:
     conda:
         "../config/emseq-conda-env.yaml"
     input:
-        lambda wildcards: f"{data_dir}/inputs/{config['emseq_ref_assemblies'][wildcards.name]['input']}"
+        lambda wildcards: f"{data_dir}/inputs/{config['ref_assemblies'][wildcards.name]['input']}"
     output:
         f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t",
         f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.0123",
@@ -2877,7 +2897,7 @@ rule emseq_biscuit_index:
     conda:
         "../config/emseq-conda-env.yaml"
     input:
-        lambda wildcards: f"{data_dir}/inputs/{config['emseq_ref_assemblies'][wildcards.name]['input']}"
+        lambda wildcards: f"{data_dir}/inputs/{config['ref_assemblies'][wildcards.name]['input']}"
     output:
         fasta = f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa",
         fai = f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa.fai",
@@ -3025,7 +3045,7 @@ myobj= methRead(args$bismark_cov_bed,
 
 
 **** Methylkit
-https://www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/methylKit.html
+https:/www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/methylKit.html
 - get nearest TSS
 - get region annotation
 
@@ -3299,9 +3319,9 @@ nohup biscuit index "$ncbi_fa" & disown
 
 
 **** EM-seq Biscuit WGMS alignment
-- Consider reference w/ decoys https://chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369
+- Consider reference w/ decoys https:/chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369
 - [ ] check pradeeps alignment command chaudhuri-lab-bucket1/ris/work/pradeep_project/Fastq_data/Prostate_Urine_Plasma/bam/bam_allbams/PB056_C1
-- https://chatgpt.com/c/67ddfbd9-7c18-8005-bd73-89e31712eb29
+- https:/chatgpt.com/c/67ddfbd9-7c18-8005-bd73-89e31712eb29
 - base command test
   #+begin_src bash
 biscuit align \
@@ -3313,7 +3333,7 @@ biscuit align \
 # WORKS
 
 # Our output is NON-stranded but is directional
-# (https://www.neb.com/en-us/faqs/2024/11/25/are-em-seq-libraries-directional-or-non-directional)
+# (https:/www.neb.com/en-us/faqs/2024/11/25/are-em-seq-libraries-directional-or-non-directional)
 
 samtools view -f 99   /tmp/test/test.bam | wc -l  # R1 forward, R2 reverse
 samtools view -f 147  /tmp/test/test.bam | wc -l  # R2 reverse, R1 forward
@@ -4470,7 +4490,7 @@ parse_args() {
 
     declare -g out_prefix="mosdepth_${user_prefix}"  # Final output prefix
     declare -g out_path="${out_dir%/}/${out_prefix}" # Full path to output base
-    declare -g quant_str="0:${quant_levels//,/:}"    # Convert to colon-delimited format
+    declare -g quant_str="0:${quant_levels/,/:}"    # Convert to colon-delimited format
 }
 
 run_mosdepth() {
@@ -4966,7 +4986,7 @@ mosdepth \
 :PROPERTIES:
 :ID:       7c540ad8-2c04-4dff-bf88-ae9c260a6a91
 :END:
-https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.bwa_index.tar.gz
+https:/ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.bwa_index.tar.gz
 
 
 #+begin_src bash
@@ -4979,7 +4999,7 @@ if [ -e "$data_dir/inputs/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz" ]; the
 else
     aria2c -c -x 10 -s 10 -m 5 -d $data_dir/inputs/ \
 	   -o Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz \
-	   https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+	   https:/ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
 
 fi
 
@@ -4989,7 +5009,7 @@ if [ -e "$data_dir/inputs/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_se
 else
     aria2c -c -x 10 -s 10 -m 5 -d $data_dir/inputs/ \
 	   -o GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz \
-	   https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
+	   https:/ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
 fi
 
 
@@ -5015,7 +5035,7 @@ nohup biscuit index "$ncbi_fa" & disown
 #+end_src
 
 ***** EM-seq methylation
-- Consider reference w/ decoys https://chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369
+- Consider reference w/ decoys https:/chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369
 ****** Biscuit index
 #+begin_src bash
 source ~/repos/breast/config/bash-env.sh
@@ -5027,7 +5047,7 @@ if [ -e "$data_dir/inputs/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz" ]; the
 else
     aria2c -c -x 10 -s 10 -m 5 -d $data_dir/inputs/ \
 	   -o Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz \
-	   https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+	   https:/ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
 
 fi
 
@@ -5037,7 +5057,7 @@ if [ -e "$data_dir/inputs/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_se
 else
     aria2c -c -x 10 -s 10 -m 5 -d $data_dir/inputs/ \
 	   -o GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz \
-	   https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
+	   https:/ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
 fi
 
 #+end_src
@@ -5132,10 +5152,10 @@ rule emseq_post_pileup:
 #+end_src
 
 ****** DMR
-https://www.bioconductor.org/packages/release/bioc/vignettes/dmrseq/inst/doc/dmrseq.html
-https://huishenlab.github.io/biscuit/docs/methylextraction.html
-https://bioconductor.org/packages/release/bioc/html/DSS.html
-https://ziemann-lab.net/public/guppy_methylseq/PCAanalysis.html
+https:/www.bioconductor.org/packages/release/bioc/vignettes/dmrseq/inst/doc/dmrseq.html
+https:/huishenlab.github.io/biscuit/docs/methylextraction.html
+https:/bioconductor.org/packages/release/bioc/html/DSS.html
+https:/ziemann-lab.net/public/guppy_methylseq/PCAanalysis.html
 
 
 #+begin_src python
@@ -5574,24 +5594,24 @@ myobj = methRead("/tmp/breast/analysis/emseq/pileup/test.tsv",
 
 ****** Reference
 - Alignment reference choice
-  - discussion [[https://chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369][gtp]]
+  - discussion [[https:/chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369][gtp]]
   - see [[id:326ecd60-8cd4-4815-a389-967b2c3fef0a][Nucleic acid sequence alignment]]
 - [cite:@chauhan2024]
 - [[id:5e9e8bfa-ac9e-4103-9cc5-7123337b4e24][biscuit]]
 
 ****** Ideas
-- for qc https://www.google.com/search?sca_esv=45e5c8ab8ae118cf&sxsrf=AHTn8zrPW-wtm7PgHxohfizFJXC9p5Qtlw:1742500238525&q=m-bias+plots&udm=2&fbs=ABzOT_CWdhQLP1FcmU5B0fn3xuWpA-dk4wpBWOGsoR7DG5zJBtmuEdhfywyzhendkLDnhcrUz6wxBwARHD96EKWkSbZoQZGasaHPJ9csj0AVVVUDNHqfR7gd1arUfaOpw1v5Icccwayh65rdsqdiyPvxAA9gXK95YqgoHnUzfZ5jo9jiMl2Q8DaMUR4I1U0kl1-ho1NSBjy_chexdcGuJmvrFewYJaqjljog&sa=X&ved=2ahUKEwj90vOdt5mMAxXLGlkFHdQWG7IQtKgLegQIExAB&biw=1745&bih=908&dpr=1.1
-- https://sequencing.qcfail.com/articles/mispriming-in-pbat-libraries-causes-methylation-bias-and-poor-mapping-efficiencies/
-- consider https://www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/methylKit.html#6_Frequently_Asked_Questions
+- for qc https:/www.google.com/search?sca_esv=45e5c8ab8ae118cf&sxsrf=AHTn8zrPW-wtm7PgHxohfizFJXC9p5Qtlw:1742500238525&q=m-bias+plots&udm=2&fbs=ABzOT_CWdhQLP1FcmU5B0fn3xuWpA-dk4wpBWOGsoR7DG5zJBtmuEdhfywyzhendkLDnhcrUz6wxBwARHD96EKWkSbZoQZGasaHPJ9csj0AVVVUDNHqfR7gd1arUfaOpw1v5Icccwayh65rdsqdiyPvxAA9gXK95YqgoHnUzfZ5jo9jiMl2Q8DaMUR4I1U0kl1-ho1NSBjy_chexdcGuJmvrFewYJaqjljog&sa=X&ved=2ahUKEwj90vOdt5mMAxXLGlkFHdQWG7IQtKgLegQIExAB&biw=1745&bih=908&dpr=1.1
+- https:/sequencing.qcfail.com/articles/mispriming-in-pbat-libraries-causes-methylation-bias-and-poor-mapping-efficiencies/
+- consider https:/www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/methylKit.html#6_Frequently_Asked_Questions
 
 ***** EM-seq cfDNA copy number alteration
 EM-seq protects 5mC and 5hmC from damination with TET2 enzymatic oxidation. Unprotected cytosines are deaminated to uracils.
 
 ***** DMR
-https://www.bioconductor.org/packages/release/bioc/vignettes/dmrseq/inst/doc/dmrseq.html
-https://huishenlab.github.io/biscuit/docs/methylextraction.html
-https://bioconductor.org/packages/release/bioc/html/DSS.html
-https://ziemann-lab.net/public/guppy_methylseq/PCAanalysis.html
+https:/www.bioconductor.org/packages/release/bioc/vignettes/dmrseq/inst/doc/dmrseq.html
+https:/huishenlab.github.io/biscuit/docs/methylextraction.html
+https:/bioconductor.org/packages/release/bioc/html/DSS.html
+https:/ziemann-lab.net/public/guppy_methylseq/PCAanalysis.html
 
 
 #+begin_src python
@@ -6372,22 +6392,22 @@ include: "./dev.smk"
 data_dir: /mnt/data/projects/breast
 emseq_ref_assemblies:
   ncbi_decoy_hg38:
-    url: https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
+    url: https:/ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
     name: ncbi_decoy_hg38
     input: GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fa.gz
 
   ensembl_hg38:
-    url: https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+    url: https:/ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
     name: ensembl_hg38
     input: Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
 
   unmeth_lambda:
-    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/lambdafsa.txt?rev=c0c6669b9bd340ddb674ebfd9d55c691&hash=7E6375924CFF9457D0157D0D87C9AC19
+    url: https:/www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/lambdafsa.txt?rev=c0c6669b9bd340ddb674ebfd9d55c691&hash=7E6375924CFF9457D0157D0D87C9AC19
     name: unmeth_lambda
     input: Lambda_NEB.fa.gz
 
   puc19:
-    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/puc19fsa.txt?rev=6e10f4c4a4234d638e401cd2f4578ef0&hash=E71970068EEA191C175B3458DB99D7BB
+    url: https:/www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/puc19fsa.txt?rev=6e10f4c4a4234d638e401cd2f4578ef0&hash=E71970068EEA191C175B3458DB99D7BB
     name: puc19
     input: pUC19.fa.gz
 
@@ -6410,13 +6430,13 @@ config_yaml=config/example-config.yaml
 
 url=$(yqgo '.emseq_ref_assemblies.puc19.url' "$config_yaml") && \
 outfile=$(yqgo '.emseq_ref_assemblies.puc19.input' "$config_yaml") && \
-wget -O - --user-agent="Mozilla/5.0" --referer="https://www.neb.com" "$url" | \
+wget -O - --user-agent="Mozilla/5.0" --referer="https:/www.neb.com" "$url" | \
   gzip > "$data_dir/inputs/$outfile"
 
 
 url=$(yqgo '.emseq_ref_assemblies.unmeth_lambda.url' "$config_yaml") && \
 outfile=$(yqgo '.emseq_ref_assemblies.unmeth_lambda.input' "$config_yaml") && \
-wget -O - --user-agent="Mozilla/5.0" --referer="https://www.neb.com" "$url" | \
+wget -O - --user-agent="Mozilla/5.0" --referer="https:/www.neb.com" "$url" | \
   gzip > "$data_dir/inputs/$outfile"
 
 
@@ -6448,14 +6468,14 @@ include: f"{repo}/workflows/dev.smk"
 ** Reference
 - Alternative cfDNA WGMS profiling
   - TET-Assisted Pyridine Borane Sequencing (TAPS) [cite:@vavoulis2025]
-- https://www-nature-com.mclibrary.idm.oclc.org/articles/s41587-022-01652-0
+- https:/www-nature-com.mclibrary.idm.oclc.org/articles/s41587-022-01652-0
 - Alignment reference choice
-  - discussion [[https://chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369][gtp]]
+  - discussion [[https:/chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369][gtp]]
   - see [[id:326ecd60-8cd4-4815-a389-967b2c3fef0a][Nucleic acid sequence alignment]]
 - [cite:@vaisvila2021]
 - [cite:@chauhan2024]
 - [[id:5e9e8bfa-ac9e-4103-9cc5-7123337b4e24][biscuit]]
-- https://github.com/semenko/serpent-methylation-pipeline
+- https:/github.com/semenko/serpent-methylation-pipeline
 - EM-seq protects 5mC and 5hmC from damination with TET2 enzymatic oxidation. Unprotected cytosines are deaminated to uracils.
 - cfDNA WGBS hypomethylation and CNAs as a general cancer marker [cite:@chan2013meth]
 - [cite:@chan2013meth]
@@ -6480,16 +6500,16 @@ include: f"{repo}/workflows/dev.smk"
 
 
 - [cite:@bie2023]
-https://www-pnas-org.mclibrary.idm.oclc.org/doi/full/10.1073/pnas.2017421118#sec-3
-https://www-nature-com.mclibrary.idm.oclc.org/articles/s41551-021-00746-5#Sec11
+https:/www-pnas-org.mclibrary.idm.oclc.org/doi/full/10.1073/pnas.2017421118#sec-3
+https:/www-nature-com.mclibrary.idm.oclc.org/articles/s41551-021-00746-5#Sec11
 
-https://www-nature-com.mclibrary.idm.oclc.org/articles/s41586-022-05580-6
+https:/www-nature-com.mclibrary.idm.oclc.org/articles/s41586-022-05580-6
 
 [cite:@melton2023]
 
-https://www-scopus-com.mclibrary.idm.oclc.org/results/results.uri?sort=cp-f&src=s&sid=02157e5ff2f1b8a77a24e67aeefcb07b&sot=a&sdt=a&cluster=scosubtype%2C%22ar%22%2Ct&sl=76&s=%28TITLE-ABS-KEY%28%22cell-free+DNA%22%29+AND+TITLE-ABS-KEY%28methylation%29%29+AND+NOT%28PCR%29&origin=searchadvanced&editSaveSearch=&txGid=3b8b26bec1c779cef84de4d3803c1be9&sessionSearchId=02157e5ff2f1b8a77a24e67aeefcb07b&limit=10
+https:/www-scopus-com.mclibrary.idm.oclc.org/results/results.uri?sort=cp-f&src=s&sid=02157e5ff2f1b8a77a24e67aeefcb07b&sot=a&sdt=a&cluster=scosubtype%2C%22ar%22%2Ct&sl=76&s=%28TITLE-ABS-KEY%28%22cell-free+DNA%22%29+AND+TITLE-ABS-KEY%28methylation%29%29+AND+NOT%28PCR%29&origin=searchadvanced&editSaveSearch=&txGid=3b8b26bec1c779cef84de4d3803c1be9&sessionSearchId=02157e5ff2f1b8a77a24e67aeefcb07b&limit=10
 
-https://www-nature-com.mclibrary.idm.oclc.org/articles/ng.3805
+https:/www-nature-com.mclibrary.idm.oclc.org/articles/ng.3805
 
 | article             | group      | platform    | depth | tissue | target | times cited | date |
 |---------------------+------------+-------------+-------+--------+--------+-------------+------|
@@ -6500,10 +6520,10 @@ Original EM-seq methods paper - [cite:@vaisvila2021]. Code is in the repo at [[f
 
 EM-seq and WGBS are not compatible- have different unique methylated CpGs at 8x [[/home/jeszyman/repos/emseq/emseq.org_20250605_135724.png][./resources/vaisvila2021fig4c.png]]
 ** Ideas
-https://bioconductor.org/packages/devel/bioc/vignettes/annotatr/inst/doc/annotatr-vignette.html
-https://pubmed.ncbi.nlm.nih.gov/24191000/
-https://deeptools.readthedocs.io/en/stable/content/tools/plotProfile.html
-https://pmc.ncbi.nlm.nih.gov/articles/PMC7849414/
+https:/bioconductor.org/packages/devel/bioc/vignettes/annotatr/inst/doc/annotatr-vignette.html
+https:/pubmed.ncbi.nlm.nih.gov/24191000/
+https:/deeptools.readthedocs.io/en/stable/content/tools/plotProfile.html
+https:/pmc.ncbi.nlm.nih.gov/articles/PMC7849414/
 - state fit for methylation like hyper /hypo of bins
 - Mosdepth aggregator
   #+begin_src snakemake
@@ -6875,8 +6895,8 @@ for (i in seq_along(pages)) {
 dev.off()
 #+end_src
 
-- https://sequencing.qcfail.com/articles/mispriming-in-pbat-libraries-causes-methylation-bias-and-poor-mapping-efficiencies/
+- https:/sequencing.qcfail.com/articles/mispriming-in-pbat-libraries-causes-methylation-bias-and-poor-mapping-efficiencies/
 
 [[/home/jeszyman/repos/emseq/emseq.org_20250605_135404.png][emseq.org_20250605_135404.png]]
 *** variant calling
-- https://pmc.ncbi.nlm.nih.gov/articles/PMC10072131/
+- https:/pmc.ncbi.nlm.nih.gov/articles/PMC10072131/

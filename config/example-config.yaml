@@ -1,22 +1,22 @@
 data_dir: /mnt/data/projects/breast
 emseq_ref_assemblies:
   ncbi_decoy_hg38:
-    url: https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
+    url: https:/ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
     name: ncbi_decoy_hg38
     input: GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fa.gz
 
   ensembl_hg38:
-    url: https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
+    url: https:/ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
     name: ensembl_hg38
     input: Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz
 
   unmeth_lambda:
-    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/lambdafsa.txt?rev=c0c6669b9bd340ddb674ebfd9d55c691&hash=7E6375924CFF9457D0157D0D87C9AC19
+    url: https:/www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/lambdafsa.txt?rev=c0c6669b9bd340ddb674ebfd9d55c691&hash=7E6375924CFF9457D0157D0D87C9AC19
     name: unmeth_lambda
     input: Lambda_NEB.fa.gz
 
   puc19:
-    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/puc19fsa.txt?rev=6e10f4c4a4234d638e401cd2f4578ef0&hash=E71970068EEA191C175B3458DB99D7BB
+    url: https:/www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/puc19fsa.txt?rev=6e10f4c4a4234d638e401cd2f4578ef0&hash=E71970068EEA191C175B3458DB99D7BB
     name: puc19
     input: pUC19.fa.gz
 

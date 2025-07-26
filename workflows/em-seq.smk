@@ -14,6 +14,7 @@
 
 # ---   Configuration Variables   --- #
 # ----------------------------------- #
+
 rule emseq_fastp:
     conda:
         "../config/emseq-conda-env.yaml"
@@ -45,6 +46,7 @@ rule emseq_fastp:
         --out2 {output.r2} \
         --thread {params.threads} \
         """
+
 rule emseq_fastqc:
     conda:
         "../config/emseq-conda-env.yaml"
@@ -69,6 +71,7 @@ rule emseq_fastqc:
         --threads {params.threads} \
         {input} &> {log}
         """
+
 # Will follow symlinks
 # rule emseq_index_bam_check:
 #     input:
@@ -111,6 +114,7 @@ rule emseq_mosdepth:
         '{params.quant_levels}' \
         {threads}
         """
+
 rule emseq_mosdepth_agg_plot:
     conda:
         "../config/mosdepth-conda-env.yaml",
@@ -142,6 +146,7 @@ rule emseq_mosdepth_agg_plot:
         --output_pdf {output.pdf} \
         --output_tsv {output.tsv}
         """
+
 rule emseq_mbias:
     conda:
         "../config/emseq-conda-env.yaml",
@@ -159,6 +164,7 @@ rule emseq_mbias:
         --noSVG \
         {input.fasta} {input.bam} > {output}
         """
+
 rule emseq_dedup:
     conda:
         "../config/emseq-conda-env.yaml",
@@ -194,6 +200,7 @@ rule emseq_dedup:
         | samtools sort -@ 8 -o {output.bam}
         samtools index -@ 8 {output.bam}
         """
+
 rule emseq_align_bwameth_spike:
     conda:
         "../config/emseq-conda-env.yaml"
@@ -217,6 +224,7 @@ rule emseq_align_bwameth_spike:
         samtools view -u -F 4 - | \
         samtools sort -@ {threads} -T {params.temp_prefix} -o {output.bam}
         """
+
 rule emseq_methyldackel_spike:
     conda:
         "../config/emseq-conda-env.yaml"
@@ -237,6 +245,7 @@ rule emseq_methyldackel_spike:
         {input.bam} \
         -o {params.out_prefix} > {log} 2>&1
         """
+
 rule bwa_meth_index:
     conda:
         "../config/emseq-conda-env.yaml"
@@ -261,6 +270,7 @@ rule bwa_meth_index:
         samtools faidx -@ 8 {params.fasta_target} && \
         bwameth.py index-mem2 {params.fasta_target} > {log} 2>&1
         """
+
 rule emseq_align_bwameth:
     conda:
         "../config/emseq-conda-env.yaml"
@@ -285,6 +295,7 @@ rule emseq_align_bwameth:
         samtools view -u - | \
         samtools sort -@ {threads} -T {params.temp_prefix} -o {output.bam}
         """
+
 rule emseq_methyldackel:
     conda:
         "../config/emseq-conda-env.yaml",
@@ -309,6 +320,7 @@ rule emseq_methyldackel:
         {input.bam} \
         -o {params.out_prefix} > {log} 2>&1
         """
+
 rule make_single_methylkit_amp_obj:
     conda:
         "../config/methylkit-conda-env.yaml",
@@ -336,6 +348,7 @@ rule make_single_methylkit_amp_obj:
           --build {params.build} \
           &>> {log}
         """
+
 rule emseq_biscuit_index:
     conda:
         "../config/emseq-conda-env.yaml"
@@ -355,6 +368,7 @@ rule emseq_biscuit_index:
         biscuit index {output.fasta} > {log} 2>&1 && \
         touch {output.biscuit_index_done}
         """
+
 rule emseq_align_biscuit:
     conda:
         "../config/emseq-conda-env.yaml",
@@ -384,6 +398,7 @@ rule emseq_align_biscuit:
         -T {data_dir}/tmp/{wildcards.library_id}_sorttmp \
         -o {output.bam} &>> {log}
         """
+
 rule emseq_biscuit_pileup:
     conda:
         "../config/emseq-conda-env.yaml",
@@ -405,6 +420,7 @@ rule emseq_biscuit_pileup:
         {input.fasta} {input.bam} \
         && bgzip -@ 8 {params.out_base}
         """
+
 rule emseq_biscuit_post_pileup:
     conda:
         "../config/emseq-conda-env.yaml",
@@ -423,6 +439,7 @@ rule emseq_biscuit_post_pileup:
 	-t cg {input.vcf} > {output.bed} \
         && biscuit vcf2bed -c {input.vcf} > {output.bismark} &> {log}
         """
+
 rule make_single_biscuit_methylkit_obj:
     conda:
         "../config/methylkit-conda-env.yaml",
@@ -445,6 +462,7 @@ rule make_single_biscuit_methylkit_obj:
           --out_dir {params.out_dir} \
           &> {log}
         """
+
 rule make_methylkit_diff_db:
     conda:
         "../config/methylkit-conda-env.yaml"

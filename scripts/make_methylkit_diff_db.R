@@ -45,7 +45,6 @@ diff <- calculateDiffMeth(meth,
                           chunk.size = 1e9,
                           save.db = TRUE,
                           dbdir = args$out_dir)
-
 library(argparse)
 library(methylKit)
 
@@ -93,7 +92,6 @@ diff <- calculateDiffMeth(meth,
                           chunk.size = 1e9,
                           save.db = TRUE,
                           dbdir = args$out_dir)
-
 library(argparse)
 library(methylKit)
 

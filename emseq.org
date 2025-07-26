@@ -587,7 +587,7 @@ rule emseq_mosdepth:
         """
 
 #+end_src
-  #+begin_src bash :tangle ./scripts/emseq_mosdepth.sh :tangle-mode (identity #o555)
+  #+begin_src bash
 #!/usr/bin/env bash
 set -euo pipefail
 

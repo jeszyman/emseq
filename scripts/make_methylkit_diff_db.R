@@ -27,7 +27,7 @@ merged_obj <- methRead(
   context = "CpG",
   assembly = "hg38",
   dbtype = "tabix",
-  mincov = 2
+  mincov = 20
 )
 
 # --- Unite ---

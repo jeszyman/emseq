@@ -1790,6 +1790,7 @@ meth <- unite(merged_obj,
               chunk.size = 1e9,
               mc.cores = as.numeric(args$cores),
               save.db = TRUE,
+              min.per.group = 1,
               suffix = args$suffix,
               dbdir = args$out_dir)
 

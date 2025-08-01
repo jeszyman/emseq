@@ -24,7 +24,6 @@ obj <- methRead(
   dbtype = "tabix",
   dbdir = args$out_dir
 )
-
 library(argparse)
 library(methylKit)
 

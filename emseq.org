@@ -446,6 +446,31 @@ relationships:
 :ID:       c5b37e92-1e28-4cfc-8678-b830ac836d57
 :END:
 push methmap to config
+**** Writeup
+- Sample preparation and sequencing.
+  Cell-free DNA was extracted and prepared using the NEBNext® Enzymatic Methyl-seq (EM-seq) Kit following the manufacturer's protocol. Libraries were sequenced on an Illumina platform using paired-end 150 bp reads.
+
+- Preprocessing and quality control.
+  Raw sequencing reads were processed with fastp (v0.23.4) using default parameters, with adapter detection enabled and quality filtering disabled to preserve methylation signal, as recommended for EM-seq libraries. FastQC (v0.11.9) was used to assess read quality before and after trimming.
+
+- Alignment and deduplication.
+  Reads were aligned to the human reference genome (GRCh38) using BWA-meth (v0.2.2) with default parameters. Resulting BAMs were coordinate-sorted and deduplicated using dupsifter (https://github.com/brentp/dupsifter), which performs read name-aware deduplication optimized for bisulfite-style alignments. Only properly paired reads (SAM flag 0x2) were retained prior to deduplication.
+
+- Methylation calling.
+  Methylation calls were made on deduplicated BAMs using MethylDackel (v0.6.1), with CpG-context methylation extracted in methylKit-compatible format (--methylKit). Calls were further processed using methylKit (v1.22.0) for filtering, tabix compression, and downstream differential methylation analysis. For each sample, methylation calls were filtered using a minimum coverage threshold of 10×.
+
+- Quality Control
+  - Depth estimation.
+    Coverage profiles were generated using mosdepth (v0.3.3) on deduplicated BAMs. Runs were performed in fast mode with 1 kb windows and median depth calculation enabled. Per-sample coverage threshold summaries and quantization tracks were generated and aggregated using a custom R script, which also calculated autosomal median depth and generated multi-panel PDF plots showing coverage distribution across user-defined thresholds.
+
+  - Spike-in controls and conversion rate estimation.
+    Each EM-seq library included unmethylated Lambda and fully methylated CpG pUC19 spike-ins. Reads were aligned to spike-in references using BWA-meth, and methylation levels were quantified using MethylDackel. Conversion efficiency was estimated from Lambda (expected methylation <1%), and methylation completeness from pUC19 (expected >90% CpG methylation) [@vaisvila2021; @chauhan2024; @emseq2023manual].
+
+  - M-bias detection.
+    To detect potential position-dependent biases in methylation calls, MethylDackel's mbias mode was used on deduplicated BAMs. Reads were assessed for strand-specific methylation bias across read positions, and results were reviewed to ensure negligible systematic error.
+
+- Pipeline orchestration.
+  All steps were executed using a reproducible Snakemake (v7.x) workflow with conda-based environment isolation. Logging was performed at each rule level, and intermediate files were tracked and retained as needed.
 **** Preamble
 #+begin_src snakemake
 ############################
@@ -1325,11 +1350,12 @@ The EM-seq kit includes two control DNA spike-ins, unmethylated Lambda and CpG m
 
 We expect Lambda methylation rates below 1% as shown in [cite:@vaisvila2021]
 
-[[file:./resources/vaisvila2021figs7b.png][vaisvila2021figs7b.png]]
-
 and we expect above 90% methylation of exclusively CpG sites for pUC19
 
-[[file:./resources/vaisvila2021figs7c.png][vaisvila2021figs7c.png]]
+#+CAPTION: vaisvila2021figs7c.png
+#+NAME: fig:vaisvila2021fig7c
+#+ATTR_ORG: :width 800
+[[file:./resources/vaisvila2021figs7c.png]]
 
 The spike workflow uses bwa-meth to quickly align to phage reference genomes. Coordinate-sorted BAM output is limited to only reads matching the phage index (-F 4). CpG methylation is called in methyldackel, allowing duplicates,
 

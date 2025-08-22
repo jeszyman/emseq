@@ -36,6 +36,7 @@ meth <- unite(merged_obj,
               chunk.size = 1e9,
               mc.cores = as.numeric(args$cores),
               save.db = TRUE,
+              min.per.group = 1,
               suffix = args$suffix,
               dbdir = args$out_dir)
 
@@ -45,6 +46,7 @@ diff <- calculateDiffMeth(meth,
                           chunk.size = 1e9,
                           save.db = TRUE,
                           dbdir = args$out_dir)
+
 library(argparse)
 library(methylKit)
 
@@ -92,6 +94,7 @@ diff <- calculateDiffMeth(meth,
                           chunk.size = 1e9,
                           save.db = TRUE,
                           dbdir = args$out_dir)
+
 library(argparse)
 library(methylKit)
 

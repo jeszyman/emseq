@@ -151,6 +151,7 @@ for (i in seq_along(pages)) {
 dev.off()
 
 fwrite(medians,   file = args$output_tsv, sep = "\t")
+
 #!/usr/bin/env Rscript
 
 suppressPackageStartupMessages({

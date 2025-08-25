@@ -441,12 +441,50 @@ relationships:
     type: one-to-many       # A library can be sequenced multiple times
 #+end_src
 ** Workflows
-*** Methylation sequence processing 2.0
+*** Methylation sequence processing
+**** Common Steps
+***** Fastp
+#+begin_src snakemake
+rule emseq_fastp:
+    conda: f"{config['envs']['emseq']}"
+    input:
+        r1 = f"{config['emseq-dir']}/fastqs/{{library_id}}.raw_R1.fastq.gz",
+        r2 = f"{config['emseq-dir']}/fastqs/{{library_id}}.raw_R2.fastq.gz",
+    log:
+        cmd = f"{config['log-dir']}/{{library_id}}-emseq-fastp.log",
+        json = f"{config['log-dir']}/{{library_id}}-emseq-fastp.json",
+        html = f"{config['log-dir']}/{{library_id}}-emseq-fastp.html",
+    output:
+        r1 = f"{config['emseq-dir']}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
+        r2 = f"{config['emseq-dir']}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
+        failed = f"{config['emseq-dir']}/fastqs/{{library_id}}.failed.fastq.gz",
+    params:
+        script = f"{config['emseq-script-dir']}/fastp-emseq-wrapper.sh",
+    threads:
+        8
+    shell:
+        """
+        fastp \
+        --detect_adapter_for_pe \
+        --disable_quality_filtering \
+        --failed_out {output.failed} \
+        --in1 {input.r1} \
+        --in2 {input.r2} \
+        --json {log.json} \
+        --html {log.html} \
+        --out1 {output.r1} \
+        --out2 {output.r2} \
+        --thread {params.threads} \
+        """
+#+end_src
+
+**** To archive
+***** Methylation sequence processing 2.0
 :PROPERTIES:
 :ID:       c5b37e92-1e28-4cfc-8678-b830ac836d57
 :END:
 push methmap to config
-**** Writeup
+****** Writeup
 - Sample preparation and sequencing.
   Cell-free DNA was extracted and prepared using the NEBNext® Enzymatic Methyl-seq (EM-seq) Kit following the manufacturer's protocol. Libraries were sequenced on an Illumina platform using paired-end 150 bp reads.
 
@@ -471,7 +509,7 @@ push methmap to config
 
 - Pipeline orchestration.
   All steps were executed using a reproducible Snakemake (v7.x) workflow with conda-based environment isolation. Logging was performed at each rule level, and intermediate files were tracked and retained as needed.
-**** Preamble
+****** Preamble
 #+begin_src snakemake
 ############################
 ###   EM-Seq Snakefile   ###
@@ -492,8 +530,8 @@ push methmap to config
 
 #+end_src
 
-**** Common steps
-***** Fastp
+****** Common steps
+******* Fastp
 #+begin_src snakemake
 rule emseq_fastp:
     conda:
@@ -550,7 +588,7 @@ fastp \
 
 #+end_src
 
-***** FastQC
+******* FastQC
 #+begin_src snakemake
 rule emseq_fastqc:
     conda:
@@ -579,7 +617,7 @@ rule emseq_fastqc:
         """
 #+end_src
 
-***** Depth
+******* Depth
 - Mosdepth on specific bams
   #+begin_src snakemake
 # Will follow symlinks
@@ -1279,7 +1317,7 @@ fwrite(medians,   file = args$output_tsv, sep = "\t")
 
 #+end_src
 
-***** M-bias
+******* M-bias
 #+begin_src snakemake
 rule emseq_mbias:
     conda:
@@ -1300,7 +1338,7 @@ rule emseq_mbias:
         """
 #+end_src
 
-***** De-duplicate
+******* De-duplicate
 :PROPERTIES:
 :ID:       4ac48779-f505-4291-b7bf-cc950d3339e6
 :END:
@@ -1342,7 +1380,7 @@ rule emseq_dedup:
         """
 
 #+end_src
-**** Spike workflow
+****** Spike workflow
 
 The EM-seq kit includes two control DNA spike-ins, unmethylated Lambda and CpG methylated pUC19.
 
@@ -1414,7 +1452,7 @@ rule emseq_methyldackel_spike:
 #+end_src
 
 
-**** BWA-Meth
+****** BWA-Meth
 
 BWA-meth alignment is much faster than biscuit.
 
@@ -1434,7 +1472,7 @@ BWA-meth output is a duplicated, coordinate sorted BAM. This is de-duplicated du
 Reference
 - https:/github.com/brentp/bwa-meth
 
-***** Index
+******* Index
 
 #+begin_src snakemake
 rule bwa_meth_index:
@@ -1464,7 +1502,7 @@ rule bwa_meth_index:
 
 #+end_src
 
-***** Align
+******* Align
 
 #+begin_src snakemake
 rule emseq_align_bwameth:
@@ -1494,9 +1532,9 @@ rule emseq_align_bwameth:
 
 #+end_src
 
-***** Post-align
-****** [[id:4ac48779-f505-4291-b7bf-cc950d3339e6][De-duplicate]]
-****** Call methylation
+******* Post-align
+******** [[id:4ac48779-f505-4291-b7bf-cc950d3339e6][De-duplicate]]
+******** Call methylation
 #+begin_src snakemake
 rule emseq_methyldackel:
     conda:
@@ -1585,8 +1623,8 @@ obj <- methRead(
 )
 
 #+end_src
-**** Biscuit
-***** Index
+****** Biscuit
+******* Index
 #+begin_src snakemake
 rule emseq_biscuit_index:
     conda:
@@ -1610,7 +1648,7 @@ rule emseq_biscuit_index:
 
 #+end_src
 
-***** Align
+******* Align
 #+begin_src snakemake
 rule emseq_align_biscuit:
     conda:
@@ -1643,8 +1681,8 @@ rule emseq_align_biscuit:
         """
 
 #+end_src
-***** [[id:4ac48779-f505-4291-b7bf-cc950d3339e6][De-duplicate]]
-***** Pileup
+******* [[id:4ac48779-f505-4291-b7bf-cc950d3339e6][De-duplicate]]
+******* Pileup
 #+begin_src snakemake
 rule emseq_biscuit_pileup:
     conda:
@@ -1739,7 +1777,7 @@ myobj= methRead(args$bismark_cov_bed,
 #+end_src
 
 
-**** Methylkit
+****** Methylkit
 https:/www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/methylKit.html
 - get nearest TSS
 - get region annotation
@@ -1829,7 +1867,7 @@ diff <- calculateDiffMeth(meth,
 #+end_src
 
 
-*** Methylation sequence processing
+***** Methylation sequence processing
 :PROPERTIES:
 :ID:       c5b37e92-1e28-4cfc-8678-b830ac836d57
 :header-args:snakemake: :tangle ./workflows/em-seq.smk :tangle-mode (identity #o555)
@@ -1855,7 +1893,7 @@ for key in unique_keys:
 
 #+RESULTS:
 
-**** Preamble
+****** Preamble
 #+begin_src snakemake
 ############################
 ###   EM-Seq Snakefile   ###
@@ -1876,8 +1914,8 @@ for key in unique_keys:
 
 #+end_src
 
-**** Common steps
-***** Fastp
+****** Common steps
+******* Fastp
 #+begin_src snakemake
 rule emseq_fastp:
     conda:
@@ -1912,7 +1950,7 @@ rule emseq_fastp:
         """
 
 #+end_src
-***** FastQC
+******* FastQC
 #+begin_src snakemake
 rule emseq_fastqc:
     conda:
@@ -1940,7 +1978,7 @@ rule emseq_fastqc:
         """
 #+end_src
 
-***** Depth
+******* Depth
 - Mosdepth on specific bams
   #+begin_src snakemake
 # Will follow symlinks
@@ -2639,7 +2677,7 @@ fwrite(medians,   file = args$output_tsv, sep = "\t")
 
 #+end_src
 
-***** M-bias
+******* M-bias
 #+begin_src snakemake
 rule emseq_mbias:
     conda:
@@ -2660,7 +2698,7 @@ rule emseq_mbias:
         """
 #+end_src
 
-***** De-duplicate
+******* De-duplicate
 :PROPERTIES:
 :ID:       4ac48779-f505-4291-b7bf-cc950d3339e6
 :END:
@@ -2702,7 +2740,7 @@ rule emseq_dedup:
         """
 
 #+end_src
-**** Spike workflow
+****** Spike workflow
 
 The EM-seq kit includes two control DNA spike-ins, unmethylated Lambda and CpG methylated pUC19.
 
@@ -2773,7 +2811,7 @@ rule emseq_methyldackel_spike:
 #+end_src
 
 
-**** BWA-Meth
+****** BWA-Meth
 
 BWA-meth alignment is much faster than biscuit.
 
@@ -2793,7 +2831,7 @@ BWA-meth output is a duplicated, coordinate sorted BAM. This is de-duplicated du
 Reference
 - https:/github.com/brentp/bwa-meth
 
-***** Index
+******* Index
 
 #+begin_src snakemake
 rule bwa_meth_index:
@@ -2823,7 +2861,7 @@ rule bwa_meth_index:
 
 #+end_src
 
-***** Align
+******* Align
 
 #+begin_src snakemake
 rule emseq_align_bwameth:
@@ -2853,9 +2891,9 @@ rule emseq_align_bwameth:
 
 #+end_src
 
-***** Post-align
-****** [[id:4ac48779-f505-4291-b7bf-cc950d3339e6][De-duplicate]]
-****** Call methylation
+******* Post-align
+******** [[id:4ac48779-f505-4291-b7bf-cc950d3339e6][De-duplicate]]
+******** Call methylation
 #+begin_src snakemake
 rule emseq_methyldackel:
     conda:
@@ -2944,8 +2982,8 @@ obj <- methRead(
 )
 
 #+end_src
-**** Biscuit
-***** Index
+****** Biscuit
+******* Index
 #+begin_src snakemake
 rule emseq_biscuit_index:
     conda:
@@ -2969,7 +3007,7 @@ rule emseq_biscuit_index:
 
 #+end_src
 
-***** Align
+******* Align
 #+begin_src snakemake
 rule emseq_align_biscuit:
     conda:
@@ -3002,8 +3040,8 @@ rule emseq_align_biscuit:
         """
 
 #+end_src
-***** [[id:4ac48779-f505-4291-b7bf-cc950d3339e6][De-duplicate]]
-***** Pileup
+******* [[id:4ac48779-f505-4291-b7bf-cc950d3339e6][De-duplicate]]
+******* Pileup
 #+begin_src snakemake
 rule emseq_biscuit_pileup:
     conda:
@@ -3098,7 +3136,7 @@ myobj= methRead(args$bismark_cov_bed,
 #+end_src
 
 
-**** Methylkit
+****** Methylkit
 https:/www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/methylKit.html
 
 #+begin_src snakemake
@@ -3185,15 +3223,14 @@ diff <- calculateDiffMeth(meth,
                           save.db = TRUE,
                           dbdir = args$out_dir)
 #+end_src
-
-*** OLD Methylation sequence processing
+***** OLD Methylation sequence processing
 :PROPERTIES:
 :ID:       c3bdbbcc-5a4c-475a-8ab1-33884ab14ef5
 :header-args:snakemake: :tangle no
 :END:
-**** methylKit per experiment
-***** Grouped objects and differential methylation
-****** Per-position
+****** methylKit per experiment
+******* Grouped objects and differential methylation
+******** Per-position
 #+begin_src snakemake
 rule make_methylkit_diff_db:
     input:
@@ -3320,7 +3357,7 @@ write_tsv(
 
 #+end_src
 
-****** Tiled
+******** Tiled
 
 #+begin_src snakemake
 rule make_methylkit_diff_db_tiled:
@@ -3446,7 +3483,7 @@ rule all_experiment_tiled_methylation:
         """
 #+end_src
 
-****** Exploratory data analysis
+******** Exploratory data analysis
 
 #+begin_src R
 # Compute global methylation (mean per sample)
@@ -3598,7 +3635,7 @@ ggsave("/tmp/global_meth.png", p1 + p2, width = 12, height = 5, dpi = 300)
 - global methylation
 - tiled methylation beta heatmap
 -
-**** Dev
+****** Dev
 :properties:
 :header-args:snakemake: :tangle no
 :end:
@@ -3680,7 +3717,7 @@ ggplot(df, aes(x = treatment, y = global_methylation)) +
 
 #+end_src
 
-***** Depth
+******* Depth
 #+begin_src bash
 
 ls /tmp/breast/analysis/emseq/bams-merged/PRO_13_deduped.bam
@@ -3696,7 +3733,7 @@ mosdepth \
 
 #+end_src
 
-***** Biscuit index
+******* Biscuit index
 :PROPERTIES:
 :ID:       7c540ad8-2c04-4dff-bf88-ae9c260a6a91
 :END:
@@ -3748,9 +3785,9 @@ samtools faidx "$ncbi_fa"
 nohup biscuit index "$ncbi_fa" & disown
 #+end_src
 
-***** EM-seq methylation
+******* EM-seq methylation
 - Consider reference w/ decoys https:/chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369
-****** Biscuit index
+******** Biscuit index
 #+begin_src bash
 source ~/repos/breast/config/bash-env.sh
 Y
@@ -3802,7 +3839,7 @@ samtools faidx "$ncbi_fa"
 
 nohup biscuit index "$ncbi_fa" & disown
 #+end_src
-****** Make methylation position calls
+******** Make methylation position calls
 
 #+begin_src bash
 biscuit pileup \
@@ -3865,7 +3902,7 @@ rule emseq_post_pileup:
         """
 #+end_src
 
-****** DMR
+******** DMR
 https:/www.bioconductor.org/packages/release/bioc/vignettes/dmrseq/inst/doc/dmrseq.html
 https:/huishenlab.github.io/biscuit/docs/methylextraction.html
 https:/bioconductor.org/packages/release/bioc/html/DSS.html
@@ -4306,22 +4343,22 @@ myobj = methRead("/tmp/breast/analysis/emseq/pileup/test.tsv",
 
 #+end_src
 
-****** Reference
+******** Reference
 - Alignment reference choice
   - discussion [[https:/chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369][gtp]]
   - see [[id:326ecd60-8cd4-4815-a389-967b2c3fef0a][Nucleic acid sequence alignment]]
 - [cite:@chauhan2024]
 - [[id:5e9e8bfa-ac9e-4103-9cc5-7123337b4e24][biscuit]]
 
-****** Ideas
+******** Ideas
 - for qc https:/www.google.com/search?sca_esv=45e5c8ab8ae118cf&sxsrf=AHTn8zrPW-wtm7PgHxohfizFJXC9p5Qtlw:1742500238525&q=m-bias+plots&udm=2&fbs=ABzOT_CWdhQLP1FcmU5B0fn3xuWpA-dk4wpBWOGsoR7DG5zJBtmuEdhfywyzhendkLDnhcrUz6wxBwARHD96EKWkSbZoQZGasaHPJ9csj0AVVVUDNHqfR7gd1arUfaOpw1v5Icccwayh65rdsqdiyPvxAA9gXK95YqgoHnUzfZ5jo9jiMl2Q8DaMUR4I1U0kl1-ho1NSBjy_chexdcGuJmvrFewYJaqjljog&sa=X&ved=2ahUKEwj90vOdt5mMAxXLGlkFHdQWG7IQtKgLegQIExAB&biw=1745&bih=908&dpr=1.1
 - https:/sequencing.qcfail.com/articles/mispriming-in-pbat-libraries-causes-methylation-bias-and-poor-mapping-efficiencies/
 - consider https:/www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/methylKit.html#6_Frequently_Asked_Questions
 
-***** EM-seq cfDNA copy number alteration
+******* EM-seq cfDNA copy number alteration
 EM-seq protects 5mC and 5hmC from damination with TET2 enzymatic oxidation. Unprotected cytosines are deaminated to uracils.
 
-***** DMR
+******* DMR
 https:/www.bioconductor.org/packages/release/bioc/vignettes/dmrseq/inst/doc/dmrseq.html
 https:/huishenlab.github.io/biscuit/docs/methylextraction.html
 https:/bioconductor.org/packages/release/bioc/html/DSS.html

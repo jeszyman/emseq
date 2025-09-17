@@ -2,25 +2,18 @@
 :PROPERTIES:
 :ID:       cd9489fd-c6e7-4c64-8317-e3d9a283b36c
 :END:
+#+begin_src emacs-lisp
+;; In the problem buffers:
+(setq-local org-element-use-cache nil)          ;; disable cache for this buffer
+(remove-hook 'before-save-hook 'org-table-recalculate-buffer-tables t)
+(remove-hook 'org-babel-post-tangle-hook #'remove-property-drawers-from-tangled-file)
+(with-eval-after-load 'org-alert (org-alert-disable))  ;; pause org-alert
+(remove-hook 'flyspell-post-command-hook #'flyspell-post-command-hook t)  ;; turn off flyspell in this buffer
+
+#+end_src
+
 ** [[id:bda70cff-0713-4e32-8da1-ee83924b8f00][README]]
 ** [[elisp:(progn (org-babel-goto-named-src-block "git-workflow-up") (org-babel-execute-src-block))][Run git workflow up]]
-*** Conda
-*** EM-seq Workflow Prerequisites
-:PROPERTIES:
-:ID:       5c481cc2-54e6-4cbb-98a0-ce16f17ede1c
-:CUSTOM_ID: 5c481cc2-54e6-4cbb-98a0-ce16f17ede1c
-:END:
-
-emseq_script_dir
-emseq_library_ids
-emseq_fastq_dir
-emseq_bam_dir
-
-log_dir
-data_dir
-qc_dir
-
-emseq_dir
 *** Resource Used and Concurrency
 
 EM-seq workflows use Snakemake's resources feature to control how many jobs of a given rule can run simultaneously. Each rule specifies a concurrency value, and a global limit is set at runtime. For example:
@@ -139,6 +132,34 @@ Alignments to spiked DNA references are specialized for fast accurate global met
 ** Repository administration
 *** Conda
 **** Environmental YAMLs
+***** EM-seq
+#+begin_src yaml :tangle ./config/emseq-conda-env.yaml
+name: emseq
+channels:
+  - conda-forge
+  - bioconda
+
+dependencies:
+  - fastp
+  - fastqc
+  - samtools
+  - bioconductor-genomeinfodbdata=1.2.7
+  - biscuit=1.6.0.20241216=*_1
+  - dupsifter=1.3.0.20241113=*_1
+  - bismark
+  - bwa
+  - bwameth
+  - methyldackel
+  - mosdepth
+  - r-argparse
+  - r-data.table
+  - r-ggplot2
+  - r-cairo
+  - r-scales
+  - r-patchwork
+  - r-matrixstats
+
+#+end_src
 ***** MethylKit
 #+begin_src yaml :tangle ./config/methylkit-conda-env.yaml
 name: methylkit
@@ -174,33 +195,6 @@ dependencies:
   - r-r.utils
 #+end_src
 
-***** EM-seq
-#+begin_src yaml :tangle ./config/emseq-conda-env.yaml
-name: emseq
-channels:
-  - conda-forge
-  - bioconda
-
-dependencies:
-  - fastp
-  - fastqc
-  - samtools
-  - bioconductor-genomeinfodbdata=1.2.7
-  - biscuit=1.6.0.20241216=*_1
-  - dupsifter=1.3.0.20241113=*_1
-  - bwa
-  - bwameth
-  - methyldackel
-  - mosdepth
-  - r-argparse
-  - r-data.table
-  - r-ggplot2
-  - r-cairo
-  - r-scales
-  - r-patchwork
-  - r-matrixstats
-
-#+end_src
 ***** bwa-meth
 #+begin_src yaml :tangle ./config/bwa-meth-env.yaml
 name: bwa_mem
@@ -281,6 +275,7 @@ To github.com:jeszyman/emseq.git
 :ID:       bda70cff-0713-4e32-8da1-ee83924b8f00
 :export_file_name: README
 :END:
+[[file:README.md]]
 #+begin_src bash
 python3 ~/repos/basecamp/scripts/emacs_export_header_to_markdown.py --org_file ~/repos/emseq/emseq.org --node_id bda70cff-0713-4e32-8da1-ee83924b8f00
 
@@ -440,59 +435,22 @@ relationships:
     to: sequencing
     type: one-to-many       # A library can be sequenced multiple times
 #+end_src
-** Workflows
-*** Methylation sequence processing
-**** Common Steps
-***** Fastp
-#+begin_src snakemake
-rule emseq_fastp:
-    conda: f"{config['envs']['emseq']}"
-    input:
-        r1 = f"{config['emseq-dir']}/fastqs/{{library_id}}.raw_R1.fastq.gz",
-        r2 = f"{config['emseq-dir']}/fastqs/{{library_id}}.raw_R2.fastq.gz",
-    log:
-        cmd = f"{config['log-dir']}/{{library_id}}-emseq-fastp.log",
-        json = f"{config['log-dir']}/{{library_id}}-emseq-fastp.json",
-        html = f"{config['log-dir']}/{{library_id}}-emseq-fastp.html",
-    output:
-        r1 = f"{config['emseq-dir']}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
-        r2 = f"{config['emseq-dir']}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
-        failed = f"{config['emseq-dir']}/fastqs/{{library_id}}.failed.fastq.gz",
-    params:
-        script = f"{config['emseq-script-dir']}/fastp-emseq-wrapper.sh",
-    threads:
-        8
-    shell:
-        """
-        fastp \
-        --detect_adapter_for_pe \
-        --disable_quality_filtering \
-        --failed_out {output.failed} \
-        --in1 {input.r1} \
-        --in2 {input.r2} \
-        --json {log.json} \
-        --html {log.html} \
-        --out1 {output.r1} \
-        --out2 {output.r2} \
-        --thread {params.threads} \
-        """
-#+end_src
-
-**** To archive
-***** Methylation sequence processing 2.0
+** Methylation sequence processing
 :PROPERTIES:
-:ID:       c5b37e92-1e28-4cfc-8678-b830ac836d57
+:ID:       92e64b67-c219-4146-a89b-a8710d91a634
+:header-args:snakemake: :tangle ./workflows/emseq.smk
 :END:
-push methmap to config
-****** Writeup
+[[file:workflows/emseq.smk]]
+*** Writeup
+
 - Sample preparation and sequencing.
   Cell-free DNA was extracted and prepared using the NEBNext® Enzymatic Methyl-seq (EM-seq) Kit following the manufacturer's protocol. Libraries were sequenced on an Illumina platform using paired-end 150 bp reads.
 
-- Preprocessing and quality control.
-  Raw sequencing reads were processed with fastp (v0.23.4) using default parameters, with adapter detection enabled and quality filtering disabled to preserve methylation signal, as recommended for EM-seq libraries. FastQC (v0.11.9) was used to assess read quality before and after trimming.
+- Sequencing read pre-processing and quality control.
+  Raw sequencing reads were processed with fastp using default parameters, with adapter detection enabled and quality filtering disabled. FastQC was used to assess read quality before and after trimming.
 
-- Alignment and deduplication.
-  Reads were aligned to the human reference genome (GRCh38) using BWA-meth (v0.2.2) with default parameters. Resulting BAMs were coordinate-sorted and deduplicated using dupsifter (https://github.com/brentp/dupsifter), which performs read name-aware deduplication optimized for bisulfite-style alignments. Only properly paired reads (SAM flag 0x2) were retained prior to deduplication.
+- Alignment and de-duplication.
+  Reads were aligned to reference genome(s) using BWA-meth with default parameters. Resulting BAMs were coordinate-sorted and deduplicated using dupsifter (https://github.com/brentp/dupsifter), which performs read name-aware de-duplication optimized for bisulfite-style alignments. Only properly paired reads (SAM flag 0x2) were retained prior to deduplication.
 
 - Methylation calling.
   Methylation calls were made on deduplicated BAMs using MethylDackel (v0.6.1), with CpG-context methylation extracted in methylKit-compatible format (--methylKit). Calls were further processed using methylKit (v1.22.0) for filtering, tabix compression, and downstream differential methylation analysis. For each sample, methylation calls were filtered using a minimum coverage threshold of 10×.
@@ -509,7 +467,8 @@ push methmap to config
 
 - Pipeline orchestration.
   All steps were executed using a reproducible Snakemake (v7.x) workflow with conda-based environment isolation. Logging was performed at each rule level, and intermediate files were tracked and retained as needed.
-****** Preamble
+
+*** Preamble
 #+begin_src snakemake
 ############################
 ###   EM-Seq Snakefile   ###
@@ -519,155 +478,141 @@ push methmap to config
 #
 # A snakefile for basic processing of EM-seq sequencing data
 
-# ---   Dependencies   --- #
-# ------------------------ #
+# Fallbacks for lint-only execution
+try:
+    ENV_EMSEQ
+except NameError:
+    ENV_EMSEQ   = "envs/emseq.yml"
+    D_EMSEQ     = "emseq"
+    D_REF       = "ref"
+    D_LOGS      = "logs"
+    D_BENCHMARK = "benchmark"
 
-# ./config/emseq-conda-env.yaml, a conda environment file called from certain rules
-# Scripts from within ./scripts
-
-# ---   Configuration Variables   --- #
-# ----------------------------------- #
-
+emseq_mincov = 2
+emseq_build = "hg38"
 #+end_src
 
-****** Common steps
-******* Fastp
+*** Common Steps
+**** Fastq
+***** Fastp
 #+begin_src snakemake
 rule emseq_fastp:
-    conda:
-        f"{config['emseq-conda-env']}",
-    input:
-        r1 = f"{config['emseq-dir']}/fastqs/{{library_id}}.raw_R1.fastq.gz",
-        r2 = f"{config['emseq-dir']}/fastqs/{{library_id}}.raw_R2.fastq.gz",
-    log:
-        cmd = f"{config['log-dir']}/{{library_id}}-emseq-fastp.log",
-        json = f"{config['log-dir']}/{{library_id}}-emseq-fastp.json",
-        html = f"{config['log-dir']}/{{library_id}}-emseq-fastp.html",
-    output:
-        r1 = f"{config['emseq-dir']}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
-        r2 = f"{config['emseq-dir']}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
-        failed = f"{config['emseq-dir']}/fastqs/{{library_id}}.failed.fastq.gz",
+    message: "EM-seq fastp for {wildcards.library_id}"
+    conda: ENV_EMSEQ
+    threads: 8
     params:
-        script = f"{config['emseq-script-dir']}/fastp-emseq-wrapper.sh",
-    threads:
-        8
+        extra = config.get("fastp", {}).get("extra", ""),
+    input:
+        r1 = f"{D_EMSEQ}/fastqs/{{library_id}}.raw_R1.fastq.gz",
+        r2 = f"{D_EMSEQ}/fastqs/{{library_id}}.raw_R2.fastq.gz",
+    output:
+        failed = f"{D_EMSEQ}/fastqs/{{library_id}}.failed.fastq.gz",
+        html = f"{D_EMSEQ}/qc/{{library_id}}_emseq_fastp.html",
+        json = f"{D_EMSEQ}/qc/{{library_id}}_emseq_fastp.json",
+        r1     = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
+        r2     = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
+    log:
+        cmd  = f"{D_LOGS}/{{library_id}}_emseq_fastp.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}_emseq_fastp.tsv"
     shell:
-        """
+        r"""
+
+        # Logging and console output
+        exec &>> "{log.cmd}"
+        echo "[fastp] $(date) lib={wildcards.library_id} threads={threads}"
+
+        # Main
         fastp \
-        --detect_adapter_for_pe \
-        --disable_quality_filtering \
-        --failed_out {output.failed} \
-        --in1 {input.r1} \
-        --in2 {input.r2} \
-        --json {log.json} \
-        --html {log.html} \
-        --out1 {output.r1} \
-        --out2 {output.r2} \
-        --thread {params.threads} \
+          --detect_adapter_for_pe \
+          --disable_quality_filtering \
+          --in1 "{input.r1}" --in2 "{input.r2}" \
+          --out1 "{output.r1}" --out2 "{output.r2}" \
+          --failed_out "{output.failed}" \
+          --json "{output.json}" --html "{output.html}" \
+          --thread {threads} \
+          {params.extra}
         """
 #+end_src
-- Likely dont need to trim  https://chatgpt.com/c/68839943-2af4-8329-a7e0-595d057d3485
-  - https:/sequencing.qcfail.com/articles/mispriming-in-pbat-libraries-causes-methylation-bias-and-poor-mapping-efficiencies/
 
-#+begin_src bash
-fastp \
-    --detect_adapter_for_pe \
-    --disable_quality_filtering \
-    --failed_out /tmp/failed.fastq.gz \
-    --in1 /tmp/in1.fastq.gz \
-    --in2 /tmp/in2.fastq.gz \
-    --json /tmp/log.json \
-    --html /tmp/log.html \
-    --out1 /tmp/out1.fastq.gz \
-    --out2 /tmp/out2.fastq.gz \
-    --thread 20 \
-    -- verbose \
-    -- trim_front1 10 \
-    -- trim_front2 10 \
-    -- cut_front
-
-#+end_src
-
-******* FastQC
+***** FastQC
 #+begin_src snakemake
 rule emseq_fastqc:
-    conda:
-        f"{config['emseq-conda-env']}",
-    input:
-        f"{config['emseq-dir']}/fastqs/{{library_id}}.{{processing}}_{{read}}.fastq.gz",
-    log:
-        f"{config['log-dir']}/{{library_id}}.{{processing}}_{{read}}_emseq_fastqc.log",
-    output:
-        f"{config['emseq-dir']}/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.html",
-        f"{config['emseq-dir']}/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.zip",
-    params:
-        outdir = f"{config['emseq-dir']}/qc",
+    message: "EM-seq FastQC for {wildcards.library_id} {wildcards.processing} {wildcards.read}"
+    conda: ENV_EMSEQ
+    threads: 4
     resources:
-        concurrency = 25,
-    threads:
-        4,
+        concurrency = 25
+    input:
+        fq = f"{D_EMSEQ}/fastqs/{{library_id}}.{{processing}}_{{read}}.fastq.gz",
+    output:
+        html = f"{D_EMSEQ}/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.html",
+        zip  = f"{D_EMSEQ}/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.zip",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{processing}}_{{read}}_emseq_fastqc.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{processing}}_{{read}}_emseq_fastqc.tsv"
     shell:
-        """
-        fastqc \
-        --outdir {params.outdir} \
-        --quiet \
-        --svg \
-        --threads {params.threads} \
-        {input} &> {log}
-        """
-#+end_src
+        r"""
+        exec &>> "{log.cmd}"
+        echo "[fastqc] $(date) lib={wildcards.library_id} proc={wildcards.processing} read={wildcards.read} threads={threads}"
 
-******* Depth
+        fastqc \
+          --outdir "$(dirname "{output.html}")" \
+          --quiet \
+          --threads {threads} \
+          "{input.fq}"
+        """
+
+#+end_src
+**** Alignment
+***** Depth
 - Mosdepth on specific bams
   #+begin_src snakemake
-# Will follow symlinks
-# rule emseq_index_bam_check:
-#     input:
-#         bam = ancient(f"{config['emseq-dir']}/bams/{{library_id}}_deduped.bam"),
-#     output:
-#         bai = f"{config['emseq-dir']}/bams/{{library_id}}_deduped.bam.bai",
-#     shell:
-#         """
-#         samtools index -@ 8 {input.bam} {output.bai}
-#         """
 rule emseq_mosdepth:
-    conda:
-        f"{config['emseq-conda-env']}",
-    input:
-        bam = f"{config['emseq-dir']}/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
-        index = f"{config['emseq-dir']}/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
-    output:
-        summary = f"{config['emseq-dir']}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.summary.txt",
-        global_dist = f"{config['emseq-dir']}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.global.dist.txt",
-        region_dist = f"{config['emseq-dir']}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.region.dist.txt",
-        regions = f"{config['emseq-dir']}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.regions.bed.gz",
-        regions_idx = f"{config['emseq-dir']}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.regions.bed.gz.csi",
-        quantized = f"{config['emseq-dir']}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.quantized.bed.gz",
-        quantized_idx = f"{config['emseq-dir']}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.quantized.bed.gz.csi",
-        thresholds = f"{config['emseq-dir']}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.thresholds.bed.gz",
-        thresholds_idx = f"{config['emseq-dir']}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.thresholds.bed.gz.csi",
-    params:
-        script = f"{config['emseq-script-dir']}/emseq_mosdepth.sh",
-        quant_levels = config["mosdepth-quant-levels"],
-        out_dir = f"{config['emseq-dir']}/qc",
-    threads:
-        8,
+    message: "EM-seq mosdepth for {wildcards.library_id} {wildcards.ref_name} {wildcards.align_method}"
+    conda: ENV_EMSEQ
+    threads: 8
     resources:
-        concurrency = 20,
+        concurrency = 20
+    params:
+        script       = f"{D_EMSEQ}/scripts/emseq_mosdepth.sh",
+        quant_levels = config.get("mosdepth-quant-levels", ""),
+    input:
+        bam   = f"{D_EMSEQ}/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
+        index = f"{D_EMSEQ}/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
+    output:
+        summary       = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.summary.txt",
+        global_dist   = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.global.dist.txt",
+        region_dist   = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.region.dist.txt",
+        regions       = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.regions.bed.gz",
+        regions_idx   = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.regions.bed.gz.csi",
+        quantized     = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.quantized.bed.gz",
+        quantized_idx = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.quantized.bed.gz.csi",
+        thresholds    = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.thresholds.bed.gz",
+        thresholds_idx= f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.thresholds.bed.gz.csi",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_mosdepth.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_mosdepth.tsv"
     shell:
-        """
-        {params.script} \
-        {input.bam} \
-        {params.out_dir} \
-        {wildcards.library_id}.{wildcards.ref_name}.{wildcards.align_method} \
-        '{params.quant_levels}' \
-        {threads}
+        r"""
+
+        exec &>> "{log.cmd}"
+        echo "[mosdepth] $(date) lib={wildcards.library_id} ref={wildcards.ref_name} aln={wildcards.align_method} threads={threads}"
+
+        "{params.script}" \
+          "{input.bam}" \
+          "$(dirname "{output.summary}")" \
+          "{wildcards.library_id}.{wildcards.ref_name}.{wildcards.align_method}" \
+          '{params.quant_levels}' \
+          {threads}
         """
 
 #+end_src
+
   #+begin_src bash
 #!/usr/bin/env bash
-set -euo pipefail
 
 # -----------------------------------------------------------------------------
 # mosdepth-wrapper.sh
@@ -750,637 +695,86 @@ run_mosdepth() {
 main "$@"
 #+end_src
 
-- Mosdepth aggregator
-  #+begin_src snakemake :tangle no
-print("emseq_library_ids:", emseq_library_ids)
-print("type of first item:", type(emseq_library_ids[0]))
-
-rule emseq_mosdepth_agg_plot:
-    input:
-        thresholds = expand(f"{config['emseq-dir']}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.thresholds.bed.gz",
-                            library_id=emseq_library_ids),
-        regions = expand(f"{config['emseq-dir']}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.regions.bed.gz",
-                         library_id=emseq_library_ids),
-    output:
-        pdf = f"{qc_dir}/emseq_mosdepth_agg_plot.pdf",
-        tsv = f"{qc_dir}/emseq_mosdepth_agg.tsv",
-    params:
-        script = f"{config['emseq-script-dir']}/emseq_mosdepth_agg_plot.R",
-        library_list = " ".join(emseq_library_ids),
-        threshold_list = lambda wildcards, input: " ".join(input.thresholds),
-        regions_list = lambda wildcards, input: " ".join(input.regions),
-    shell:
-        """
-        Rscript {params.script} \
-        --threshold_list "{params.threshold_list}" \
-        --regions_list "{params.regions_list}" \
-        --library_list "{params.library_list}" \
-        --output_pdf {output.pdf} \
-        --output_tsv {output.tsv}
-        """
-
-#+end_src
-  #+begin_src snakemake :tangle no
-
-def flatten(x):
-    return [item for sublist in x for item in (sublist if isinstance(sublist, list) else [sublist])]
-
-print("emseq_library_ids:", emseq_library_ids)
-print("type of first item:", type(emseq_library_ids[0]))
-
-rule emseq_mosdepth_agg_plot:
-    input:
-        threshold_list = lambda wildcards, input: " ".join(flatten(input.thresholds)),
-        regions_list = lambda wildcards, input: " ".join(flatten(input.regions)),
-    output:
-        pdf = f"{qc_dir}/mosdepth_agg_plot.pdf",
-    params:
-        script = f"{config['emseq-script-dir']}/emseq_mosdepth_agg_plot.R",
-        library_list = " ".join(emseq_library_ids),
-        threshold_list = lambda wildcards, input: " ".join(input.thresholds),
-        regions_list = lambda wildcards, input: " ".join(input.regions),
-    shell:
-        """
-        Rscript {params.script} \
-        --threshold_list "{params.threshold_list}" \
-        --regions_list "{params.regions_list}" \
-        --library_list "{params.library_list}" \
-        --output_pdf {output.pdf}
-        """
-
-#+end_src
-
-  #+begin_src snakemake
-rule emseq_mosdepth_agg_plot:
-    conda:
-        "../config/mosdepth-conda-env.yaml",
-    input:
-        thresholds = lambda wildcards: expand(
-            f"{config['emseq-dir']}/qc/mosdepth_{{library_id}}.{mosdepth_map[wildcards.experiment]['ref_name']}."
-            f"{mosdepth_map[wildcards.experiment]['align_method']}.thresholds.bed.gz",
-            library_id=mosdepth_map[wildcards.experiment]['library_ids']
-        ),
-        regions = lambda wildcards: expand(
-            f"{config['emseq-dir']}/qc/mosdepth_{{library_id}}.{mosdepth_map[wildcards.experiment]['ref_name']}."
-            f"{mosdepth_map[wildcards.experiment]['align_method']}.regions.bed.gz",
-            library_id=mosdepth_map[wildcards.experiment]['library_ids']
-        )
-    output:
-        pdf = f"{config['emseq-dir']}/qc/{{experiment}}.emseq_mosdepth_agg_plot.pdf",
-        tsv = f"{config['emseq-dir']}/qc/{{experiment}}.emseq_mosdepth_agg.tsv",
-    params:
-        script = f"{config['emseq-script-dir']}/emseq_mosdepth_agg_plot.R",
-        library_list = lambda wildcards: " ".join(mosdepth_map[wildcards.experiment]['library_ids']),
-        threshold_list = lambda wildcards, input: " ".join(input.thresholds),
-        regions_list = lambda wildcards, input: " ".join(input.regions),
-    shell:
-        """
-        Rscript {params.script} \
-        --threshold_list "{params.threshold_list}" \
-        --regions_list "{params.regions_list}" \
-        --library_list "{params.library_list}" \
-        --output_pdf {output.pdf} \
-        --output_tsv {output.tsv}
-        """
-
-#+end_src
-
-  #+begin_src R :tangle no
-#!/usr/bin/env Rscript
-
-# ==============================================================================
-# Description:
-#   Parses multiple mosdepth threshold files (*.thresholds.bed.gz) and generates
-#   a single paginated PDF plot (4×6 panels per page) showing counts of bases
-#   covered at actual observed thresholds (e.g., 1X, 2X, 5X...) per sample.
-#
-#   Infers 0X bins by identifying regions where all threshold counts are zero.
-#
-# Inputs:
-#   --threshold_list   Space-separated list of mosdepth threshold files
-#   --library_list     Space-separated list of sample names (must match order)
-#   --output_pdf       Full path to output PDF file (single file, multi-page)
-# ==============================================================================
-
-suppressPackageStartupMessages({
-  suppressWarnings(library(argparse))
-  suppressWarnings(library(data.table))
-  suppressWarnings(library(ggplot2))
-  suppressWarnings(library(Cairo))
-  suppressWarnings(library(scales))
-  suppressWarnings(library(patchwork))
-})
-
-
-suppressWarnings(library(matrixStats))  # at top
-
-
-# -------------------------------
-# Argument parsing
-# -------------------------------
-
-prog <- basename(commandArgs(trailingOnly = FALSE)[1])
-
-parser <- ArgumentParser(
-  description = "Generate a paginated threshold coverage plot from mosdepth output.",
-  prog = prog
-)
-
-parser$add_argument("--threshold_list", required = TRUE,
-                    help = "Space-separated list of mosdepth threshold files (*.thresholds.bed.gz)")
-parser$add_argument("--library_list", required = TRUE,
-                    help = "Space-separated list of sample names (must match file order)")
-parser$add_argument("--output_pdf", required = TRUE,
-                    help = "Full output PDF file path (e.g., /tmp/plot.pdf)")
-
-args <- parser$parse_args()
-threshold_files <- unlist(strsplit(args$threshold_list, " "))
-library_ids <- unlist(strsplit(args$library_list, " "))
-output_pdf <- args$output_pdf
-
-if (length(threshold_files) != length(library_ids)) {
-  stop("Error: threshold_list and library_list must be the same length")
-}
-
-# -------------------------------
-# Function to parse each threshold file
-# -------------------------------
-
-read_thresholds <- function(file, sample) {
-  header <- fread(file, nrows = 0)
-  names(header)[1] <- sub("^#", "", names(header)[1])
-  threshold_cols <- setdiff(names(header), c("chrom", "start", "end", "region"))
-  df <- fread(file, skip = 1, col.names = names(header))
-  df[, sample := sample]
-  melted <- melt(df,
-    id.vars = c("chrom", "start", "end", "region", "sample"),
-    measure.vars = threshold_cols,
-    variable.name = "threshold",
-    value.name = "count"
-  )
-  list(data = melted, thresholds = threshold_cols)
-}
-
-# -------------------------------
-# Read and combine all files
-# -------------------------------
-
-parsed <- mapply(read_thresholds, threshold_files, library_ids, SIMPLIFY = FALSE)
-hist_data <- rbindlist(lapply(parsed, `[[`, "data"))
-all_thresholds <- unique(unlist(lapply(parsed, `[[`, "thresholds")))
-
-# -------------------------------
-# Infer 0X bins from zeroed rows
-# -------------------------------
-
-hist_wide <- dcast(hist_data, chrom + start + end + region + sample ~ threshold,
-                   value.var = "count", fill = 0)
-hist_wide[, is_zero := rowSums(.SD) == 0, .SDcols = all_thresholds]
-zero_counts <- hist_data[, .(total = sum(count)), by = .(chrom, start, end, region, sample)]
-zero_counts <- zero_counts[total == 0, .(count = .N * (end[1] - start[1])), by = sample]
-zero_counts[, threshold := "0X"]
-
-# -------------------------------
-# Compute median depth per sample
-# -------------------------------
-
-hist_data[, threshold_numeric := as.numeric(sub("X$", "", threshold))]
-medians <- hist_data[!is.na(threshold_numeric),
-  .(median = weightedMedian(threshold_numeric, w = count)),
-  by = sample]
-
-
-# -------------------------------
-# Aggregate and bind all data
-# -------------------------------
-
-plot_data <- hist_data[, .(count = sum(count)), by = .(sample, threshold)]
-plot_data <- rbind(plot_data, zero_counts, fill = TRUE)
-
-# Correct threshold order based on numeric prefix
-threshold_levels <- unique(plot_data$threshold)
-threshold_levels <- threshold_levels[order(as.numeric(sub("X$", "", as.character(threshold_levels))))]
-plot_data[, threshold := factor(threshold, levels = threshold_levels)]
-
-# -------------------------------
-# Panel layout and plotting
-# -------------------------------
-
-make_panel <- function(sample_id) {
-  median_val <- medians[sample == sample_id, median]
-  subtitle <- sprintf("Median depth: %.1f×", median_val)
-
-  ggplot(plot_data[sample == sample_id], aes(x = threshold, y = count, fill = threshold)) +
-    geom_col(width = 0.8) +
-    scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
-    scale_fill_brewer(palette = "Set2", guide = "none") +
-    labs(title = sample_id, subtitle = subtitle, x = "Coverage threshold", y = "Covered bases") +
-    theme_minimal(base_size = 10) +
-    theme(
-      axis.text = element_text(size = 8),
-      axis.title = element_text(size = 9),
-      plot.title = element_text(size = 10, hjust = 0.5),
-      plot.subtitle = element_text(size = 9, hjust = 0.5),
-      panel.grid = element_line(linewidth = 0.2, colour = "grey90")
-    )
-}
-
-ncol <- 4
-nrow <- 6
-panels_per_page <- ncol * nrow
-sample_list <- unique(plot_data$sample)
-pages <- split(sample_list, ceiling(seq_along(sample_list) / panels_per_page))
-
-# -------------------------------
-# Output: single PDF with multiple pages
-# -------------------------------
-
-CairoPDF(output_pdf, width = 8.5, height = 11, onefile = TRUE)
-for (i in seq_along(pages)) {
-  plots <- lapply(pages[[i]], make_panel)
-  layout <- wrap_plots(plots, ncol = ncol, nrow = nrow) +
-    plot_annotation(
-      title = "Coverage threshold by sample",
-      theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
-    )
-  print(layout)
-}
-dev.off()
-
-#+end_src
-  #+begin_src R :tangle no
-#!/usr/bin/env Rscript
-
-suppressPackageStartupMessages({
-  suppressWarnings(library(argparse))
-  suppressWarnings(library(data.table))
-  suppressWarnings(library(ggplot2))
-  suppressWarnings(library(Cairo))
-  suppressWarnings(library(scales))
-  suppressWarnings(library(patchwork))
-  suppressWarnings(library(matrixStats))
-})
-
-# -------------------------------
-# Argument parsing
-# -------------------------------
-
-prog <- basename(commandArgs(trailingOnly = FALSE)[1])
-
-parser <- ArgumentParser(
-  description = "Generate a paginated threshold coverage plot from mosdepth output.",
-  prog = prog
-)
-
-parser$add_argument("--threshold_list", required = TRUE,
-                    help = "Space-separated list of mosdepth threshold files (*.thresholds.bed.gz)")
-parser$add_argument("--regions_list", required = TRUE,
-                    help = "Space-separated list of mosdepth regions files (*.regions.bed.gz)")
-parser$add_argument("--library_list", required = TRUE,
-                    help = "Space-separated list of sample names (must match file order)")
-parser$add_argument("--output_pdf", required = TRUE,
-                    help = "Full output PDF file path (e.g., /tmp/plot.pdf)")
-
-args <- parser$parse_args()
-threshold_files <- unlist(strsplit(args$threshold_list, " "))
-regions_files <- unlist(strsplit(args$regions_list, " "))
-library_ids <- unlist(strsplit(args$library_list, " "))
-output_pdf <- args$output_pdf
-
-if (!all(lengths(list(threshold_files, regions_files, library_ids)) == length(library_ids))) {
-  stop("Error: threshold_list, regions_list, and library_list must all be the same length.")
-}
-
-# -------------------------------
-# Read and melt threshold files
-# -------------------------------
-
-read_thresholds <- function(file, sample) {
-  header <- fread(file, nrows = 0)
-  names(header)[1] <- sub("^#", "", names(header)[1])
-  threshold_cols <- setdiff(names(header), c("chrom", "start", "end", "region"))
-  df <- fread(file, skip = 1, col.names = names(header))
-  df[, sample := sample]
-  melted <- melt(df,
-    id.vars = c("chrom", "start", "end", "region", "sample"),
-    measure.vars = threshold_cols,
-    variable.name = "threshold",
-    value.name = "count"
-  )
-  list(data = melted, thresholds = threshold_cols)
-}
-
-parsed <- mapply(read_thresholds, threshold_files, library_ids, SIMPLIFY = FALSE)
-hist_data <- rbindlist(lapply(parsed, `[[`, "data"))
-hist_data[, count := as.numeric(count)]
-
-all_thresholds <- unique(unlist(lapply(parsed, `[[`, "thresholds")))
-
-# -------------------------------
-# Read autosomal median from regions.bed.gz
-# -------------------------------
-
-get_autosomal_median <- function(file, sample_id) {
-  df <- fread(file, col.names = c("chrom", "start", "end", "depth"))
-  df <- df[chrom %in% as.character(1:22)]
-  df[, sample := sample_id]
-  df[, median := median(depth)]
-  df[1, .(sample, median)]
-}
-
-medians <- rbindlist(mapply(get_autosomal_median, regions_files, library_ids, SIMPLIFY = FALSE))
-
-# -------------------------------
-# Infer 0X bins from zeroed rows
-# -------------------------------
-
-hist_wide <- dcast(hist_data, chrom + start + end + region + sample ~ threshold,
-                   value.var = "count", fill = 0)
-hist_wide[, is_zero := rowSums(.SD) == 0, .SDcols = all_thresholds]
-zero_counts <- hist_data[, .(total = sum(count)), by = .(chrom, start, end, region, sample)]
-zero_counts <- zero_counts[total == 0, .(count = .N * (end[1] - start[1])), by = sample]
-zero_counts[, threshold := "0X"]
-
-# -------------------------------
-# Aggregate and bind all data
-# -------------------------------
-
-plot_data <- hist_data[, .(count = sum(count)), by = .(sample, threshold)]
-plot_data <- rbind(plot_data, zero_counts, fill = TRUE)
-
-threshold_levels <- unique(plot_data$threshold)
-threshold_levels <- threshold_levels[order(as.numeric(sub("X$", "", as.character(threshold_levels))))]
-plot_data[, threshold := factor(threshold, levels = threshold_levels)]
-
-# -------------------------------
-# Plot panels
-# -------------------------------
-print(medians)
-
-make_panel <- function(sample_id) {
-  median_val <- medians[sample == sample_id][["median"]]
-  subtitle <- sprintf("Median depth: %.1f×", median_val)
-
-  ggplot(plot_data[sample == sample_id], aes(x = threshold, y = count, fill = threshold)) +
-    geom_col(width = 0.8) +
-    scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
-    scale_fill_brewer(palette = "Set2", guide = "none") +
-    labs(title = sample_id, subtitle = subtitle, x = "Coverage threshold", y = "Covered bases") +
-    theme_minimal(base_size = 10) +
-    theme(
-      axis.text = element_text(size = 8),
-      axis.title = element_text(size = 9),
-      plot.title = element_text(size = 10, hjust = 0.5),
-      plot.subtitle = element_text(size = 9, hjust = 0.5),
-      panel.grid = element_line(linewidth = 0.2, colour = "grey90")
-    )
-}
-
-ncol <- 4
-nrow <- 6
-panels_per_page <- ncol * nrow
-sample_list <- unique(plot_data$sample)
-pages <- split(sample_list, ceiling(seq_along(sample_list) / panels_per_page))
-
-# -------------------------------
-# Output
-# -------------------------------
-
-CairoPDF(output_pdf, width = 8.5, height = 11, onefile = TRUE)
-for (i in seq_along(pages)) {
-  plots <- lapply(pages[[i]], make_panel)
-  layout <- wrap_plots(plots, ncol = ncol, nrow = nrow) +
-    plot_annotation(
-      title = "Coverage threshold by sample",
-      theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
-    )
-  print(layout)
-}
-dev.off()
-#+end_src
-
-- [[file:scripts/emseq_mosdepth_agg_plot.R]]
-  #+begin_src R :tangle ./scripts/emseq_mosdepth_agg_plot.R
-#!/usr/bin/env Rscript
-
-suppressPackageStartupMessages({
-  suppressWarnings(library(argparse))
-  suppressWarnings(library(data.table))
-  suppressWarnings(library(ggplot2))
-  suppressWarnings(library(Cairo))
-  suppressWarnings(library(scales))
-  suppressWarnings(library(patchwork))
-  suppressWarnings(library(matrixStats))
-})
-
-# -------------------------------
-# Argument parsing
-# -------------------------------
-
-prog <- basename(commandArgs(trailingOnly = FALSE)[1])
-
-parser <- ArgumentParser(
-  description = "Generate a paginated threshold coverage plot from mosdepth output.",
-  prog = prog
-)
-
-parser$add_argument("--threshold_list", required = TRUE,
-                    help = "Space-separated list of mosdepth threshold files (*.thresholds.bed.gz)")
-parser$add_argument("--regions_list", required = TRUE,
-                    help = "Space-separated list of mosdepth regions files (*.regions.bed.gz)")
-parser$add_argument("--library_list", required = TRUE,
-                    help = "Space-separated list of sample names (must match file order)")
-parser$add_argument("--output_pdf", required = TRUE,
-                    help = "Full output PDF file path (e.g., /tmp/plot.pdf)")
-parser$add_argument("--output_tsv", required = TRUE,
-                    help = "Path for tabular output")
-
-args <- parser$parse_args()
-threshold_files <- unlist(strsplit(args$threshold_list, " "))
-regions_files <- unlist(strsplit(args$regions_list, " "))
-library_ids <- unlist(strsplit(args$library_list, " "))
-output_tsv <- args$output_tsv
-output_pdf <- args$output_pdf
-
-if (!all(lengths(list(threshold_files, regions_files, library_ids)) == length(library_ids))) {
-  stop("Error: threshold_list, regions_list, and library_list must all be the same length.")
-}
-
-# -------------------------------
-# Read and melt threshold files
-# -------------------------------
-
-read_thresholds <- function(file, sample) {
-  header <- fread(file, nrows = 0)
-  names(header)[1] <- sub("^#", "", names(header)[1])
-  threshold_cols <- setdiff(names(header), c("chrom", "start", "end", "region"))
-  df <- fread(file, skip = 1, col.names = names(header))
-  df[, sample := sample]
-  melted <- melt(df,
-    id.vars = c("chrom", "start", "end", "region", "sample"),
-    measure.vars = threshold_cols,
-    variable.name = "threshold",
-    value.name = "count"
-  )
-  list(data = melted, thresholds = threshold_cols)
-}
-
-parsed <- mapply(read_thresholds, threshold_files, library_ids, SIMPLIFY = FALSE)
-hist_data <- rbindlist(lapply(parsed, `[[`, "data"))
-hist_data[, count := as.numeric(count)]
-
-all_thresholds <- unique(unlist(lapply(parsed, `[[`, "thresholds")))
-
-# -------------------------------
-# Read autosomal median from regions.bed.gz
-# -------------------------------
-
-get_autosomal_median <- function(file, sample_id) {
-  df <- fread(file, col.names = c("chrom", "start", "end", "depth"))
-  df <- df[chrom %in% paste0("chr", 1:22)]
-  df[, sample := sample_id]
-  df[, median := median(depth)]
-  df[1, .(sample, median)]
-}
-
-medians <- rbindlist(mapply(get_autosomal_median, regions_files, library_ids, SIMPLIFY = FALSE))
-
-# -------------------------------
-# Infer 0X bins from zeroed rows
-# -------------------------------
-
-hist_wide <- dcast(hist_data, chrom + start + end + region + sample ~ threshold,
-                   value.var = "count", fill = 0)
-hist_wide[, is_zero := rowSums(.SD) == 0, .SDcols = all_thresholds]
-zero_counts <- hist_data[, .(total = sum(count)), by = .(chrom, start, end, region, sample)]
-zero_counts <- zero_counts[total == 0, .(count = .N * (end[1] - start[1])), by = sample]
-zero_counts[, threshold := "0X"]
-
-# -------------------------------
-# Aggregate and bind all data
-# -------------------------------
-
-plot_data <- hist_data[, .(count = sum(count)), by = .(sample, threshold)]
-plot_data <- rbind(plot_data, zero_counts, fill = TRUE)
-
-threshold_levels <- unique(plot_data$threshold)
-threshold_levels <- threshold_levels[order(as.numeric(sub("X$", "", as.character(threshold_levels))))]
-plot_data[, threshold := factor(threshold, levels = threshold_levels)]
-
-# -------------------------------
-# Plot panels
-# -------------------------------
-print(medians)
-
-make_panel <- function(sample_id) {
-  median_val <- medians[sample == sample_id][["median"]]
-  subtitle <- sprintf("Median depth: %.1f×", median_val)
-
-  ggplot(plot_data[sample == sample_id], aes(x = threshold, y = count, fill = threshold)) +
-    geom_col(width = 0.8) +
-    scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
-    scale_fill_brewer(palette = "Set2", guide = "none") +
-    labs(title = sample_id, subtitle = subtitle, x = "Coverage threshold", y = "Covered bases") +
-    theme_minimal(base_size = 10) +
-    theme(
-      axis.text = element_text(size = 8),
-      axis.title = element_text(size = 9),
-      plot.title = element_text(size = 10, hjust = 0.5),
-      plot.subtitle = element_text(size = 9, hjust = 0.5),
-      panel.grid = element_line(linewidth = 0.2, colour = "grey90")
-    )
-}
-
-ncol <- 4
-nrow <- 6
-panels_per_page <- ncol * nrow
-sample_list <- unique(plot_data$sample)
-pages <- split(sample_list, ceiling(seq_along(sample_list) / panels_per_page))
-
-# -------------------------------
-# Output
-# -------------------------------
-
-CairoPDF(output_pdf, width = 8.5, height = 11, onefile = TRUE)
-for (i in seq_along(pages)) {
-  plots <- lapply(pages[[i]], make_panel)
-  layout <- wrap_plots(plots, ncol = ncol, nrow = nrow) +
-    plot_annotation(
-      title = "Coverage threshold by sample",
-      theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
-    )
-  print(layout)
-}
-dev.off()
-
-fwrite(medians,   file = args$output_tsv, sep = "\t")
-
-#+end_src
-
-******* M-bias
+***** M-bias
 #+begin_src snakemake
 rule emseq_mbias:
-    conda:
-        f"{config['emseq-conda-env']}",
+    message: "EM-seq MethylDackel mbias for {wildcards.library_id} {wildcards.ref_name} {wildcards.align_method}"
+    conda: ENV_EMSEQ
+    threads: 10
     input:
-        bam = f"{config['emseq-dir']}/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsorted.deduped.bam",
-        fasta = f"{data_dir}/ref/{{align_method}}/{{ref_name}}/{{ref_name}}.fa",
-    log:
-        f"{config['log-dir']}/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_mbias.log",
+        bam   = f"{D_EMSEQ}/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
+        fasta = f"{D_REF}/{{align_method}}/{{ref_name}}/{{ref_name}}.fa",
     output:
-        f"{config['emseq-dir']}/qc/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_mbias.txt",
+        txt = f"{D_EMSEQ}/qc/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_mbias.txt",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_mbias.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_mbias.tsv"
     shell:
         r"""
+
+        exec &>> "{log.cmd}"
+        echo "[mbias] $(date) lib={wildcards.library_id} ref={wildcards.ref_name} aln={wildcards.align_method} threads={threads}"
+
         MethylDackel mbias \
-        -@ 10 \
-        --noSVG \
-        {input.fasta} {input.bam} > {ouput}
+          -@ {threads} \
+          --noSVG \
+          "{input.fasta}" "{input.bam}" > "{output.txt}"
         """
+
 #+end_src
 
-******* De-duplicate
+
+**** De-duplicate
 :PROPERTIES:
 :ID:       4ac48779-f505-4291-b7bf-cc950d3339e6
 :END:
 #+begin_src snakemake
 rule emseq_dedup:
-    conda:
-        f"{config['emseq-conda-env']}",
-    input:
-        bam = f"{config['emseq-dir']}/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.bam",
-        fasta = f"{data_dir}/ref/{{align_method}}/{{ref_name}}/{{ref_name}}.fa",
-    log:
-        f"{config['log-dir']}/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_dedup.log",
-    output:
-        bam = f"{config['emseq-dir']}/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
-        index = f"{config['emseq-dir']}/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
-    params:
-        temp_prefix = lambda wildcards: f"{data_dir}/tmp/{wildcards.library_id}.{wildcards.ref_name}.{wildcards.align_method}.coorsort",
+    message: "EM-seq dedup (dupsifter) for {wildcards.library_id} {wildcards.ref_name} {wildcards.align_method}"
+    conda: ENV_EMSEQ
+    threads: 8
     resources:
-        concurrency = 25,
+        concurrency = 25
+    params:
+        temp_prefix = lambda wc: f"{D_REF}/tmp/{wc.library_id}.{wc.ref_name}.{wc.align_method}.coorsort"
+    input:
+        bam   = f"{D_EMSEQ}/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.bam",
+        fasta = f"{D_REF}/{{align_method}}/{{ref_name}}/{{ref_name}}.fa",
+    output:
+        bam   = f"{D_EMSEQ}/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
+        index = f"{D_EMSEQ}/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_dedup.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_dedup.tsv"
     shell:
         r"""
-        # Clean up any existing temp BAM chunks from previous failed sort
-        rm -f {params.temp_prefix}.*
 
-        # Extract only properly paired reads (-f 0x2), include header (-h)
-        # Name-sort BAM using samtools; output to stdout
-        # Deduplicate using dupsifter, using reference FASTA and streaming input from stdin
-        # Coordinate-sort deduplicated BAM for downstream tools
-        # Index final BAM
+        mkdir -p "$(dirname "{params.temp_prefix}")"
 
-        samtools view -h -f 0x2 {input.bam} \
-        | samtools sort -n -@ 8 -O BAM -T {params.temp_prefix} -o - \
+        # append all stdout+stderr to the command log
+        exec >> "{log.cmd}" 2>&1    # use this if you want POSIX; otherwise: exec &>> "{log.cmd}"
+
+        echo "[dedup] $(date) lib={wildcards.library_id} ref={wildcards.ref_name} aln={wildcards.align_method} threads={threads}"
+
+        # Clean previous temp chunks (unquoted glob on purpose)
+        rm -f {params.temp_prefix}.tmp.*
+
+        # Proper pairs -> name-sort (BAM) -> dupsifter -> coord-sort -> index
+        samtools view -bh -f 0x2 "{input.bam}" \
+        | samtools sort -n -@ {threads} -O BAM -T "{params.temp_prefix}.tmp" -o - \
         | dupsifter \
-            --add-mate-tags \
-            --stats-output {log} \
-            {input.fasta} - \
-        | samtools sort -@ 8 -o {output.bam}
-        samtools index -@ 8 {output.bam}
-        """
+        --add-mate-tags \
+        --stats-output "{log.cmd}.dupsifter.tsv" \
+        "{input.fasta}" - \
+        | samtools sort -@ {threads} -O BAM -T "{params.temp_prefix}.tmp" -o "{output.bam}"
 
+        samtools index -@ {threads} "{output.bam}"
+        """
 #+end_src
-****** Spike workflow
+
+*** Spike workflow
 
 The EM-seq kit includes two control DNA spike-ins, unmethylated Lambda and CpG methylated pUC19.
 
@@ -1403,56 +797,71 @@ The spike workflow uses bwa-meth to quickly align to phage reference genomes. Co
 
 #+begin_src snakemake
 rule emseq_align_bwameth_spike:
-    conda:
-        f"{config['emseq-conda-env']}",
-    input:
-        r1 = f"{config['emseq-dir']}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
-        r2 = f"{config['emseq-dir']}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
-        ref = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa"
-    output:
-        bam = f"{config['emseq-dir']}/spike/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam"
+    message: "EM-seq bwameth (spike) for {wildcards.library_id} {wildcards.ref_name}"
+    conda: ENV_EMSEQ
     threads: 48
-    log:
-        f"{config['log-dir']}/{{library_id}}.{{ref_name}}.emseq_align_bwameth_spike.log"
     params:
-        temp_prefix = lambda wildcards: f"{data_dir}/tmp/{wildcards.library_id}.{wildcards.ref_name}"
+        temp_prefix = lambda wc: f"{D_EMSEQ}/tmp/{wc.library_id}.{wc.ref_name}"
+    input:
+        r1  = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
+        r2  = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
+        ref = f"{D_REF}/bwa_meth/{{ref_name}}/{{ref_name}}.fa",
+    output:
+        bam = f"{D_EMSEQ}/spike/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{ref_name}}_emseq_align_bwameth_spike.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{ref_name}}_emseq_align_bwameth_spike.tsv"
     shell:
-        """
-        mkdir -p $(dirname {params.temp_prefix})
+        r"""
+
+        exec &>> "{log.cmd}"
+        echo "[bwameth-spike] $(date) lib={wildcards.library_id} ref={wildcards.ref_name} threads={threads}"
+
         bwameth.py --threads {threads} \
-            --reference {input.ref} \
-            {input.r1} {input.r2} 2> {log} | \
-        samtools view -u -F 4 - | \
-        samtools sort -@ {threads} -T {params.temp_prefix} -o {output.bam}
+          --reference "{input.ref}" \
+          "{input.r1}" "{input.r2}" \
+        | samtools view -u -F 4 - \
+        | samtools sort -@ {threads} -T "{params.temp_prefix}" -o "{output.bam}"
         """
 
 #+end_src
 
 #+begin_src snakemake
 rule emseq_methyldackel_spike:
-    conda:
-        f"{config['emseq-conda-env']}",
+    message: "EM-seq MethylDackel (spike) for {wildcards.library_id} {wildcards.ref_name} {wildcards.align_method}"
+    conda: ENV_EMSEQ
+    threads: 8
     input:
-        bam = f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam",
-        fasta = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa",
+        bam   = f"{D_EMSEQ}/spike/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.bam",
+        fasta = f"{D_REF}/bwa_meth/{{ref_name}}/{{ref_name}}.fa",
     output:
-        bed = f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
+        bed = f"{D_EMSEQ}/spike/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
     log:
-        f"{config['log-dir']}/{{library_id}}_{{ref_name}}_{{align_method}}_methyldackel.log",
+        cmd = f"{D_LOGS}/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_methyldackel_spike.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_methyldackel_spike.tsv"
     params:
-        out_prefix = f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel",
+        out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0]
     shell:
-        """
+        r"""
+        mkdir -p "$(dirname "{params.out_prefix}")"
+
+
+        exec &>> "{log.cmd}"
+        echo "[methyldackel-spike] $(date) lib={wildcards.library_id} ref={wildcards.ref_name} aln={wildcards.align_method} threads={threads}"
+
         MethylDackel extract \
-        --methylKit \
-        {input.fasta} \
-        {input.bam} \
-        -o {params.out_prefix} > {log} 2>&1
+          -@ {threads} \
+          --methylKit \
+          "{input.fasta}" \
+          "{input.bam}" \
+          -o "{params.out_prefix}"
         """
 #+end_src
 
 
-****** BWA-Meth
+*** BWA-Meth
 
 BWA-meth alignment is much faster than biscuit.
 
@@ -1472,126 +881,145 @@ BWA-meth output is a duplicated, coordinate sorted BAM. This is de-duplicated du
 Reference
 - https:/github.com/brentp/bwa-meth
 
-******* Index
+**** Index
 
 #+begin_src snakemake
+# -------- Index (bwa-meth) --------
 rule bwa_meth_index:
-    conda:
-        f"{config['emseq-conda-env']}",
+    message: "bwa-meth index for {wildcards.name}"
+    conda: ENV_EMSEQ
+    threads: 8
     input:
-        lambda wildcards: f"{data_dir}/inputs/{config['emseq_ref_assemblies'][wildcards.name]['input']}"
+        lambda wc: f"{D_INPUTS}/{config['emseq_ref_assemblies'][wc.name]['input']}"
     output:
-        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t",
-        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.0123",
-        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.amb",
-        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.ann",
-        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.bwt.2bit.64",
-        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.pac",
-        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa",
+        f"{D_REF}/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t",
+        f"{D_REF}/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.0123",
+        f"{D_REF}/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.amb",
+        f"{D_REF}/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.ann",
+        f"{D_REF}/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.bwt.2bit.64",
+        f"{D_REF}/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.pac",
+        f"{D_REF}/bwa_meth/{{name}}/{{name}}.fa",
     params:
-        fasta_target = lambda wildcards: f"{data_dir}/ref/bwa_meth/{wildcards.name}/{wildcards.name}.fa"
+        fasta_target = lambda wc: f"{D_REF}/bwa_meth/{wc.name}/{wc.name}.fa"
     log:
-        f"{config['log-dir']}/{{name}}_bwa_meth_index.log"
+        cmd = f"{D_LOGS}/{{name}}_bwa_meth_index.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{name}}_bwa_meth_index.tsv"
     shell:
-        """
-        mkdir -p $(dirname {params.fasta_target}) && \
-        zcat {input} > {params.fasta_target} && \
-        samtools faidx -@ 8 {params.fasta_target} && \
-        bwameth.py index-mem2 {params.fasta_target} > {log} 2>&1
-        """
+        r"""
+        exec &>> "{log.cmd}"
+        echo "[bwa-meth index] $(date) name={wildcards.name} threads={threads}"
 
+        zcat "{input}" > "{params.fasta_target}"
+        samtools faidx -@ {threads} "{params.fasta_target}"
+        bwameth.py index-mem2 "{params.fasta_target}"
+        """
 #+end_src
 
-******* Align
+**** Align
 
 #+begin_src snakemake
+# -------- Align (bwa-meth) --------
 rule emseq_align_bwameth:
-    conda:
-        f"{config['emseq-conda-env']}",
-    input:
-        r1 = f"{config['emseq-dir']}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
-        r2 = f"{config['emseq-dir']}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
-        ref = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa",
-        c2t = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa.bwameth.c2t",
-    output:
-        bam = f"{config['emseq-dir']}/bams/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam"
+    message: "EM-seq bwameth for {wildcards.library_id} {wildcards.ref_name}"
+    conda: ENV_EMSEQ
     threads: 16
     params:
-        temp_prefix = lambda wildcards: f"{data_dir}/tmp/{wildcards.library_id}.{wildcards.ref_name}",
+        temp_prefix = lambda wc: f"{D_EMSEQ}/tmp/{wc.library_id}.{wc.ref_name}"
+    input:
+        r1  = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
+        r2  = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
+        ref = f"{D_REF}/bwa_meth/{{ref_name}}/{{ref_name}}.fa",
+        c2t = f"{D_REF}/bwa_meth/{{ref_name}}/{{ref_name}}.fa.bwameth.c2t",
+    output:
+        bam = f"{D_EMSEQ}/bams/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam",
     log:
-        f"{config['log-dir']}/{{library_id}}.{{ref_name}}.bwameth.log"
+        cmd = f"{D_LOGS}/{{library_id}}.{{ref_name}}_bwameth.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{ref_name}}_bwameth.tsv"
     shell:
-        """
-        mkdir -p $(dirname {params.temp_prefix})
+        r"""
+        exec &>> "{log.cmd}"
+        echo "[bwameth] $(date) lib={wildcards.library_id} ref={wildcards.ref_name} threads={threads}"
+
+        mkdir -p "$(dirname "{params.temp_prefix}")"
+
         bwameth.py --threads {threads} \
-            --reference {input.ref} \
-            {input.r1} {input.r2} 2> {log} | \
-        samtools view -u - | \
-        samtools sort -@ {threads} -T {params.temp_prefix} -o {output.bam}
+          --reference "{input.ref}" \
+          "{input.r1}" "{input.r2}" \
+        | samtools view -u - \
+        | samtools sort -@ {threads} -T "{params.temp_prefix}" -o "{output.bam}"
         """
-
 #+end_src
 
-******* Post-align
-******** [[id:4ac48779-f505-4291-b7bf-cc950d3339e6][De-duplicate]]
-******** Call methylation
+**** Post-align
+***** [[id:4ac48779-f505-4291-b7bf-cc950d3339e6][De-duplicate]]
+***** Call methylation
 #+begin_src snakemake
+# -------- Call methylation (MethylDackel) --------
 rule emseq_methyldackel:
-    conda:
-        f"{config['emseq-conda-env']}",
-    input:
-        bam = f"{config['emseq-dir']}/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
-        fasta = f"{data_dir}/ref/bwa_meth/{{ref_name}}/{{ref_name}}.fa",
-    output:
-        f"{config['emseq-dir']}/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
-    log:
-        f"{config['log-dir']}/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_methyldackel_dedup.log",
-    params:
-        out_prefix = f"{config['emseq-dir']}/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel",
-        threads = 20,
+    message: "EM-seq MethylDackel for {wildcards.library_id} {wildcards.ref_name} {wildcards.align_method}"
+    conda: ENV_EMSEQ
+    threads: 20
     resources:
-        concurrency = 25,
-    shell:
-        """
-        MethylDackel extract \
-        -@ {params.threads} \
-        --methylKit \
-        {input.fasta} \
-        {input.bam} \
-        -o {params.out_prefix} > {log} 2>&1
-        """
-
-#+end_src
-
-#+begin_src snakemake
-rule make_single_methylkit_amp_obj:
-    conda:
-        "../config/methylkit-conda-env.yaml",
+        concurrency = 25
     input:
-        f"{config['emseq-dir']}/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
-    log:
-        f"{config['log-dir']}/{{library_id}}.{{ref_name}}.{{align_method}}_single_methylkit_amp.log",
+        bam   = f"{D_EMSEQ}/bams/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
+        fasta = f"{D_REF}/bwa_meth/{{ref_name}}/{{ref_name}}.fa",
     output:
-        bgz = f"{config['emseq-dir']}/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.methyldackel.txt.bgz",
-        tbi = f"{config['emseq-dir']}/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.methyldackel.txt.bgz.tbi",
+        bed = f"{D_EMSEQ}/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
     params:
-        Rscript = f"{config['emseq-script-dir']}/make_single_amp_methylkit_obj.R",
-        out_dir = f"{config['emseq-dir']}/dmr/tabix",
-        mincov = emseq_mincov,
-        build = emseq_build,
-        treatment = 1,
+        out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0]
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_methyldackel_dedup.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{ref_name}}.{{align_method}}_emseq_methyldackel.tsv"
     shell:
+        r"""
+        exec &>> "{log.cmd}"
+        echo "[methyldackel] $(date) lib={wildcards.library_id} ref={wildcards.ref_name} aln={wildcards.align_method} threads={threads}"
+
+        MethylDackel extract \
+          -@ {threads} \
+          --methylKit \
+          "{input.fasta}" \
+          "{input.bam}" \
+          -o "{params.out_prefix}"
         """
-        Rscript {params.Rscript} \
-          --amp_file {input} \
+#+end_src
+#+begin_src snakemake
+# -------- Build single methylKit (R) --------
+rule make_single_methylkit_amp_obj:
+    message: "Build tabix-backed methylKit object for {wildcards.library_id} {wildcards.ref_name} {wildcards.align_method}"
+    conda: "../config/methylkit-conda-env.yaml"
+    threads: 1
+    input:
+        f"{D_EMSEQ}/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
+    output:
+        bgz = f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.methyldackel.txt.bgz",
+        tbi = f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.methyldackel.txt.bgz.tbi",
+    params:
+        Rscript   = f"{R_EMSEQ}/scripts/make_single_amp_methylkit_obj.R",
+        mincov    = emseq_mincov,
+        build     = emseq_build,
+        treatment = 1,
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{ref_name}}.{{align_method}}_single_methylkit_amp.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{ref_name}}.{{align_method}}_single_methylkit_amp.tsv"
+    shell:
+        r"""
+        exec &>> "{log.cmd}"
+        echo "[methylKit-amp] $(date) lib={wildcards.library_id} ref={wildcards.ref_name} aln={wildcards.align_method}"
+
+        Rscript "{params.Rscript}" \
+          --amp_file "{input}" \
           --library_id "{wildcards.library_id}.{wildcards.ref_name}.{wildcards.align_method}.methyldackel" \
           --mincov {params.mincov} \
-          --out_dir {params.out_dir} \
+          --out_dir "$(dirname "{output.bgz}")" \
           --treatment {params.treatment} \
-          --build {params.build} \
-          &>> {log}
+          --build {params.build}
         """
-
 #+end_src
 
 #+begin_src R :tangle ./scripts/make_single_amp_methylkit_obj.R
@@ -1623,254 +1051,14 @@ obj <- methRead(
 )
 
 #+end_src
-****** Biscuit
-******* Index
-#+begin_src snakemake
-rule emseq_biscuit_index:
-    conda:
-        f"{config['emseq-conda-env']}",
-    input:
-        lambda wildcards: f"{data_dir}/inputs/{config['emseq_ref_assemblies'][wildcards.name]['input']}"
-    output:
-        fasta = f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa",
-        fai = f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa.fai",
-        biscuit_index_done = f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa.biscuit.index.done"
-    log:
-        f"{config['log-dir']}/{{name}}_biscuit_index.log"
-    shell:
-        """
-        mkdir -p $(dirname {output.fasta}) && \
-        zcat {input} > {output.fasta} && \
-        samtools faidx {output.fasta} && \
-        biscuit index {output.fasta} > {log} 2>&1 && \
-        touch {output.biscuit_index_done}
-        """
+*** Ideas
+- push methmap to config
 
-#+end_src
-
-******* Align
-#+begin_src snakemake
-rule emseq_align_biscuit:
-    conda:
-        f"{config['emseq-conda-env']}",
-    input:
-        r1 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
-        r2 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
-        fasta = f"{data_dir}/ref/biscuit/{{ref_name}}/{{ref_name}}.fa",
-        index = f"{data_dir}/ref/biscuit/{{ref_name}}/{{ref_name}}.fa.par.sa",
-    log:
-        cmd = f"{config['log-dir']}/{{library_id}}.{{ref_name}}.biscuit.coorsort.bam",
-    output:
-        bam = f"{config['emseq-dir']}/bams/{{library_id}}.{{ref_name}}.biscuit.coorsort.bam",
-    params:
-        threads = 80,
-    resources:
-        concurrency=100
-    shell:
-        """
-        mkdir -p {data_dir}/tmp && \
-        biscuit align \
-        -@ {params.threads} \
-        -biscuit-ref {input.fasta} \
-        {input.r1} {input.r2} \
-        | samtools sort \
-        -@ 8 \
-        -m 2G \
-        -T {data_dir}/tmp/{wildcards.library_id}_sorttmp \
-        -o {output.bam} &>> {log}
-        """
-
-#+end_src
-******* [[id:4ac48779-f505-4291-b7bf-cc950d3339e6][De-duplicate]]
-******* Pileup
-#+begin_src snakemake
-rule emseq_biscuit_pileup:
-    conda:
-        f"{config['emseq-conda-env']}",
-    input:
-        bam = f"{config['emseq-dir']}/bams/{{library_id}}.{{ref_name}}.biscuit.coorsort.deduped.bam",
-        fasta = f"{data_dir}/ref/biscuit/{{ref_name}}/{{ref_name}}.fa",
-    log:
-        f"{config['log-dir']}/{{library_id}}.{{ref_name}}.biscuit_emseq_pileup.log",
-    output:
-        vcf = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}.biscuit_pileup.vcf.gz",
-        tsv = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}.biscuit_pileup.vcf_meth_average.tsv",
-    params:
-        out_base = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}.biscuit_pileup.vcf",
-    shell:
-        """
-        biscuit pileup \
-        -@ 20 \
-        -o {params.out_base} \
-        {input.fasta} {input.bam} \
-        && bgzip -@ 8 {params.out_base}
-        """
-#+end_src
-#+begin_src snakemake
-rule emseq_biscuit_post_pileup:
-    conda:
-        f"{config['emseq-conda-env']}",
-    input:
-        vcf = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}.biscuit_pileup.vcf.gz",
-    log:
-        f"{config['log-dir']}/{{library_id}}.{{ref_name}}_emseq_biscuit_post_pileup.log",
-    output:
-        tbi = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}_pileup.vcf.gz.tbi",
-        bed = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}_pileup.bed",
-        bismark = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}_bismark_cov.bed",
-    shell:
-        """
-        tabix -p vcf {input.vcf} \
-        && biscuit vcf2bed \
-	-t cg {input.vcf} > {output.bed} \
-        && biscuit vcf2bed -c {input.vcf} > {output.bismark} &> {log}
-        """
-#+end_src
-
-#+begin_src snakemake
-rule make_single_biscuit_methylkit_obj:
-    conda:
-        "../config/methylkit-conda-env.yaml",
-    input:
-        bismark = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}_bismark_cov.bed",
-    log:
-        f"{config['log-dir']}/{{library_id}}.{{ref_name}}_make_single_biscuit_methylkit_obj.log",
-    output:
-        txt = f"{data_dir}/analysis/emseq/post-biscuit/{{library_id}}.{{ref_name}}_biscuit.txt",
-        bgz = f"{data_dir}/analysis/emseq/post-biscuit/{{library_id}}.{{ref_name}}_biscuit.txt.bgz",
-        tbi = f"{data_dir}/analysis/emseq/post-biscuit/{{library_id}}.{{ref_name}}_biscuit.txt.bgz.tbi",
-    params:
-        Rscript = f"{config['emseq-script-dir']}/make_single_biscuit_methylkit_obj.R",
-        out_dir = f"{data_dir}/analysis/emseq/post-biscuit",
-    shell:
-        """
-        Rscript {params.Rscript} \
-          --bismark_cov_bed {input.bismark} \
-          --library_id {wildcards.library_id} \
-          --out_dir {params.out_dir} \
-          &> {log}
-        """
-#+end_src
-
-#+begin_src R :tangle ./scripts/make_single_biscuit_methylkit_obj.R
-library(argparse)
-library(methylKit)
-
-parser <- ArgumentParser()
-parser$add_argument("--bismark_cov_bed", required = TRUE)
-parser$add_argument("--library_id", required = TRUE)
-parser$add_argument("--treatment", type = "integer", required = TRUE)
-parser$add_argument("--out_dir", required = TRUE)
-
-args <- parser$parse_args()
-
-myobj= methRead(args$bismark_cov_bed,
-                sample.id = args$library_id,
-                treatment = 1,
-                context="CpG",
-                pipeline="bismarkCoverage",
-                mincov = 2,
-                assembly= "hg38",
-                dbtype = "tabix",
-                dbdir = args$out_dir)
-
-#+end_src
-
-
-****** Methylkit
-https:/www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/methylKit.html
-- get nearest TSS
-- get region annotation
-
-#+begin_src snakemake :tangle no
-rule make_methylkit_diff_db:
-    input:
-        mkit_lib_db = lambda wildcards: expand(
-            f"{data_dir}/analysis/emseq/meth/{{library_id}}.{{ref_name}}.{{align_method}}.{{meth_caller}}.txt.bgz",
-            library_id = meth_map[wildcards.experiment]['libs'],
-            ref_name = meth_map[wildcards.experiment]['ref_name'],
-            align_method = meth_map[wildcards.experiment]['align_method'],
-            meth_caller = meth_map[wildcards.experiment]['meth_caller']),
-    log:
-        f"{config['log-dir']}/{{experiment}}.{{ref_name}}.{{align_method}}.{{meth_caller}}_make_methylkit_diff_db.log",
-    output:
-        unite = f"{emseq_dir}/diff/methylBase_{{experiment}}.txt.bgz",
-        diff = f"{emseq_dir}/diff/methylDiff_{{experiment}}.txt.bgz",
-    params:
-        library_id = lambda wildcards: " ".join(meth_map[wildcards.experiment]['libs']),
-        treatment_list = lambda wildcards: meth_map[wildcards.experiment]['tx'],
-        mincov = lambda wildcards: meth_map[wildcards.experiment]['mincov'],
-        assembly = lambda wildcards: meth_map[wildcards.experiment]['assembly'],
-        out_dir = f"{emseq_dir}/diff",
-        script = f"{config['emseq-script-dir']}/make_methylkit_diff_db.R",
-    shell:
-        """
-        Rscript {params.script} \
-        --lib_db_list "{input.mkit_lib_db}" \
-        --lib_id_list "{params.library_id}" \
-        --treatment_list "{params.treatment_list}" \
-        --cores 32 \
-        --out_dir {params.out_dir} \
-        --suffix {wildcards.experiment} > {log} 2>&1
-        """
-#+end_src
-
-#+begin_src R :tangle ./scripts/make_methylkit_diff_db.R
-library(argparse)
-library(methylKit)
-
-# --- Argument Parsing ---
-parser <- ArgumentParser()
-parser$add_argument("--lib_db_list", required = TRUE)
-parser$add_argument("--lib_id_list", required = TRUE)
-parser$add_argument("--treatment_list", required = TRUE)
-parser$add_argument("--cores", required = TRUE)
-parser$add_argument("--out_dir", required = TRUE)
-parser$add_argument("--suffix", required = TRUE)
-
-args <- parser$parse_args()
-
-lib_db_list <- unlist(strsplit(args$lib_db_list, " "))
-lib_id_list <- unlist(strsplit(args$lib_id_list, " "))
-treatment_list <- as.numeric(unlist(strsplit(args$treatment_list, " ")))
-
-stopifnot(length(lib_db_list) == length(lib_id_list),
-          length(lib_id_list) == length(treatment_list))
-
-# --- Read methylation databases ---
-merged_obj <- methRead(
-  location = as.list(lib_db_list),
-  sample.id = as.list(lib_id_list),
-  treatment = treatment_list,
-  context = "CpG",
-  assembly = "hg38",
-  dbtype = "tabix",
-  mincov = 10
-)
-
-# --- Unite ---
-meth <- unite(merged_obj,
-              destrand = FALSE,
-              chunk.size = 1e9,
-              mc.cores = as.numeric(args$cores),
-              save.db = TRUE,
-              min.per.group = 1,
-              suffix = args$suffix,
-              dbdir = args$out_dir)
-
-# --- Diff methylation ---
-diff <- calculateDiffMeth(meth,
-                          mc.cores = as.numeric(args$cores),
-                          chunk.size = 1e9,
-                          save.db = TRUE,
-                          dbdir = args$out_dir)
-#+end_src
-
-
-***** Methylation sequence processing
+*** To archive
+**** Methylation sequence processing
 :PROPERTIES:
 :ID:       c5b37e92-1e28-4cfc-8678-b830ac836d57
-:header-args:snakemake: :tangle ./workflows/em-seq.smk :tangle-mode (identity #o555)
+:header-args:snakemake: :tangle no
 :END:
 [[file:workflows/em-seq.smk]]
 #+begin_src python :results output replace
@@ -1893,7 +1081,7 @@ for key in unique_keys:
 
 #+RESULTS:
 
-****** Preamble
+***** Preamble
 #+begin_src snakemake
 ############################
 ###   EM-Seq Snakefile   ###
@@ -1914,8 +1102,8 @@ for key in unique_keys:
 
 #+end_src
 
-****** Common steps
-******* Fastp
+***** Common steps
+****** Fastp
 #+begin_src snakemake
 rule emseq_fastp:
     conda:
@@ -1950,7 +1138,7 @@ rule emseq_fastp:
         """
 
 #+end_src
-******* FastQC
+****** FastQC
 #+begin_src snakemake
 rule emseq_fastqc:
     conda:
@@ -1978,7 +1166,7 @@ rule emseq_fastqc:
         """
 #+end_src
 
-******* Depth
+****** Depth
 - Mosdepth on specific bams
   #+begin_src snakemake
 # Will follow symlinks
@@ -2025,9 +1213,8 @@ rule emseq_mosdepth:
         """
 
 #+end_src
-  #+begin_src bash :tangle ./scripts/emseq_mosdepth.sh :tangle-mode (identity #o555)
+  #+begin_src bash :tangle ./scripts/emseq_mosdepth.sh
 #!/usr/bin/env bash
-set -euo pipefail
 
 # -----------------------------------------------------------------------------
 # mosdepth-wrapper.sh
@@ -2677,7 +1864,7 @@ fwrite(medians,   file = args$output_tsv, sep = "\t")
 
 #+end_src
 
-******* M-bias
+****** M-bias
 #+begin_src snakemake
 rule emseq_mbias:
     conda:
@@ -2698,7 +1885,7 @@ rule emseq_mbias:
         """
 #+end_src
 
-******* De-duplicate
+****** De-duplicate
 :PROPERTIES:
 :ID:       4ac48779-f505-4291-b7bf-cc950d3339e6
 :END:
@@ -2740,7 +1927,7 @@ rule emseq_dedup:
         """
 
 #+end_src
-****** Spike workflow
+***** Spike workflow
 
 The EM-seq kit includes two control DNA spike-ins, unmethylated Lambda and CpG methylated pUC19.
 
@@ -2811,7 +1998,7 @@ rule emseq_methyldackel_spike:
 #+end_src
 
 
-****** BWA-Meth
+***** BWA-Meth
 
 BWA-meth alignment is much faster than biscuit.
 
@@ -2831,37 +2018,7 @@ BWA-meth output is a duplicated, coordinate sorted BAM. This is de-duplicated du
 Reference
 - https:/github.com/brentp/bwa-meth
 
-******* Index
-
-#+begin_src snakemake
-rule bwa_meth_index:
-    conda:
-        "../config/emseq-conda-env.yaml"
-    input:
-        lambda wildcards: f"{data_dir}/inputs/{config['ref_assemblies'][wildcards.name]['input']}"
-    output:
-        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t",
-        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.0123",
-        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.amb",
-        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.ann",
-        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.bwt.2bit.64",
-        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t.pac",
-        f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa",
-    params:
-        fasta_target = lambda wildcards: f"{data_dir}/ref/bwa_meth/{wildcards.name}/{wildcards.name}.fa"
-    log:
-        f"{data_dir}/emseq/logs/{{name}}_bwa_meth_index.log"
-    shell:
-        """
-        mkdir -p $(dirname {params.fasta_target}) && \
-        zcat {input} > {params.fasta_target} && \
-        samtools faidx -@ 8 {params.fasta_target} && \
-        bwameth.py index-mem2 {params.fasta_target} > {log} 2>&1
-        """
-
-#+end_src
-
-******* Align
+****** Align
 
 #+begin_src snakemake
 rule emseq_align_bwameth:
@@ -2891,9 +2048,9 @@ rule emseq_align_bwameth:
 
 #+end_src
 
-******* Post-align
-******** [[id:4ac48779-f505-4291-b7bf-cc950d3339e6][De-duplicate]]
-******** Call methylation
+****** Post-align
+******* [[id:4ac48779-f505-4291-b7bf-cc950d3339e6][De-duplicate]]
+******* Call methylation
 #+begin_src snakemake
 rule emseq_methyldackel:
     conda:
@@ -2982,8 +2139,8 @@ obj <- methRead(
 )
 
 #+end_src
-****** Biscuit
-******* Index
+***** Biscuit
+****** Index
 #+begin_src snakemake
 rule emseq_biscuit_index:
     conda:
@@ -3007,7 +2164,7 @@ rule emseq_biscuit_index:
 
 #+end_src
 
-******* Align
+****** Align
 #+begin_src snakemake
 rule emseq_align_biscuit:
     conda:
@@ -3040,8 +2197,8 @@ rule emseq_align_biscuit:
         """
 
 #+end_src
-******* [[id:4ac48779-f505-4291-b7bf-cc950d3339e6][De-duplicate]]
-******* Pileup
+****** [[id:4ac48779-f505-4291-b7bf-cc950d3339e6][De-duplicate]]
+****** Pileup
 #+begin_src snakemake
 rule emseq_biscuit_pileup:
     conda:
@@ -3136,7 +2293,7 @@ myobj= methRead(args$bismark_cov_bed,
 #+end_src
 
 
-****** Methylkit
+***** Methylkit
 https:/www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/methylKit.html
 
 #+begin_src snakemake
@@ -3223,14 +2380,14 @@ diff <- calculateDiffMeth(meth,
                           save.db = TRUE,
                           dbdir = args$out_dir)
 #+end_src
-***** OLD Methylation sequence processing
+**** OLD Methylation sequence processing
 :PROPERTIES:
 :ID:       c3bdbbcc-5a4c-475a-8ab1-33884ab14ef5
 :header-args:snakemake: :tangle no
 :END:
-****** methylKit per experiment
-******* Grouped objects and differential methylation
-******** Per-position
+***** methylKit per experiment
+****** Grouped objects and differential methylation
+******* Per-position
 #+begin_src snakemake
 rule make_methylkit_diff_db:
     input:
@@ -3357,7 +2514,7 @@ write_tsv(
 
 #+end_src
 
-******** Tiled
+******* Tiled
 
 #+begin_src snakemake
 rule make_methylkit_diff_db_tiled:
@@ -3483,7 +2640,7 @@ rule all_experiment_tiled_methylation:
         """
 #+end_src
 
-******** Exploratory data analysis
+******* Exploratory data analysis
 
 #+begin_src R
 # Compute global methylation (mean per sample)
@@ -3635,7 +2792,7 @@ ggsave("/tmp/global_meth.png", p1 + p2, width = 12, height = 5, dpi = 300)
 - global methylation
 - tiled methylation beta heatmap
 -
-****** Dev
+***** Dev
 :properties:
 :header-args:snakemake: :tangle no
 :end:
@@ -3717,7 +2874,7 @@ ggplot(df, aes(x = treatment, y = global_methylation)) +
 
 #+end_src
 
-******* Depth
+****** Depth
 #+begin_src bash
 
 ls /tmp/breast/analysis/emseq/bams-merged/PRO_13_deduped.bam
@@ -3733,7 +2890,7 @@ mosdepth \
 
 #+end_src
 
-******* Biscuit index
+****** Biscuit index
 :PROPERTIES:
 :ID:       7c540ad8-2c04-4dff-bf88-ae9c260a6a91
 :END:
@@ -3785,9 +2942,9 @@ samtools faidx "$ncbi_fa"
 nohup biscuit index "$ncbi_fa" & disown
 #+end_src
 
-******* EM-seq methylation
+****** EM-seq methylation
 - Consider reference w/ decoys https:/chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369
-******** Biscuit index
+******* Biscuit index
 #+begin_src bash
 source ~/repos/breast/config/bash-env.sh
 Y
@@ -3839,7 +2996,7 @@ samtools faidx "$ncbi_fa"
 
 nohup biscuit index "$ncbi_fa" & disown
 #+end_src
-******** Make methylation position calls
+******* Make methylation position calls
 
 #+begin_src bash
 biscuit pileup \
@@ -3902,7 +3059,7 @@ rule emseq_post_pileup:
         """
 #+end_src
 
-******** DMR
+******* DMR
 https:/www.bioconductor.org/packages/release/bioc/vignettes/dmrseq/inst/doc/dmrseq.html
 https:/huishenlab.github.io/biscuit/docs/methylextraction.html
 https:/bioconductor.org/packages/release/bioc/html/DSS.html
@@ -4343,22 +3500,22 @@ myobj = methRead("/tmp/breast/analysis/emseq/pileup/test.tsv",
 
 #+end_src
 
-******** Reference
+******* Reference
 - Alignment reference choice
   - discussion [[https:/chatgpt.com/c/67c1c299-f8ec-8005-a2ba-59e05af12369][gtp]]
   - see [[id:326ecd60-8cd4-4815-a389-967b2c3fef0a][Nucleic acid sequence alignment]]
 - [cite:@chauhan2024]
 - [[id:5e9e8bfa-ac9e-4103-9cc5-7123337b4e24][biscuit]]
 
-******** Ideas
+******* Ideas
 - for qc https:/www.google.com/search?sca_esv=45e5c8ab8ae118cf&sxsrf=AHTn8zrPW-wtm7PgHxohfizFJXC9p5Qtlw:1742500238525&q=m-bias+plots&udm=2&fbs=ABzOT_CWdhQLP1FcmU5B0fn3xuWpA-dk4wpBWOGsoR7DG5zJBtmuEdhfywyzhendkLDnhcrUz6wxBwARHD96EKWkSbZoQZGasaHPJ9csj0AVVVUDNHqfR7gd1arUfaOpw1v5Icccwayh65rdsqdiyPvxAA9gXK95YqgoHnUzfZ5jo9jiMl2Q8DaMUR4I1U0kl1-ho1NSBjy_chexdcGuJmvrFewYJaqjljog&sa=X&ved=2ahUKEwj90vOdt5mMAxXLGlkFHdQWG7IQtKgLegQIExAB&biw=1745&bih=908&dpr=1.1
 - https:/sequencing.qcfail.com/articles/mispriming-in-pbat-libraries-causes-methylation-bias-and-poor-mapping-efficiencies/
 - consider https:/www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/methylKit.html#6_Frequently_Asked_Questions
 
-******* EM-seq cfDNA copy number alteration
+****** EM-seq cfDNA copy number alteration
 EM-seq protects 5mC and 5hmC from damination with TET2 enzymatic oxidation. Unprotected cytosines are deaminated to uracils.
 
-******* DMR
+****** DMR
 https:/www.bioconductor.org/packages/release/bioc/vignettes/dmrseq/inst/doc/dmrseq.html
 https:/huishenlab.github.io/biscuit/docs/methylextraction.html
 https:/bioconductor.org/packages/release/bioc/html/DSS.html
@@ -4965,9 +4122,313 @@ ggplot(meth_df, aes(x = group, y = methylation, fill = group)) +
 
 
 
-*** Test
-[[file:workflows/test.smk]]
+** cfDNA methylation and fragmentation
+- [cite:@noe2024]
+
+*** An 2023 methylation and fragmentation patterns
+
+
+#+begin_src bash
+#ssh jeff-nf1
+
+#mamba install -c bioconda -c conda-forge bismark -n emseq
+
+conda activate emseq
+
+
+
+# ---- settings ----
+GENOME_NAME=ncbi_hg38
+GENOME_ROOT=/mnt/data/projects/nf1/ref/bismark
+GENOME_DIR=$GENOME_ROOT/$GENOME_NAME
+INDEX_DIR=$GENOME_DIR/bismark_index
+THREADS=16
+
+# ---- prep dirs ----
+mkdir -p "$INDEX_DIR"
+
+# By default, bismark expects fasta(s) in the target folder.
+# So place the FASTA there (symlink is fine) BEFORE running:
+
+cd /mnt/data/projects/nf1/inputs
+
+wget https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz
+
+gunzip -c GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz.1 > ../ref/bismark/ncbi_hg38/bismark_index/GCA_000001405.15_GRCh38_no_alt_analysis_set.fa
+
+cd "$GENOME_DIR"
+
+# ---- build the Bismark index (Bowtie2) ----
+# (Requires: bismark, bowtie2, perl)
+bismark_genome_preparation \
+  --bowtie2 \
+  --parallel "$THREADS" \
+  --verbose \
+  "$INDEX_DIR"
+
+
+# ---- sanity check: index files should now exist ----
+ls -1 "$INDEX_DIR" | grep -E 'Bisulfite_Genome|.bt2$'
+
+mkdir -p /mnt/data/projects/nf1/tmp
+
+cd /mnt/data/projects/nf1/tmp/bismark_out
+
+# these write to dir of action
+bismark --non_directional \
+  -p 24 \
+  /mnt/data/projects/nf1/ref/bismark/ncbi_hg38/bismark_index \
+  -1 /mnt/data/projects/nf1/emseq/fastqs/emseq_05.raw_R1.fastq.gz \
+  -2 /mnt/data/projects/nf1/emseq/fastqs/emseq_05.raw_R2.fastq.gz \
+  -o /mnt/data/projects/nf1/tmp/bismark_out
+
+nohup bismark --non_directional \
+  -p 24 \
+  /mnt/data/projects/nf1/ref/bismark/ncbi_hg38/bismark_index \
+  -1 /mnt/data/projects/nf1/emseq/fastqs/emseq_05.raw_R1.fastq.gz \
+  -2 /mnt/data/projects/nf1/emseq/fastqs/emseq_05.raw_R2.fastq.gz \
+  -o /mnt/data/projects/nf1/tmp/bismark_out \
+  > bismark_emseq05.log 2>&1 &
+
+nohup bismark --non_directional \
+  -p 24 \
+  /mnt/data/projects/nf1/ref/bismark/ncbi_hg38/bismark_index \
+  -1 /mnt/data/projects/nf1/emseq/fastqs/emseq_06.raw_R1.fastq.gz \
+  -2 /mnt/data/projects/nf1/emseq/fastqs/emseq_06.raw_R2.fastq.gz \
+  -o /mnt/data/projects/nf1/tmp/bismark_out \
+  > bismark_emseq06.log 2>&1 &
+
+##########1##########2##########3##########4##########5##########6##########7##########8
+cp /mnt/data/projects/nf1/tmp/bismark_out/emseq_05.raw_R1_bismark_bt2_pe.bam /mnt/data/projects/nf1/tmp/an/emseq_05.bam
+
+cp /mnt/data/projects/nf1/tmp/bismark_out/emseq_06.raw_R1_bismark_bt2_pe.bam /mnt/data/projects/nf1/tmp/an/emseq_06.bam
+
+cd /mnt/data/projects/nf1/tmp/an
+ls
+
+samtools view -h emseq_05.bam | samtools view -b -o emseq_05_repaired.bam
+
+samtools view -h emseq_06.bam | samtools view -b -o emseq_06_repaired.bam
+
+python3 test3.py emseq_05_repaired.bam 10 > /tmp/emseq_05_meth_and_frag.tsv
+
+python3 test3.py emseq_06_repaired.bam 10 > /tmp/emseq_06_meth_and_frag.tsv
+
+python3 test3.py emseq_05_repaired.bam > /tmp/emseq_05_meth_and_frag.tsv
+
+python3 test3.py emseq_06_repaired.bam > /tmp/emseq_06_meth_and_frag.tsv
+
+##########1##########2##########3##########4##########5##########6##########7##########8
+# 2) Deduplicate the Bismark BAM (paired-end)
+deduplicate_bismark --bam --paired \
+  --output_dir /mnt/data/projects/nf1/tmp/bismark_out \
+  /mnt/data/projects/nf1/tmp/bismark_out/emseq_12.raw_R1_bismark_bt2_pe.bam
+
+#+end_src
+
+#+begin_src R
+library(tidyverse)
+
+pn = read_tsv("/tmp/emseq_05_meth_and_frag.tsv") %>% mutate(dx = "pn")
+mpnst = read_tsv("/tmp/emseq_06_meth_and_frag.tsv") %>% mutate(dx = "mpnst")
+
+test=rbind(pn, mpnst)
+
+test %>%
+  filter(label != "mid") %>%
+  filter(tlen < 167) %>%
+  ggplot(aes(x = dx, fill = label)) +
+  geom_bar(position = "fill") +
+  labs(x = "Diagnosis", y = "Proportion", fill = "Methylation category")
+
+
+test %>%
+  mutate(tlen_bin = cut(tlen, breaks = seq(0, 400, 10))) %>%
+  group_by(tlen_bin) %>%
+  summarise(mean_cpg = mean(cpg_frac, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(x = tlen_bin, y = mean_cpg, group = 1)) +
+  geom_line() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+
+test %>%
+  mutate(tlen_bin = cut(tlen, breaks = seq(150, 300, 5))) %>%
+  group_by(dx, tlen_bin) %>%
+  summarise(mean_cpg = mean(cpg_frac, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(x = tlen_bin, y = mean_cpg, color = dx, group = dx)) +
+  #geom_line() +
+  geom_smooth(se=F) +
+  labs(x = "Fragment length (bp bins)", y = "Mean CpG fraction") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+
+test %>%
+  mutate(tlen_bin = cut(tlen, breaks = seq(0, 400, 10))) %>%
+  group_by(dx, tlen_bin) %>%
+  summarise(mean_cpg = mean(cpg_frac, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(x = tlen_bin, y = mean_cpg, group = dx, color = dx)) +
+  geom_line() +
+  facet_wrap(~dx) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+
+test %>%
+  filter(label != "mid") %>%
+  filter(tlen > 167) %>%
+  ggplot(aes(x = dx, fill = label)) +
+  geom_bar(position = "fill") +
+  labs(x = "Diagnosis", y = "Proportion", fill = "Methylation category")
+
+
+test %>%
+  mutate(frag_bin = ifelse(tlen < 167, "<167", ">167")) %>%
+  group_by(dx, frag_bin) %>%
+  summarise(frac_hyper = mean(label == "hypo"), .groups = "drop") %>%
+  tidyr::pivot_wider(
+    names_from = frag_bin,
+    values_from = frac_hyper
+  )
+
+test %>%
+  mutate(frag_bin = ifelse(tlen < 167, "<167", ">167")) %>%
+  group_by(frag_bin) %>%
+  summarise(frac_hyper = mean(label == "hypo"), .groups = "drop") %>%
+  tidyr::pivot_wider(
+    names_from = frag_bin,
+    values_from = frac_hyper
+  )
+
+test %>%
+  filter(label != "mid") %>%
+  filter(tlen > 250) %>%
+  count(dx, label) %>%
+  ggplot(aes(x = dx, y = n, fill = label)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Diagnosis", y = "Count", fill = "Methylation category")
+
+test %>%
+  filter(label != "mid") %>%
+  ggplot(., aes(x=tlen, color = label)) + geom_density()
+
+test %>%
+  ggplot(aes(x = tlen, color = label)) +
+  geom_density(adjust = 0.7) +
+  facet_wrap(~dx)
+
+test %>%
+  filter(tlen >155, tlen <250) %>%
+  ggplot(aes(x = tlen, color = dx)) +
+  geom_density(adjust = 0.6) +
+  facet_wrap(~label)
+
+
+test %>%
+  filter(tlen < 200, label != "mid") %>%
+  ggplot(aes(x = tlen, fill = label)) +
+  geom_histogram(position = "identity", alpha = 0.4, bins = 50)
+
+df %>%
+  filter(tlen < 200, label != "mid") %>%
+  ggplot(aes(x = tlen, color = label)) +
+  geom_density(adjust = 0.7)   # smaller = less smooth, more jagged
+
+df %>%
+  filter(tlen < 200, label != "mid") %>%
+  ggplot(aes(x = tlen, color = label)) +
+  geom_freqpoly(binwidth = 1)
+
+
+#########1#########2#########3#########4#########5#########6#########7#########8
+
+meth=read_tsv("/tmp/meth.tsv")
+
+meth <- meth %>% rename(global_meth = `global%meth`)
+
+# Run two-sample t-test
+t.test(global_meth ~ dx, data = meth)
+#+end_src
+
+** Test
+#+begin_src yaml :tangle ./config/test.yaml
+ENV-EMSEQ: "~/repos/emseq/config/emseq-conda-env.yaml"
+
+D-DATA: "/mnt/data/projects/aero"
+
+emseq_ref_assemblies:
+  ncbi_decoy_hg38:
+    url: https:/ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
+    name: ncbi_decoy_hg38
+    input: GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fa.gz
+
+  unmeth_lambda:
+    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/lambdafsa.txt?rev=c0c6669b9bd340ddb674ebfd9d55c691&hash=7E6375924CFF9457D0157D0D87C9AC19
+    name: unmeth_lambda
+    input: Lambda_NEB.fa.gz
+
+  puc19:
+    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/puc19fsa.txt?rev=6e10f4c4a4234d638e401cd2f4578ef0&hash=E71970068EEA191C175B3458DB99D7BB
+    name: puc19
+    input: pUC19.fa.gz
+
+R-EMSEQ: "~/repos/emseq"
+
+threads: 24
+#+end_src
+
 #+begin_src snakemake :tangle ./workflows/test.smk
+
+import pandas as pd
+import os
+
+def resolve_config_paths(config_dict):
+    for k, v in config_dict.items():
+        if isinstance(v, str):
+            config_dict[k] = os.path.expandvars(os.path.expanduser(v))
+        elif isinstance(v, dict):
+            resolve_config_paths(v)
+        elif isinstance(v, list):
+            config_dict[k] = [os.path.expandvars(os.path.expanduser(i)) if isinstance(i, str) else i for i in v]
+
+resolve_config_paths(config)
+
+ENV_EMSEQ = config['ENV-EMSEQ']
+
+D_EMSEQ = f"{config['D-DATA']}/emseq"
+D_REF = f"{config['D-DATA']}/ref"
+D_LOGS = f"{config['D-DATA']}/logs"
+D_BENCHMARK = f"{config['D-DATA']}/benchmark"
+D_INPUTS = f"{config['D-DATA']}/inputs"
+
+R_EMSEQ = config['R-EMSEQ']
+
+emseq_mincov = 2
+
+emseq_build = ["ncbi_decoy_hg38"]
+
+spike_builds = ["puc19", "unmeth_lambda"]
+library_ids = ["AERO_24"]
+
+rule all:
+    input:
+        # FASTQs
+        expand(f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
+               library_id = library_ids,
+               processing = ["trimmed"],
+               read = ["R1","R2"]),
+
+        expand(f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.methyldackel.txt.bgz",
+               library_id = library_ids,
+               ref_name = emseq_build,
+               align_method = "bwa_meth"),
+
+        expand(f"{D_EMSEQ}/spike/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
+               library_id = library_ids,
+               ref_name = spike_builds,
+               align_method = "bwa_meth"),
+
+include: f"{R_EMSEQ}/workflows/emseq.smk"
+
+
+#+end_src
+
+#+begin_src snakemake
 
 # Development snakemake to test
 mosdepth_quant_levels = config["mosdepth-quant-levels"]
@@ -5137,7 +4598,7 @@ include: "./dev.smk"
 
 #+end_src
 
-**** Example wrapper
+*** Example wrapper
 
 #+begin_src yaml :tangle ./config/example-config.yaml
 data_dir: /mnt/data/projects/breast
@@ -5215,7 +4676,6 @@ rule all:
 include: f"{repo}/workflows/dev.smk"
 
 #+end_src
-
 ** Reference
 - [[id:79dfda7e-8b6d-45c7-88d5-804979155763][cfDNA methylation]]
 - Alternative cfDNA WGMS profiling
@@ -5272,6 +4732,571 @@ Original EM-seq methods paper - [cite:@vaisvila2021]. Code is in the repo at [[f
 
 EM-seq and WGBS are not compatible- have different unique methylated CpGs at 8x [[/home/jeszyman/repos/emseq/emseq.org_20250605_135724.png][./resources/vaisvila2021fig4c.png]]
 ** Ideas
+- Mosdepth aggregator
+  #+begin_src snakemake :tangle no
+print("emseq_library_ids:", emseq_library_ids)
+print("type of first item:", type(emseq_library_ids[0]))
+
+rule emseq_mosdepth_agg_plot:
+    input:
+        thresholds = expand(f"{config['emseq-dir']}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.thresholds.bed.gz",
+                            library_id=emseq_library_ids),
+        regions = expand(f"{config['emseq-dir']}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.regions.bed.gz",
+                         library_id=emseq_library_ids),
+    output:
+        pdf = f"{qc_dir}/emseq_mosdepth_agg_plot.pdf",
+        tsv = f"{qc_dir}/emseq_mosdepth_agg.tsv",
+    params:
+        script = f"{config['emseq-script-dir']}/emseq_mosdepth_agg_plot.R",
+        library_list = " ".join(emseq_library_ids),
+        threshold_list = lambda wildcards, input: " ".join(input.thresholds),
+        regions_list = lambda wildcards, input: " ".join(input.regions),
+    shell:
+        """
+        Rscript {params.script} \
+        --threshold_list "{params.threshold_list}" \
+        --regions_list "{params.regions_list}" \
+        --library_list "{params.library_list}" \
+        --output_pdf {output.pdf} \
+        --output_tsv {output.tsv}
+        """
+
+#+end_src
+  #+begin_src snakemake :tangle no
+
+def flatten(x):
+    return [item for sublist in x for item in (sublist if isinstance(sublist, list) else [sublist])]
+
+print("emseq_library_ids:", emseq_library_ids)
+print("type of first item:", type(emseq_library_ids[0]))
+
+rule emseq_mosdepth_agg_plot:
+    input:
+        threshold_list = lambda wildcards, input: " ".join(flatten(input.thresholds)),
+        regions_list = lambda wildcards, input: " ".join(flatten(input.regions)),
+    output:
+        pdf = f"{qc_dir}/mosdepth_agg_plot.pdf",
+    params:
+        script = f"{config['emseq-script-dir']}/emseq_mosdepth_agg_plot.R",
+        library_list = " ".join(emseq_library_ids),
+        threshold_list = lambda wildcards, input: " ".join(input.thresholds),
+        regions_list = lambda wildcards, input: " ".join(input.regions),
+    shell:
+        """
+        Rscript {params.script} \
+        --threshold_list "{params.threshold_list}" \
+        --regions_list "{params.regions_list}" \
+        --library_list "{params.library_list}" \
+        --output_pdf {output.pdf}
+        """
+
+#+end_src
+
+  #+begin_src snakemake
+rule emseq_mosdepth_agg_plot:
+    conda:
+        "../config/mosdepth-conda-env.yaml",
+    input:
+        thresholds = lambda wildcards: expand(
+            f"{config['emseq-dir']}/qc/mosdepth_{{library_id}}.{mosdepth_map[wildcards.experiment]['ref_name']}."
+            f"{mosdepth_map[wildcards.experiment]['align_method']}.thresholds.bed.gz",
+            library_id=mosdepth_map[wildcards.experiment]['library_ids']
+        ),
+        regions = lambda wildcards: expand(
+            f"{config['emseq-dir']}/qc/mosdepth_{{library_id}}.{mosdepth_map[wildcards.experiment]['ref_name']}."
+            f"{mosdepth_map[wildcards.experiment]['align_method']}.regions.bed.gz",
+            library_id=mosdepth_map[wildcards.experiment]['library_ids']
+        )
+    output:
+        pdf = f"{config['emseq-dir']}/qc/{{experiment}}.emseq_mosdepth_agg_plot.pdf",
+        tsv = f"{config['emseq-dir']}/qc/{{experiment}}.emseq_mosdepth_agg.tsv",
+    params:
+        script = f"{config['emseq-script-dir']}/emseq_mosdepth_agg_plot.R",
+        library_list = lambda wildcards: " ".join(mosdepth_map[wildcards.experiment]['library_ids']),
+        threshold_list = lambda wildcards, input: " ".join(input.thresholds),
+        regions_list = lambda wildcards, input: " ".join(input.regions),
+    shell:
+        """
+        Rscript {params.script} \
+        --threshold_list "{params.threshold_list}" \
+        --regions_list "{params.regions_list}" \
+        --library_list "{params.library_list}" \
+        --output_pdf {output.pdf} \
+        --output_tsv {output.tsv}
+        """
+
+#+end_src
+
+  #+begin_src R :tangle no
+#!/usr/bin/env Rscript
+
+# ==============================================================================
+# Description:
+#   Parses multiple mosdepth threshold files (*.thresholds.bed.gz) and generates
+#   a single paginated PDF plot (4×6 panels per page) showing counts of bases
+#   covered at actual observed thresholds (e.g., 1X, 2X, 5X...) per sample.
+#
+#   Infers 0X bins by identifying regions where all threshold counts are zero.
+#
+# Inputs:
+#   --threshold_list   Space-separated list of mosdepth threshold files
+#   --library_list     Space-separated list of sample names (must match order)
+#   --output_pdf       Full path to output PDF file (single file, multi-page)
+# ==============================================================================
+
+suppressPackageStartupMessages({
+  suppressWarnings(library(argparse))
+  suppressWarnings(library(data.table))
+  suppressWarnings(library(ggplot2))
+  suppressWarnings(library(Cairo))
+  suppressWarnings(library(scales))
+  suppressWarnings(library(patchwork))
+})
+
+
+suppressWarnings(library(matrixStats))  # at top
+
+
+# -------------------------------
+# Argument parsing
+# -------------------------------
+
+prog <- basename(commandArgs(trailingOnly = FALSE)[1])
+
+parser <- ArgumentParser(
+  description = "Generate a paginated threshold coverage plot from mosdepth output.",
+  prog = prog
+)
+
+parser$add_argument("--threshold_list", required = TRUE,
+                    help = "Space-separated list of mosdepth threshold files (*.thresholds.bed.gz)")
+parser$add_argument("--library_list", required = TRUE,
+                    help = "Space-separated list of sample names (must match file order)")
+parser$add_argument("--output_pdf", required = TRUE,
+                    help = "Full output PDF file path (e.g., /tmp/plot.pdf)")
+
+args <- parser$parse_args()
+threshold_files <- unlist(strsplit(args$threshold_list, " "))
+library_ids <- unlist(strsplit(args$library_list, " "))
+output_pdf <- args$output_pdf
+
+if (length(threshold_files) != length(library_ids)) {
+  stop("Error: threshold_list and library_list must be the same length")
+}
+
+# -------------------------------
+# Function to parse each threshold file
+# -------------------------------
+
+read_thresholds <- function(file, sample) {
+  header <- fread(file, nrows = 0)
+  names(header)[1] <- sub("^#", "", names(header)[1])
+  threshold_cols <- setdiff(names(header), c("chrom", "start", "end", "region"))
+  df <- fread(file, skip = 1, col.names = names(header))
+  df[, sample := sample]
+  melted <- melt(df,
+    id.vars = c("chrom", "start", "end", "region", "sample"),
+    measure.vars = threshold_cols,
+    variable.name = "threshold",
+    value.name = "count"
+  )
+  list(data = melted, thresholds = threshold_cols)
+}
+
+# -------------------------------
+# Read and combine all files
+# -------------------------------
+
+parsed <- mapply(read_thresholds, threshold_files, library_ids, SIMPLIFY = FALSE)
+hist_data <- rbindlist(lapply(parsed, `[[`, "data"))
+all_thresholds <- unique(unlist(lapply(parsed, `[[`, "thresholds")))
+
+# -------------------------------
+# Infer 0X bins from zeroed rows
+# -------------------------------
+
+hist_wide <- dcast(hist_data, chrom + start + end + region + sample ~ threshold,
+                   value.var = "count", fill = 0)
+hist_wide[, is_zero := rowSums(.SD) == 0, .SDcols = all_thresholds]
+zero_counts <- hist_data[, .(total = sum(count)), by = .(chrom, start, end, region, sample)]
+zero_counts <- zero_counts[total == 0, .(count = .N * (end[1] - start[1])), by = sample]
+zero_counts[, threshold := "0X"]
+
+# -------------------------------
+# Compute median depth per sample
+# -------------------------------
+
+hist_data[, threshold_numeric := as.numeric(sub("X$", "", threshold))]
+medians <- hist_data[!is.na(threshold_numeric),
+  .(median = weightedMedian(threshold_numeric, w = count)),
+  by = sample]
+
+
+# -------------------------------
+# Aggregate and bind all data
+# -------------------------------
+
+plot_data <- hist_data[, .(count = sum(count)), by = .(sample, threshold)]
+plot_data <- rbind(plot_data, zero_counts, fill = TRUE)
+
+# Correct threshold order based on numeric prefix
+threshold_levels <- unique(plot_data$threshold)
+threshold_levels <- threshold_levels[order(as.numeric(sub("X$", "", as.character(threshold_levels))))]
+plot_data[, threshold := factor(threshold, levels = threshold_levels)]
+
+# -------------------------------
+# Panel layout and plotting
+# -------------------------------
+
+make_panel <- function(sample_id) {
+  median_val <- medians[sample == sample_id, median]
+  subtitle <- sprintf("Median depth: %.1f×", median_val)
+
+  ggplot(plot_data[sample == sample_id], aes(x = threshold, y = count, fill = threshold)) +
+    geom_col(width = 0.8) +
+    scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
+    scale_fill_brewer(palette = "Set2", guide = "none") +
+    labs(title = sample_id, subtitle = subtitle, x = "Coverage threshold", y = "Covered bases") +
+    theme_minimal(base_size = 10) +
+    theme(
+      axis.text = element_text(size = 8),
+      axis.title = element_text(size = 9),
+      plot.title = element_text(size = 10, hjust = 0.5),
+      plot.subtitle = element_text(size = 9, hjust = 0.5),
+      panel.grid = element_line(linewidth = 0.2, colour = "grey90")
+    )
+}
+
+ncol <- 4
+nrow <- 6
+panels_per_page <- ncol * nrow
+sample_list <- unique(plot_data$sample)
+pages <- split(sample_list, ceiling(seq_along(sample_list) / panels_per_page))
+
+# -------------------------------
+# Output: single PDF with multiple pages
+# -------------------------------
+
+CairoPDF(output_pdf, width = 8.5, height = 11, onefile = TRUE)
+for (i in seq_along(pages)) {
+  plots <- lapply(pages[[i]], make_panel)
+  layout <- wrap_plots(plots, ncol = ncol, nrow = nrow) +
+    plot_annotation(
+      title = "Coverage threshold by sample",
+      theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+    )
+  print(layout)
+}
+dev.off()
+
+#+end_src
+  #+begin_src R :tangle no
+#!/usr/bin/env Rscript
+
+suppressPackageStartupMessages({
+  suppressWarnings(library(argparse))
+  suppressWarnings(library(data.table))
+  suppressWarnings(library(ggplot2))
+  suppressWarnings(library(Cairo))
+  suppressWarnings(library(scales))
+  suppressWarnings(library(patchwork))
+  suppressWarnings(library(matrixStats))
+})
+
+# -------------------------------
+# Argument parsing
+# -------------------------------
+
+prog <- basename(commandArgs(trailingOnly = FALSE)[1])
+
+parser <- ArgumentParser(
+  description = "Generate a paginated threshold coverage plot from mosdepth output.",
+  prog = prog
+)
+
+parser$add_argument("--threshold_list", required = TRUE,
+                    help = "Space-separated list of mosdepth threshold files (*.thresholds.bed.gz)")
+parser$add_argument("--regions_list", required = TRUE,
+                    help = "Space-separated list of mosdepth regions files (*.regions.bed.gz)")
+parser$add_argument("--library_list", required = TRUE,
+                    help = "Space-separated list of sample names (must match file order)")
+parser$add_argument("--output_pdf", required = TRUE,
+                    help = "Full output PDF file path (e.g., /tmp/plot.pdf)")
+
+args <- parser$parse_args()
+threshold_files <- unlist(strsplit(args$threshold_list, " "))
+regions_files <- unlist(strsplit(args$regions_list, " "))
+library_ids <- unlist(strsplit(args$library_list, " "))
+output_pdf <- args$output_pdf
+
+if (!all(lengths(list(threshold_files, regions_files, library_ids)) == length(library_ids))) {
+  stop("Error: threshold_list, regions_list, and library_list must all be the same length.")
+}
+
+# -------------------------------
+# Read and melt threshold files
+# -------------------------------
+
+read_thresholds <- function(file, sample) {
+  header <- fread(file, nrows = 0)
+  names(header)[1] <- sub("^#", "", names(header)[1])
+  threshold_cols <- setdiff(names(header), c("chrom", "start", "end", "region"))
+  df <- fread(file, skip = 1, col.names = names(header))
+  df[, sample := sample]
+  melted <- melt(df,
+    id.vars = c("chrom", "start", "end", "region", "sample"),
+    measure.vars = threshold_cols,
+    variable.name = "threshold",
+    value.name = "count"
+  )
+  list(data = melted, thresholds = threshold_cols)
+}
+
+parsed <- mapply(read_thresholds, threshold_files, library_ids, SIMPLIFY = FALSE)
+hist_data <- rbindlist(lapply(parsed, `[[`, "data"))
+hist_data[, count := as.numeric(count)]
+
+all_thresholds <- unique(unlist(lapply(parsed, `[[`, "thresholds")))
+
+# -------------------------------
+# Read autosomal median from regions.bed.gz
+# -------------------------------
+
+get_autosomal_median <- function(file, sample_id) {
+  df <- fread(file, col.names = c("chrom", "start", "end", "depth"))
+  df <- df[chrom %in% as.character(1:22)]
+  df[, sample := sample_id]
+  df[, median := median(depth)]
+  df[1, .(sample, median)]
+}
+
+medians <- rbindlist(mapply(get_autosomal_median, regions_files, library_ids, SIMPLIFY = FALSE))
+
+# -------------------------------
+# Infer 0X bins from zeroed rows
+# -------------------------------
+
+hist_wide <- dcast(hist_data, chrom + start + end + region + sample ~ threshold,
+                   value.var = "count", fill = 0)
+hist_wide[, is_zero := rowSums(.SD) == 0, .SDcols = all_thresholds]
+zero_counts <- hist_data[, .(total = sum(count)), by = .(chrom, start, end, region, sample)]
+zero_counts <- zero_counts[total == 0, .(count = .N * (end[1] - start[1])), by = sample]
+zero_counts[, threshold := "0X"]
+
+# -------------------------------
+# Aggregate and bind all data
+# -------------------------------
+
+plot_data <- hist_data[, .(count = sum(count)), by = .(sample, threshold)]
+plot_data <- rbind(plot_data, zero_counts, fill = TRUE)
+
+threshold_levels <- unique(plot_data$threshold)
+threshold_levels <- threshold_levels[order(as.numeric(sub("X$", "", as.character(threshold_levels))))]
+plot_data[, threshold := factor(threshold, levels = threshold_levels)]
+
+# -------------------------------
+# Plot panels
+# -------------------------------
+print(medians)
+
+make_panel <- function(sample_id) {
+  median_val <- medians[sample == sample_id][["median"]]
+  subtitle <- sprintf("Median depth: %.1f×", median_val)
+
+  ggplot(plot_data[sample == sample_id], aes(x = threshold, y = count, fill = threshold)) +
+    geom_col(width = 0.8) +
+    scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
+    scale_fill_brewer(palette = "Set2", guide = "none") +
+    labs(title = sample_id, subtitle = subtitle, x = "Coverage threshold", y = "Covered bases") +
+    theme_minimal(base_size = 10) +
+    theme(
+      axis.text = element_text(size = 8),
+      axis.title = element_text(size = 9),
+      plot.title = element_text(size = 10, hjust = 0.5),
+      plot.subtitle = element_text(size = 9, hjust = 0.5),
+      panel.grid = element_line(linewidth = 0.2, colour = "grey90")
+    )
+}
+
+ncol <- 4
+nrow <- 6
+panels_per_page <- ncol * nrow
+sample_list <- unique(plot_data$sample)
+pages <- split(sample_list, ceiling(seq_along(sample_list) / panels_per_page))
+
+# -------------------------------
+# Output
+# -------------------------------
+
+CairoPDF(output_pdf, width = 8.5, height = 11, onefile = TRUE)
+for (i in seq_along(pages)) {
+  plots <- lapply(pages[[i]], make_panel)
+  layout <- wrap_plots(plots, ncol = ncol, nrow = nrow) +
+    plot_annotation(
+      title = "Coverage threshold by sample",
+      theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+    )
+  print(layout)
+}
+dev.off()
+#+end_src
+  - [[file:scripts/emseq_mosdepth_agg_plot.R]]
+  #+begin_src R :tangle ./scripts/emseq_mosdepth_agg_plot.R
+#!/usr/bin/env Rscript
+
+suppressPackageStartupMessages({
+  suppressWarnings(library(argparse))
+  suppressWarnings(library(data.table))
+  suppressWarnings(library(ggplot2))
+  suppressWarnings(library(Cairo))
+  suppressWarnings(library(scales))
+  suppressWarnings(library(patchwork))
+  suppressWarnings(library(matrixStats))
+})
+
+# -------------------------------
+# Argument parsing
+# -------------------------------
+
+prog <- basename(commandArgs(trailingOnly = FALSE)[1])
+
+parser <- ArgumentParser(
+  description = "Generate a paginated threshold coverage plot from mosdepth output.",
+  prog = prog
+)
+
+parser$add_argument("--threshold_list", required = TRUE,
+                    help = "Space-separated list of mosdepth threshold files (*.thresholds.bed.gz)")
+parser$add_argument("--regions_list", required = TRUE,
+                    help = "Space-separated list of mosdepth regions files (*.regions.bed.gz)")
+parser$add_argument("--library_list", required = TRUE,
+                    help = "Space-separated list of sample names (must match file order)")
+parser$add_argument("--output_pdf", required = TRUE,
+                    help = "Full output PDF file path (e.g., /tmp/plot.pdf)")
+parser$add_argument("--output_tsv", required = TRUE,
+                    help = "Path for tabular output")
+
+args <- parser$parse_args()
+threshold_files <- unlist(strsplit(args$threshold_list, " "))
+regions_files <- unlist(strsplit(args$regions_list, " "))
+library_ids <- unlist(strsplit(args$library_list, " "))
+output_tsv <- args$output_tsv
+output_pdf <- args$output_pdf
+
+if (!all(lengths(list(threshold_files, regions_files, library_ids)) == length(library_ids))) {
+  stop("Error: threshold_list, regions_list, and library_list must all be the same length.")
+}
+
+# -------------------------------
+# Read and melt threshold files
+# -------------------------------
+
+read_thresholds <- function(file, sample) {
+  header <- fread(file, nrows = 0)
+  names(header)[1] <- sub("^#", "", names(header)[1])
+  threshold_cols <- setdiff(names(header), c("chrom", "start", "end", "region"))
+  df <- fread(file, skip = 1, col.names = names(header))
+  df[, sample := sample]
+  melted <- melt(df,
+    id.vars = c("chrom", "start", "end", "region", "sample"),
+    measure.vars = threshold_cols,
+    variable.name = "threshold",
+    value.name = "count"
+  )
+  list(data = melted, thresholds = threshold_cols)
+}
+
+parsed <- mapply(read_thresholds, threshold_files, library_ids, SIMPLIFY = FALSE)
+hist_data <- rbindlist(lapply(parsed, `[[`, "data"))
+hist_data[, count := as.numeric(count)]
+
+all_thresholds <- unique(unlist(lapply(parsed, `[[`, "thresholds")))
+
+# -------------------------------
+# Read autosomal median from regions.bed.gz
+# -------------------------------
+
+get_autosomal_median <- function(file, sample_id) {
+  df <- fread(file, col.names = c("chrom", "start", "end", "depth"))
+  df <- df[chrom %in% paste0("chr", 1:22)]
+  df[, sample := sample_id]
+  df[, median := median(depth)]
+  df[1, .(sample, median)]
+}
+
+medians <- rbindlist(mapply(get_autosomal_median, regions_files, library_ids, SIMPLIFY = FALSE))
+
+# -------------------------------
+# Infer 0X bins from zeroed rows
+# -------------------------------
+
+hist_wide <- dcast(hist_data, chrom + start + end + region + sample ~ threshold,
+                   value.var = "count", fill = 0)
+hist_wide[, is_zero := rowSums(.SD) == 0, .SDcols = all_thresholds]
+zero_counts <- hist_data[, .(total = sum(count)), by = .(chrom, start, end, region, sample)]
+zero_counts <- zero_counts[total == 0, .(count = .N * (end[1] - start[1])), by = sample]
+zero_counts[, threshold := "0X"]
+
+# -------------------------------
+# Aggregate and bind all data
+# -------------------------------
+
+plot_data <- hist_data[, .(count = sum(count)), by = .(sample, threshold)]
+plot_data <- rbind(plot_data, zero_counts, fill = TRUE)
+
+threshold_levels <- unique(plot_data$threshold)
+threshold_levels <- threshold_levels[order(as.numeric(sub("X$", "", as.character(threshold_levels))))]
+plot_data[, threshold := factor(threshold, levels = threshold_levels)]
+
+# -------------------------------
+# Plot panels
+# -------------------------------
+print(medians)
+
+make_panel <- function(sample_id) {
+  median_val <- medians[sample == sample_id][["median"]]
+  subtitle <- sprintf("Median depth: %.1f×", median_val)
+
+  ggplot(plot_data[sample == sample_id], aes(x = threshold, y = count, fill = threshold)) +
+    geom_col(width = 0.8) +
+    scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
+    scale_fill_brewer(palette = "Set2", guide = "none") +
+    labs(title = sample_id, subtitle = subtitle, x = "Coverage threshold", y = "Covered bases") +
+    theme_minimal(base_size = 10) +
+    theme(
+      axis.text = element_text(size = 8),
+      axis.title = element_text(size = 9),
+      plot.title = element_text(size = 10, hjust = 0.5),
+      plot.subtitle = element_text(size = 9, hjust = 0.5),
+      panel.grid = element_line(linewidth = 0.2, colour = "grey90")
+    )
+}
+
+ncol <- 4
+nrow <- 6
+panels_per_page <- ncol * nrow
+sample_list <- unique(plot_data$sample)
+pages <- split(sample_list, ceiling(seq_along(sample_list) / panels_per_page))
+
+# -------------------------------
+# Output
+# -------------------------------
+
+CairoPDF(output_pdf, width = 8.5, height = 11, onefile = TRUE)
+for (i in seq_along(pages)) {
+  plots <- lapply(pages[[i]], make_panel)
+  layout <- wrap_plots(plots, ncol = ncol, nrow = nrow) +
+    plot_annotation(
+      title = "Coverage threshold by sample",
+      theme = theme(plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+    )
+  print(layout)
+}
+dev.off()
+
+fwrite(medians,   file = args$output_tsv, sep = "\t")
+
+#+end_src
 - Copy number integration
   - [cite:@chan2013meth]
   - [cite:@widman2024]
@@ -5651,5 +5676,250 @@ for (i in seq_along(pages)) {
 }
 dev.off()
 #+end_src
+*** Methylkit
+https:/www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/methylKit.html
+- get nearest TSS
+- get region annotation
+
+#+begin_src snakemake :tangle no
+rule make_methylkit_diff_db:
+    input:
+        mkit_lib_db = lambda wildcards: expand(
+            f"{data_dir}/analysis/emseq/meth/{{library_id}}.{{ref_name}}.{{align_method}}.{{meth_caller}}.txt.bgz",
+            library_id = meth_map[wildcards.experiment]['libs'],
+            ref_name = meth_map[wildcards.experiment]['ref_name'],
+            align_method = meth_map[wildcards.experiment]['align_method'],
+            meth_caller = meth_map[wildcards.experiment]['meth_caller']),
+    log:
+        f"{config['log-dir']}/{{experiment}}.{{ref_name}}.{{align_method}}.{{meth_caller}}_make_methylkit_diff_db.log",
+    output:
+        unite = f"{emseq_dir}/diff/methylBase_{{experiment}}.txt.bgz",
+        diff = f"{emseq_dir}/diff/methylDiff_{{experiment}}.txt.bgz",
+    params:
+        library_id = lambda wildcards: " ".join(meth_map[wildcards.experiment]['libs']),
+        treatment_list = lambda wildcards: meth_map[wildcards.experiment]['tx'],
+        mincov = lambda wildcards: meth_map[wildcards.experiment]['mincov'],
+        assembly = lambda wildcards: meth_map[wildcards.experiment]['assembly'],
+        out_dir = f"{emseq_dir}/diff",
+        script = f"{config['emseq-script-dir']}/make_methylkit_diff_db.R",
+    shell:
+        """
+        Rscript {params.script} \
+        --lib_db_list "{input.mkit_lib_db}" \
+        --lib_id_list "{params.library_id}" \
+        --treatment_list "{params.treatment_list}" \
+        --cores 32 \
+        --out_dir {params.out_dir} \
+        --suffix {wildcards.experiment} > {log} 2>&1
+        """
+#+end_src
+
+#+begin_src R :tangle ./scripts/make_methylkit_diff_db.R
+library(argparse)
+library(methylKit)
+
+# --- Argument Parsing ---
+parser <- ArgumentParser()
+parser$add_argument("--lib_db_list", required = TRUE)
+parser$add_argument("--lib_id_list", required = TRUE)
+parser$add_argument("--treatment_list", required = TRUE)
+parser$add_argument("--cores", required = TRUE)
+parser$add_argument("--out_dir", required = TRUE)
+parser$add_argument("--suffix", required = TRUE)
+
+args <- parser$parse_args()
+
+lib_db_list <- unlist(strsplit(args$lib_db_list, " "))
+lib_id_list <- unlist(strsplit(args$lib_id_list, " "))
+treatment_list <- as.numeric(unlist(strsplit(args$treatment_list, " ")))
+
+stopifnot(length(lib_db_list) == length(lib_id_list),
+          length(lib_id_list) == length(treatment_list))
+
+# --- Read methylation databases ---
+merged_obj <- methRead(
+  location = as.list(lib_db_list),
+  sample.id = as.list(lib_id_list),
+  treatment = treatment_list,
+  context = "CpG",
+  assembly = "hg38",
+  dbtype = "tabix",
+  mincov = 10
+)
+
+# --- Unite ---
+meth <- unite(merged_obj,
+              destrand = FALSE,
+              chunk.size = 1e9,
+              mc.cores = as.numeric(args$cores),
+              save.db = TRUE,
+              min.per.group = 1,
+              suffix = args$suffix,
+              dbdir = args$out_dir)
+
+# --- Diff methylation ---
+diff <- calculateDiffMeth(meth,
+                          mc.cores = as.numeric(args$cores),
+                          chunk.size = 1e9,
+                          save.db = TRUE,
+                          dbdir = args$out_dir)
+#+end_src
+
+
+*** Biscuit
+**** Index
+#+begin_src snakemake
+rule emseq_biscuit_index:
+    conda:
+        f"{config['emseq-conda-env']}",
+    input:
+        lambda wildcards: f"{data_dir}/inputs/{config['emseq_ref_assemblies'][wildcards.name]['input']}"
+    output:
+        fasta = f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa",
+        fai = f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa.fai",
+        biscuit_index_done = f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa.biscuit.index.done"
+    log:
+        f"{config['log-dir']}/{{name}}_biscuit_index.log"
+    shell:
+        """
+        mkdir -p $(dirname {output.fasta}) && \
+        zcat {input} > {output.fasta} && \
+        samtools faidx {output.fasta} && \
+        biscuit index {output.fasta} > {log} 2>&1 && \
+        touch {output.biscuit_index_done}
+        """
+
+#+end_src
+
+**** Align
+#+begin_src snakemake
+rule emseq_align_biscuit:
+    conda:
+        f"{config['emseq-conda-env']}",
+    input:
+        r1 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
+        r2 = f"{data_dir}/analysis/emseq/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
+        fasta = f"{data_dir}/ref/biscuit/{{ref_name}}/{{ref_name}}.fa",
+        index = f"{data_dir}/ref/biscuit/{{ref_name}}/{{ref_name}}.fa.par.sa",
+    log:
+        cmd = f"{config['log-dir']}/{{library_id}}.{{ref_name}}.biscuit.coorsort.bam",
+    output:
+        bam = f"{config['emseq-dir']}/bams/{{library_id}}.{{ref_name}}.biscuit.coorsort.bam",
+    params:
+        threads = 80,
+    resources:
+        concurrency=100
+    shell:
+        """
+        mkdir -p {data_dir}/tmp && \
+        biscuit align \
+        -@ {params.threads} \
+        -biscuit-ref {input.fasta} \
+        {input.r1} {input.r2} \
+        | samtools sort \
+        -@ 8 \
+        -m 2G \
+        -T {data_dir}/tmp/{wildcards.library_id}_sorttmp \
+        -o {output.bam} &>> {log}
+        """
+
+#+end_src
+**** [[id:4ac48779-f505-4291-b7bf-cc950d3339e6][De-duplicate]]
+**** Pileup
+#+begin_src snakemake
+rule emseq_biscuit_pileup:
+    conda:
+        f"{config['emseq-conda-env']}",
+    input:
+        bam = f"{config['emseq-dir']}/bams/{{library_id}}.{{ref_name}}.biscuit.coorsort.deduped.bam",
+        fasta = f"{data_dir}/ref/biscuit/{{ref_name}}/{{ref_name}}.fa",
+    log:
+        f"{config['log-dir']}/{{library_id}}.{{ref_name}}.biscuit_emseq_pileup.log",
+    output:
+        vcf = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}.biscuit_pileup.vcf.gz",
+        tsv = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}.biscuit_pileup.vcf_meth_average.tsv",
+    params:
+        out_base = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}.biscuit_pileup.vcf",
+    shell:
+        """
+        biscuit pileup \
+        -@ 20 \
+        -o {params.out_base} \
+        {input.fasta} {input.bam} \
+        && bgzip -@ 8 {params.out_base}
+        """
+#+end_src
+#+begin_src snakemake
+rule emseq_biscuit_post_pileup:
+    conda:
+        f"{config['emseq-conda-env']}",
+    input:
+        vcf = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}.biscuit_pileup.vcf.gz",
+    log:
+        f"{config['log-dir']}/{{library_id}}.{{ref_name}}_emseq_biscuit_post_pileup.log",
+    output:
+        tbi = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}_pileup.vcf.gz.tbi",
+        bed = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}_pileup.bed",
+        bismark = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}_bismark_cov.bed",
+    shell:
+        """
+        tabix -p vcf {input.vcf} \
+        && biscuit vcf2bed \
+	-t cg {input.vcf} > {output.bed} \
+        && biscuit vcf2bed -c {input.vcf} > {output.bismark} &> {log}
+        """
+#+end_src
+
+#+begin_src snakemake
+rule make_single_biscuit_methylkit_obj:
+    conda:
+        "../config/methylkit-conda-env.yaml",
+    input:
+        bismark = f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}_bismark_cov.bed",
+    log:
+        f"{config['log-dir']}/{{library_id}}.{{ref_name}}_make_single_biscuit_methylkit_obj.log",
+    output:
+        txt = f"{data_dir}/analysis/emseq/post-biscuit/{{library_id}}.{{ref_name}}_biscuit.txt",
+        bgz = f"{data_dir}/analysis/emseq/post-biscuit/{{library_id}}.{{ref_name}}_biscuit.txt.bgz",
+        tbi = f"{data_dir}/analysis/emseq/post-biscuit/{{library_id}}.{{ref_name}}_biscuit.txt.bgz.tbi",
+    params:
+        Rscript = f"{config['emseq-script-dir']}/make_single_biscuit_methylkit_obj.R",
+        out_dir = f"{data_dir}/analysis/emseq/post-biscuit",
+    shell:
+        """
+        Rscript {params.Rscript} \
+          --bismark_cov_bed {input.bismark} \
+          --library_id {wildcards.library_id} \
+          --out_dir {params.out_dir} \
+          &> {log}
+        """
+#+end_src
+
+#+begin_src R :tangle ./scripts/make_single_biscuit_methylkit_obj.R
+library(argparse)
+library(methylKit)
+
+parser <- ArgumentParser()
+parser$add_argument("--bismark_cov_bed", required = TRUE)
+parser$add_argument("--library_id", required = TRUE)
+parser$add_argument("--treatment", type = "integer", required = TRUE)
+parser$add_argument("--out_dir", required = TRUE)
+
+args <- parser$parse_args()
+
+myobj= methRead(args$bismark_cov_bed,
+                sample.id = args$library_id,
+                treatment = 1,
+                context="CpG",
+                pipeline="bismarkCoverage",
+                mincov = 2,
+                assembly= "hg38",
+                dbtype = "tabix",
+                dbdir = args$out_dir)
+
+#+end_src
+
+
+
 *** variant calling
 - https:/pmc.ncbi.nlm.nih.gov/articles/PMC10072131/

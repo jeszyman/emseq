@@ -1,164 +1,50 @@
-# Development snakemake to test
-mosdepth_quant_levels = config["mosdepth-quant-levels"]
-repo = "~/repos/emseq"
-data_dir=config["data_dir"]
-emseq_script_dir = "~/repos/emseq/scripts"
-log_dir = f"{data_dir}/logs"
+import pandas as pd
+import os
+
+def resolve_config_paths(config_dict):
+    for k, v in config_dict.items():
+        if isinstance(v, str):
+            config_dict[k] = os.path.expandvars(os.path.expanduser(v))
+        elif isinstance(v, dict):
+            resolve_config_paths(v)
+        elif isinstance(v, list):
+            config_dict[k] = [os.path.expandvars(os.path.expanduser(i)) if isinstance(i, str) else i for i in v]
+
+resolve_config_paths(config)
+
+ENV_EMSEQ = config['ENV-EMSEQ']
+
+D_EMSEQ = f"{config['D-DATA']}/emseq"
+D_REF = f"{config['D-DATA']}/ref"
+D_LOGS = f"{config['D-DATA']}/logs"
+D_BENCHMARK = f"{config['D-DATA']}/benchmark"
+D_INPUTS = f"{config['D-DATA']}/inputs"
+
+R_EMSEQ = config['R-EMSEQ']
 
 emseq_mincov = 2
-emseq_build = "hg38"
 
-threads = 80
-# We specify em-seq bam directory directly to allow for workflows that merge at the bam level:
-emseq_bam_dir = f"{data_dir}/analysis/emseq/bams"
+emseq_build = ["ncbi_decoy_hg38"]
 
-
-# Explicitly select which references to build
-index_targets = ["unmeth_lambda", "puc19"]
-
-library_ids = ["NH_15_L3", "PRO_6_L2"]
-
-spike_ref_names = ["unmeth_lambda"]
-
-ref_names = ["ncbi_decoy_hg38"]
-
-align_methods = ["bwa_meth"]
-
-emseq_library_ids = library_ids
-
-meth_map = {
-    "test": {
-        "build": "hg38",
-        "mincov": "5",
-        "libs": library_ids,
-        "tx": "0,1"
-}
-}
-
-
-mosdepth_map = {
-    "tests": {
-        "library_ids": ["NH_15_L3", "PRO_6_L2"],
-        "ref_name": "ncbi_decoy_hg38",
-        "align_method": "bwa_meth"
-    }
-}
+spike_builds = ["puc19", "unmeth_lambda"]
+library_ids = ["AERO_24"]
 
 rule all:
     input:
         # FASTQs
-        expand(f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_{{processing}}_{{read}}.fastq.gz",
+        expand(f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
                library_id = library_ids,
-               processing = ["raw","trimmed"],
+               processing = ["trimmed"],
                read = ["R1","R2"]),
 
-        expand(f"{data_dir}/qc/{{library_id}}_{{processing}}_{{read}}_fastqc.{{suffix}}",
+        expand(f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.methyldackel.txt.bgz",
                library_id = library_ids,
-               processing = ["raw","trimmed"],
-               read = ["R1","R2"],
-               suffix = ["zip","html"]),
-
-        # Spike-ins
-        expand(f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam",
-               library_id = library_ids,
-               ref_name = spike_ref_names,
+               ref_name = emseq_build,
                align_method = "bwa_meth"),
 
-        expand(f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
-               library_id=library_ids,
-               ref_name=spike_ref_names,
-               align_method= "bwa_meth"),
-
-        # Biscuit 1 steps
-        ## Index
-        expand(f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa.fai",
-               name = "ncbi_decoy_hg38"),
-
-        ## Align
-        expand(f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.biscuit.coorsort.bam",
+        expand(f"{D_EMSEQ}/spike/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
                library_id = library_ids,
-               ref_name = ref_names),
-
-        # BWA-meth
-        # ## Index
-        # expand(f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t",
-        #        name = ref_names),
-
-        # ## Align
-
-        # expand(f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam",
-        #        library_id = library_ids,
-        #        ref_name = ref_names,
-        #        align_method = "bwa_meth"),
-
-        ## COMMON DEDUP HERE
-
-        ## Pileup
-        # expand(f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}.biscuit_pileup.{{suffix}}",
-        #        library_id = library_ids,
-        #        ref_name = ref_names,
-        #        suffix = ["vcf.gz","vcf_meth_average.tsv"]),
-
-        # ## Make per-library methylkit objects
-        # expand(f"{data_dir}/analysis/emseq/post-biscuit/{{library_id}}.{{ref_name}}_biscuit.{{suffix}}",
-        #        library_id = library_ids,
-        #        ref_name = ref_names,
-        #        suffix = ["txt", "txt.bgz", "txt.bgz.tbi"]),
-
-        # Common post-alignment per-library steps
-        ## Deduplicate
-        expand(f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
-               library_id = library_ids,
-               ref_name = ref_names,
-               align_method = ["biscuit","bwa_meth"]),
-
-        ## Depth
-        expand(f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.summary.txt",
-               library_id = library_ids,
-               ref_name = ref_names,
-               align_method = ["biscuit","bwa_meth"]),
-
-        ## Call methylation
-        expand(f"{data_dir}/analysis/emseq/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
-               library_id = library_ids,
-               ref_name = ref_names,
-               align_method = ["biscuit", "bwa_meth"]),
-
-        ## Create per-library methylkit objects
-        expand(f"{data_dir}/analysis/emseq/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.txt",
-               library_id = library_ids,
-               ref_name = ref_names,
+               ref_name = spike_builds,
                align_method = "bwa_meth"),
 
-        expand(f"{data_dir}/qc/{{experiment}}.emseq_mosdepth_agg_plot.pdf",
-               experiment = mosdepth_map.keys()),
-
-        f"{data_dir}/qc/emseq_multiqc/emseq_multiqc.html",
-
-
-
-rule emseq_multiqc:
-    input:
-        fastqc = expand(f"{data_dir}/qc/{{library_id}}_{{processing}}_{{read}}_fastqc.zip",
-                        library_id = emseq_library_ids,
-                        processing = ["raw","trimmed"],
-                        read = ["R1", "R2"]),
-#        mosdepth = expand(f"{qc_dir}/mosdepth_{{library_id}}.mosdepth.summary.txt",
-#                          library_id = emseq_library_ids),
-    log:
-        f"{log_dir}/emseq_multiqc.log",
-    output:
-        f"{data_dir}/qc/emseq_multiqc/emseq_multiqc.html",
-    params:
-        out_dir = f"{data_dir}/qc/emseq_multiqc",
-        out_name = "emseq_multiqc",
-    shell:
-        """
-        multiqc \
-        {input} \
-        --force \
-        --outdir {params.out_dir} \
-        --filename {params.out_name}
-        """
-
-include: "./dev.smk"
+include: f"{R_EMSEQ}/workflows/emseq.smk"

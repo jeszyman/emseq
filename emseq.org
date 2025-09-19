@@ -413,7 +413,9 @@ jobs:
       # Dry-run the DAG (fast). Set a fixed concurrency to avoid needing yq.
       - name: Snakemake dry-run
         run: |
-          conda run -n emseq snakemake \
+          set -euo pipefail
+          conda activate emseq
+          snakemake \
             -s workflows/test.smk \
             --configfile config/test.yaml \
             --cores 4 \

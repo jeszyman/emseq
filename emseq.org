@@ -393,11 +393,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+
       # Build the same env you use locally (adjust path if needed)
       - name: Setup Conda (Mambaforge) with repo env
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@v2
         with:
-          miniforge-variant: Mambaforge
+          miniforge-variant: Miniforge3
           auto-activate-base: false
           use-mamba: true
           activate-environment: emseq

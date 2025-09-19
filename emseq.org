@@ -410,16 +410,6 @@ jobs:
           use-mamba: true
           environment-file: config/emseq-conda-env.yaml
 
-      # Snakemake usually isn't in your lab env; add it there for CI
-      - name: Install snakemake into emseq
-        run: mamba install -n emseq -y snakemake-minimal=7.32.4
-
-      # Tiny fixtures (same as local)
-      - name: Get test data
-        run: |
-          chmod +x tools/get_test_data.sh
-          conda run -n emseq ./tools/get_test_data.sh
-
       # Dry-run the DAG (fast). Set a fixed concurrency to avoid needing yq.
       - name: Snakemake dry-run
         run: |

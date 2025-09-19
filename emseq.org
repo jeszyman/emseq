@@ -405,10 +405,10 @@ jobs:
           test -f config/emseq-conda-env.yaml || { echo "Missing: config/emseq-conda-env.yaml"; exit 1; }
           sed -n '1,40p' config/emseq-conda-env.yaml
 
-      - name: Setup Conda (Mambaforge)
+      - name: Setup Conda (Miniforge3)
         uses: conda-incubator/setup-miniconda@v3
         with:
-          miniforge-variant: Mambaforge
+          miniforge-variant: Miniforge3
           auto-activate-base: true
           use-mamba: true
 

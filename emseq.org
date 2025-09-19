@@ -386,17 +386,20 @@ concurrency:
 permissions:
   contents: read
 
-defaults:
-  run:
-    shell: bash -l {0}   # login shell so `conda activate` works
-
-
 jobs:
   smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+
+      # Install micromamba for fast, reliable environment management
+      - name: Set up micromamba
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: config/emseq-conda-env.yaml
+          environment-name: emseq
+          cache-environment: true
 
       - name: Verify required files
         run: |
@@ -405,27 +408,18 @@ jobs:
           test -f workflows/test.smk
           test -f config/test.yaml
 
-      - name: Create/Update env (mamba, then conda fallback)
+      - name: Show environment info
         run: |
-          set -euo pipefail
-          if conda env list | awk '{print $1}' | grep -qx emseq; then
-            echo "Updating existing env 'emseq'..."
-            mamba env update -n emseq -f config/emseq-conda-env.yaml -vv || \
-              conda env update -n emseq -f config/emseq-conda-env.yaml -vv
-          else
-            echo "Creating env 'emseq'..."
-            mamba env create -n emseq -f config/emseq-conda-env.yaml -vv || \
-              conda env create -n emseq -f config/emseq-conda-env.yaml -vv
-          fi
-          conda env list
-          conda run -n emseq python -V || true
-          conda run -n emseq samtools --version || true
+          micromamba info
+          micromamba list -n emseq
+          micromamba run -n emseq python -V
+          micromamba run -n emseq snakemake --version
+          micromamba run -n emseq samtools --version || true
 
       - name: Snakemake dry-run
         run: |
           set -euo pipefail
-          conda activate emseq
-          snakemake \
+          micromamba run -n emseq snakemake \
             -s workflows/test.smk \
             --configfile config/test.yaml \
             --cores 4 \
@@ -435,10 +429,10 @@ jobs:
             --resources concurrency=50
 
       - name: Summary
-        if: ${{ success() || failure() }}
+        if: always()
         run: |
-          conda activate emseq
-          snakemake -s workflows/test.smk --summary --cores 1 --dry-run
+          micromamba run -n emseq snakemake \
+            -s workflows/test.smk --summary --cores 1 --dry-run
 #+end_src
 
 #+begin_src yaml :tangle ./.github/workflows/test-data.yml

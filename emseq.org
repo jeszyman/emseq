@@ -386,55 +386,70 @@ concurrency:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash -l {0}   # login shell so conda works
+
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
-      # Bootstrap conda/mamba
-      - name: Setup Conda (Miniforge)
+      - name: Verify env file exists
+        run: |
+          set -euo pipefail
+          ls -lah
+          ls -lah config || true
+          test -f config/emseq-conda-env.yaml || { echo "Missing: config/emseq-conda-env.yaml"; exit 1; }
+          sed -n '1,40p' config/emseq-conda-env.yaml
+
+      - name: Setup Conda (Mambaforge)
         uses: conda-incubator/setup-miniconda@v3
         with:
-          miniforge-variant: Miniforge3
-          auto-activate-base: false
+          miniforge-variant: Mambaforge
+          auto-activate-base: true
           use-mamba: true
 
-      # Prove the file is present (fail fast if path is wrong)
-      - name: Verify env file
-        shell: bash -l {0}
+      - name: Configure channels (strict)
         run: |
           set -euo pipefail
-          ls -lah config
-          test -f config/emseq-conda-env.yaml
-          sed -n '1,20p' config/emseq-conda-env.yaml
+          conda config --set channel_priority strict
+          # Ensure channels order matches your YAML
+          conda config --remove-key channels || true
+          conda config --add channels conda-forge
+          conda config --add channels bioconda
+          conda config --show
+          conda info -a
 
-      # Create OR update the env so reruns don't fail if it already exists
-      - name: Create/Update env from YAML
-        shell: bash -l {0}
+      - name: Create/Update env (mamba, then conda fallback)
         run: |
           set -euo pipefail
-          # If env exists, update; else create
+          # if exists, update; else create
           if conda env list | awk '{print $1}' | grep -qx emseq; then
-            mamba env update -n emseq -f config/emseq-conda-env.yaml
+            echo "Updating existing env 'emseq'..."
+            mamba env update -n emseq -f config/emseq-conda-env.yaml -vv || \
+              conda env update -n emseq -f config/emseq-conda-env.yaml -vv
           else
-            mamba env create  -n emseq -f config/emseq-conda-env.yaml
+            echo "Creating env 'emseq'..."
+            mamba env create -n emseq -f config/emseq-conda-env.yaml -vv || \
+              conda env create -n emseq -f config/emseq-conda-env.yaml -vv
           fi
           conda env list
+          conda run -n emseq python -V || true
           conda run -n emseq samtools --version || true
 
-      - name: Make script executable
-        run: chmod +x tools/get_test_data.sh
-
-      - name: Execute script (inside env)
-        shell: bash -l {0}
-        run: conda run -n emseq ./tools/get_test_data.sh
-
-      - name: Sanity checks
-        shell: bash -l {0}
+      - name: Execute script + sanity checks (inside env)
         run: |
           set -euo pipefail
+          conda activate emseq
+          which samtools
+          samtools --version
+          chmod +x tools/get_test_data.sh
+          ./tools/get_test_data.sh
+
+          # Checks
           test -d tests/full || (echo "tests/full not created" >&2; exit 1)
           fq_count=$(find tests/full -type f -name "*fastq.gz" | wc -l)
           (( fq_count >= 4 )) || { echo "Expected ≥4 FASTQs, got ${fq_count}"; exit 1; }

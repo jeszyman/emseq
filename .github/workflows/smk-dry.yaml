@@ -22,6 +22,7 @@ defaults:
   run:
     shell: bash -l {0}   # login shell so `conda activate` works
 
+
 jobs:
   smoke:
     runs-on: ubuntu-latest
@@ -36,13 +37,21 @@ jobs:
           test -f workflows/test.smk
           test -f config/test.yaml
 
-      - name: Setup Conda (Miniforge) from repo env
-        uses: conda-incubator/setup-miniconda@v3
-        with:
-          miniforge-variant: Miniforge3
-          auto-activate-base: false
-          use-mamba: true
-          environment-file: config/emseq-conda-env.yaml
+      - name: Create/Update env (mamba, then conda fallback)
+        run: |
+          set -euo pipefail
+          if conda env list | awk '{print $1}' | grep -qx emseq; then
+            echo "Updating existing env 'emseq'..."
+            mamba env update -n emseq -f config/emseq-conda-env.yaml -vv || \
+              conda env update -n emseq -f config/emseq-conda-env.yaml -vv
+          else
+            echo "Creating env 'emseq'..."
+            mamba env create -n emseq -f config/emseq-conda-env.yaml -vv || \
+              conda env create -n emseq -f config/emseq-conda-env.yaml -vv
+          fi
+          conda env list
+          conda run -n emseq python -V || true
+          conda run -n emseq samtools --version || true
 
       - name: Snakemake dry-run
         run: |

@@ -374,7 +374,6 @@ on:
       - "workflows/**"
       - "config/**"
       - "scripts/**"
-      - "tools/**"
       - ".github/workflows/ci-snakemake.yml"
   schedule:
     - cron: "0 4 * * 1"
@@ -387,6 +386,10 @@ concurrency:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash -l {0}   # login shell so `conda activate` works
+
 jobs:
   smoke:
     runs-on: ubuntu-latest
@@ -394,14 +397,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Fail fast if your env YAML moved
-      - name: Verify env files
+      - name: Verify required files
         run: |
           set -euo pipefail
           test -f config/emseq-conda-env.yaml
-          test -f tools/get_test_data.sh
+          test -f workflows/test.smk
+          test -f config/test.yaml
 
-      # Build your emseq env exactly as in repo
       - name: Setup Conda (Miniforge) from repo env
         uses: conda-incubator/setup-miniconda@v3
         with:
@@ -410,7 +412,6 @@ jobs:
           use-mamba: true
           environment-file: config/emseq-conda-env.yaml
 
-      # Dry-run the DAG (fast). Set a fixed concurrency to avoid needing yq.
       - name: Snakemake dry-run
         run: |
           set -euo pipefail
@@ -422,13 +423,13 @@ jobs:
             --dry-run \
             --printshellcmds \
             --rerun-incomplete \
-            --conda-frontend conda \
             --resources concurrency=50
 
-      # Optional: show what would run
       - name: Summary
-        run: conda run -n emseq snakemake -s workflows/test.smk --summary --cores 1 --dry-run
-
+        if: ${{ success() || failure() }}
+        run: |
+          conda activate emseq
+          snakemake -s workflows/test.smk --summary --cores 1 --dry-run
 #+end_src
 
 #+begin_src yaml :tangle ./.github/workflows/test-data.yml

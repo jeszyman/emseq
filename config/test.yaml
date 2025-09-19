@@ -10,11 +10,11 @@ mosdepth-quant-levels: "1,5"
 # Environments and repositories
 # -----------------------------
 envs:
-  emseq: "~/repos/emseq/config/emseq-conda-env.yaml"
-  methylkit: "~/repos/emseq/config/methylkit-conda-env.yaml"
+  emseq: "config/emseq-conda-env.yaml"
+  methylkit: "config/methylkit-conda-env.yaml"
 
 repos:
-  emseq: "~/repos/emseq"
+  emseq: "./"
 
 # -----------------------------
 # Sample set and region filters

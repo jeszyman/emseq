@@ -1,144 +1,52 @@
-library(argparse)
-library(methylKit)
+#!/usr/bin/env Rscript
 
-# --- Argument Parsing ---
+suppressPackageStartupMessages({
+  library(argparse)
+  library(methylKit)
+})
+
+# --- helpers ---
+as_int <- function(x, nm) {
+  xi <- suppressWarnings(as.integer(x))
+  if (is.na(xi)) stop(sprintf("'%s' must be an integer (got: %s)", nm, x))
+  xi
+}
+as_num_chunk <- function(x, nm="chunk_size") {
+  xn <- suppressWarnings(as.numeric(x))
+  if (is.na(xn)) stop(sprintf("'%s' must be numeric (accepts forms like 1e9 or 1000000000; got: %s)", nm, x))
+  xn
+}
+
+# --- args ---
 parser <- ArgumentParser()
-parser$add_argument("--lib_db_list", required = TRUE)
-parser$add_argument("--lib_id_list", required = TRUE)
-parser$add_argument("--treatment_list", required = TRUE)
-parser$add_argument("--cores", required = TRUE)
-parser$add_argument("--out_dir", required = TRUE)
-parser$add_argument("--suffix", required = TRUE)
+parser$add_argument("--mbase", required=TRUE,
+                    help="Path to methylBase_*.txt.bgz from unite step")
+parser$add_argument("--cores", default="4",
+                    help="Parallel workers (default: 4)")
+parser$add_argument("--out_dir", required=TRUE,
+                    help="Output directory for methylKit DBs")
+parser$add_argument("--suffix", required=TRUE,
+                    help="Suffix for DB files (e.g., 'test')")
+parser$add_argument("--chunk_size", default="1e9",
+                    help="Chunk size (accepts '1e9' style; default: 1e9)")
 
 args <- parser$parse_args()
 
-lib_db_list <- unlist(strsplit(args$lib_db_list, " "))
-lib_id_list <- unlist(strsplit(args$lib_id_list, " "))
-treatment_list <- as.numeric(unlist(strsplit(args$treatment_list, " ")))
+cores      <- as_int(args$cores, "cores")
+chunk_size <- as_num_chunk(args$chunk_size, "chunk_size")
 
-stopifnot(length(lib_db_list) == length(lib_id_list),
-          length(lib_id_list) == length(treatment_list))
+# --- load methylBase (tabix backend) ---
 
-# --- Read methylation databases ---
-merged_obj <- methRead(
-  location = as.list(lib_db_list),
-  sample.id = as.list(lib_id_list),
-  treatment = treatment_list,
-  context = "CpG",
-  assembly = "hg38",
-  dbtype = "tabix",
-  mincov = 2
+meth <- methylKit:::readMethylDB(args$mbase)
+
+# --- Differential methylation ---
+diff <- calculateDiffMeth(
+  meth,
+  mc.cores   = cores,
+  chunk.size = chunk_size,
+  save.db    = TRUE,
+  dbdir      = args$out_dir
 )
 
-# --- Unite ---
-meth <- unite(merged_obj,
-              destrand = FALSE,
-              chunk.size = 1e9,
-              mc.cores = as.numeric(args$cores),
-              save.db = TRUE,
-              suffix = args$suffix,
-              dbdir = args$out_dir)
-
-# --- Diff methylation ---
-diff <- calculateDiffMeth(meth,
-                          mc.cores = as.numeric(args$cores),
-                          chunk.size = 1e9,
-                          save.db = TRUE,
-                          dbdir = args$out_dir)
-
-library(argparse)
-library(methylKit)
-
-# --- Argument Parsing ---
-parser <- ArgumentParser()
-parser$add_argument("--lib_db_list", required = TRUE)
-parser$add_argument("--lib_id_list", required = TRUE)
-parser$add_argument("--treatment_list", required = TRUE)
-parser$add_argument("--cores", required = TRUE)
-parser$add_argument("--out_dir", required = TRUE)
-parser$add_argument("--suffix", required = TRUE)
-
-args <- parser$parse_args()
-
-lib_db_list <- unlist(strsplit(args$lib_db_list, " "))
-lib_id_list <- unlist(strsplit(args$lib_id_list, " "))
-treatment_list <- as.numeric(unlist(strsplit(args$treatment_list, " ")))
-
-stopifnot(length(lib_db_list) == length(lib_id_list),
-          length(lib_id_list) == length(treatment_list))
-
-# --- Read methylation databases ---
-merged_obj <- methRead(
-  location = as.list(lib_db_list),
-  sample.id = as.list(lib_id_list),
-  treatment = treatment_list,
-  context = "CpG",
-  assembly = "hg38",
-  dbtype = "tabix",
-  mincov = 2
-)
-
-# --- Unite ---
-meth <- unite(merged_obj,
-              destrand = FALSE,
-              chunk.size = 1e9,
-              mc.cores = as.numeric(args$cores),
-              save.db = TRUE,
-              suffix = args$suffix,
-              dbdir = args$out_dir)
-
-# --- Diff methylation ---
-diff <- calculateDiffMeth(meth,
-                          mc.cores = as.numeric(args$cores),
-                          chunk.size = 1e9,
-                          save.db = TRUE,
-                          dbdir = args$out_dir)
-
-library(argparse)
-library(methylKit)
-
-# --- Argument Parsing ---
-parser <- ArgumentParser()
-parser$add_argument("--lib_db_list", required = TRUE)
-parser$add_argument("--lib_id_list", required = TRUE)
-parser$add_argument("--treatment_list", required = TRUE)
-parser$add_argument("--cores", required = TRUE)
-parser$add_argument("--out_dir", required = TRUE)
-parser$add_argument("--suffix", required = TRUE)
-
-args <- parser$parse_args()
-
-lib_db_list <- unlist(strsplit(args$lib_db_list, " "))
-lib_id_list <- unlist(strsplit(args$lib_id_list, " "))
-treatment_list <- as.numeric(unlist(strsplit(args$treatment_list, " ")))
-
-stopifnot(length(lib_db_list) == length(lib_id_list),
-          length(lib_id_list) == length(treatment_list))
-
-# --- Read methylation databases ---
-merged_obj <- methRead(
-  location = as.list(lib_db_list),
-  sample.id = as.list(lib_id_list),
-  treatment = treatment_list,
-  context = "CpG",
-  assembly = "hg38",
-  dbtype = "tabix",
-  mincov = 10
-)
-
-# --- Unite ---
-meth <- unite(merged_obj,
-              destrand = FALSE,
-              chunk.size = 1e9,
-              mc.cores = as.numeric(args$cores),
-              save.db = TRUE,
-              min.per.group = 1,
-              suffix = args$suffix,
-              dbdir = args$out_dir)
-
-# --- Diff methylation ---
-diff <- calculateDiffMeth(meth,
-                          mc.cores = as.numeric(args$cores),
-                          chunk.size = 1e9,
-                          save.db = TRUE,
-                          dbdir = args$out_dir)
+diff_path <- file.path(args$out_dir, sprintf("methylDiff_%s.txt.bgz", args$suffix))
+message("Done. methylDiff: ", diff_path)

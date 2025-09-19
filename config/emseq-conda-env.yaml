@@ -6,6 +6,7 @@ channels:
 dependencies:
   - fastp
   - fastqc
+  - bedtools
   - samtools
   - bioconductor-genomeinfodbdata=1.2.7
   - biscuit=1.6.0.20241216=*_1
@@ -15,6 +16,7 @@ dependencies:
   - bwameth
   - methyldackel
   - mosdepth
+  - multiqc
   - r-argparse
   - r-data.table
   - r-ggplot2

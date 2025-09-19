@@ -56,7 +56,7 @@ parse_args() {
 
     declare -g out_prefix="mosdepth_${user_prefix}"  # Final output prefix
     declare -g out_path="${out_dir%/}/${out_prefix}" # Full path to output base
-    declare -g quant_str="0:$(echo "$quant_levels" | tr ',' ':')"
+    declare -g quant_str="0:${quant_levels/,/:}"    # Convert to colon-delimited format
 }
 
 run_mosdepth() {
@@ -79,3 +79,4 @@ run_mosdepth() {
 }
 
 main "$@"
+# (can be just a trailing newline)

@@ -365,6 +365,80 @@ Mon Jun  9 09:24:27 AM CDT 2025
 To github.com:jeszyman/emseq.git
    4862c0c..6ded313  master -> master
 **** first test
+#+begin_src yaml :tangle ./.github/workflows/smk-dry.yaml
+name: ci-snakemake
+
+on:
+  pull_request:
+    paths:
+      - "workflows/**"
+      - "config/**"
+      - "scripts/**"
+      - "tools/**"
+      - ".github/workflows/ci-snakemake.yml"
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-snakemake-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fail fast if your env YAML moved
+      - name: Verify env files
+        run: |
+          set -euo pipefail
+          test -f config/emseq-conda-env.yaml
+          test -f tools/get_test_data.sh
+
+      # Build your emseq env exactly as in repo
+      - name: Setup Conda (Miniforge) from repo env
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-variant: Miniforge3
+          auto-activate-base: false
+          use-mamba: true
+          environment-file: config/emseq-conda-env.yaml
+
+      # Snakemake usually isn't in your lab env; add it there for CI
+      - name: Install snakemake into emseq
+        run: mamba install -n emseq -y snakemake-minimal=7.32.4
+
+      # Tiny fixtures (same as local)
+      - name: Get test data
+        run: |
+          chmod +x tools/get_test_data.sh
+          conda run -n emseq ./tools/get_test_data.sh
+
+      # Dry-run the DAG (fast). Set a fixed concurrency to avoid needing yq.
+      - name: Snakemake dry-run
+        run: |
+          conda run -n emseq snakemake \
+            -s workflows/test.smk \
+            --configfile config/test.yaml \
+            --cores 4 \
+            --dry-run \
+            --printshellcmds \
+            --rerun-incomplete \
+            --conda-frontend conda \
+            --resources concurrency=50
+
+      # Optional: show what would run
+      - name: Summary
+        run: conda run -n emseq snakemake -s workflows/test.smk --summary --cores 1 --dry-run
+
+#+end_src
+
 #+begin_src yaml :tangle ./.github/workflows/test-data.yml
 name: test-data
 
@@ -487,18 +561,6 @@ Current stable version tested with minimal in-repo example is tagged emseq.v3.0.
   - Many small fixes for consistent naming and run condition optimization
 - [2025-09-18 Thu] Updated EM-seq main pipeline to wf/emseq/v2.0.0. Mainly improved and simplified variable naming.
 ** Conda environmental YAMLs
-*** Test data
-#+begin_src yaml :tangle ./config/testdata-conda-env.yaml
-name: testdata
-channels:
-  - conda-forge
-  - bioconda
-
-dependencies:
-  - seqtk
-
-#+end_src
-
 *** EM-seq
 #+begin_src yaml :tangle ./config/emseq-conda-env.yaml
 name: emseq
@@ -529,6 +591,7 @@ dependencies:
   - dupsifter=1.3.0.20241113
   - libdeflate=1.22
   - bedtools
+  - snakemake
 #+end_src
 *** MethylKit
 #+begin_src yaml :tangle ./config/methylkit-conda-env.yaml
@@ -569,20 +632,6 @@ dependencies:
   - r-patchwork
   - r-matrixstats
   - r-r.utils
-#+end_src
-
-*** bwa-meth
-#+begin_src yaml :tangle ./config/bwa-meth-env.yaml
-name: bwa_mem
-channels:
-  - conda-forge
-  - bioconda
-
-dependencies:
-  - samtools
-  - bwa
-  - bwameth
-  - methyldackel
 #+end_src
 
 ** Input data model

@@ -1,0 +1,70 @@
+name: ci-snakemake
+
+on:
+  pull_request:
+    paths:
+      - "workflows/**"
+      - "config/**"
+      - "scripts/**"
+      - "tools/**"
+      - ".github/workflows/ci-snakemake.yml"
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-snakemake-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fail fast if your env YAML moved
+      - name: Verify env files
+        run: |
+          set -euo pipefail
+          test -f config/emseq-conda-env.yaml
+          test -f tools/get_test_data.sh
+
+      # Build your emseq env exactly as in repo
+      - name: Setup Conda (Miniforge) from repo env
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          miniforge-variant: Miniforge3
+          auto-activate-base: false
+          use-mamba: true
+          environment-file: config/emseq-conda-env.yaml
+
+      # Snakemake usually isn't in your lab env; add it there for CI
+      - name: Install snakemake into emseq
+        run: mamba install -n emseq -y snakemake-minimal=7.32.4
+
+      # Tiny fixtures (same as local)
+      - name: Get test data
+        run: |
+          chmod +x tools/get_test_data.sh
+          conda run -n emseq ./tools/get_test_data.sh
+
+      # Dry-run the DAG (fast). Set a fixed concurrency to avoid needing yq.
+      - name: Snakemake dry-run
+        run: |
+          conda run -n emseq snakemake \
+            -s workflows/test.smk \
+            --configfile config/test.yaml \
+            --cores 4 \
+            --dry-run \
+            --printshellcmds \
+            --rerun-incomplete \
+            --conda-frontend conda \
+            --resources concurrency=50
+
+      # Optional: show what would run
+      - name: Summary
+        run: conda run -n emseq snakemake -s workflows/test.smk --summary --cores 1 --dry-run

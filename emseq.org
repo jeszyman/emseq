@@ -366,25 +366,6 @@ To github.com:jeszyman/emseq.git
    4862c0c..6ded313  master -> master
 **** first test
 #+begin_src yaml :tangle ./.github/workflows/test-data.yml
-name: test-data
-
-on:
-  pull_request:
-    paths:
-      - "tools/get_test_data.sh"
-      - "tests/**"
-      - ".github/workflows/test-data.yml"
-  schedule:
-    - cron: "0 4 * * 1"   # Mondays 04:00 UTC
-  workflow_dispatch:
-
-concurrency:
-  group: test-data-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  contents: read
-
 jobs:
   run:
     name: Run get_test_data.sh and verify outputs
@@ -392,6 +373,16 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+
+      - name: Set up micromamba with samtools
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: test-env
+          create-args: >-
+            samtools=1.20
+            htslib=1.20
+          cache-environment: true
+          cache-downloads: true
 
       - name: Cache test data (optional)
         id: cache-testdata
@@ -404,10 +395,9 @@ jobs:
         run: chmod +x tools/get_test_data.sh
 
       - name: Execute script
-        run: ./tools/get_test_data.sh
+        run: micromamba run -n test-env ./tools/get_test_data.sh
 
       - name: Sanity checks
-        shell: bash
         run: |
           set -euo pipefail
           test -d tests/full || (echo "tests/full not created" >&2; exit 1)

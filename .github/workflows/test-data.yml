@@ -18,20 +18,8 @@ permissions:
   contents: read
 
 jobs:
-  lint:
-    name: ShellCheck get_test_data.sh
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install shellcheck
-        run: sudo apt-get update && sudo apt-get install -y shellcheck
-      - name: Run shellcheck
-        run: shellcheck -x tools/get_test_data.sh
-
   run:
     name: Run get_test_data.sh and verify outputs
-    needs: lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

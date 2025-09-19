@@ -409,6 +409,7 @@ jobs:
           auto-activate-base: false
           use-mamba: true
           environment-file: config/emseq-conda-env.yaml
+          activate-environment: emseq  # Add this line!
 
       # Optional cache for generated fixtures
       - name: Cache test data (optional)

@@ -374,8 +374,9 @@ on:
       - "tools/get_test_data.sh"
       - "tests/**"
       - ".github/workflows/test-data.yml"
+      - "config/emseq-conda-env.yaml"
   schedule:
-    - cron: "0 4 * * 1"   # Mondays 04:00 UTC
+    - cron: "0 4 * * 1"
   workflow_dispatch: {}
 
 concurrency:
@@ -389,22 +390,34 @@ jobs:
   run:
     name: Run get_test_data.sh and verify outputs
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
+      # Prove the file is where we think it is (fail early if not).
+      - name: Verify env file exists
+        run: |
+          set -euo pipefail
+          ls -lah
+          ls -lah config || true
+          test -f config/emseq-conda-env.yaml || { echo "Missing: config/emseq-conda-env.yaml"; exit 1; }
+          sed -n '1,60p' config/emseq-conda-env.yaml
 
-      # Build the same env you use locally (adjust path if needed)
-      - name: Setup Conda (Mambaforge) with repo env
-        uses: conda-incubator/setup-miniconda@v2
+      # Build env from your YAML (fast + cached)
+      - name: Setup micromamba from repo env
+        uses: mamba-org/setup-micromamba@v2
         with:
-          miniforge-variant: Miniforge3
-          auto-activate-base: false
-          use-mamba: true
-          activate-environment: emseq
           environment-file: config/emseq-conda-env.yaml
+          environment-name: emseq
+          cache-environment: true
+          cache-downloads: true
+          condarc: |
+            channel_priority: strict
+            channels:
+              - conda-forge
+              - bioconda
 
-      # Optional: cache generated fixtures to speed reruns
+      # Optional cache for generated fixtures
       - name: Cache test data (optional)
         id: cache-testdata
         uses: actions/cache@v4
@@ -415,13 +428,10 @@ jobs:
       - name: Make script executable
         run: chmod +x tools/get_test_data.sh
 
-      # NOTE: shell: bash -l logs into the conda-enabled shell so env is active
       - name: Execute script
-        shell: bash -l {0}
-        run: ./tools/get_test_data.sh
+        run: micromamba run -n emseq ./tools/get_test_data.sh
 
       - name: Sanity checks
-        shell: bash -l {0}
         run: |
           set -euo pipefail
           test -d tests/full || (echo "tests/full not created" >&2; exit 1)

@@ -364,6 +364,88 @@ Mon Jun  9 09:24:27 AM CDT 2025
  2 files changed, 2 insertions(+), 2 deletions(-)
 To github.com:jeszyman/emseq.git
    4862c0c..6ded313  master -> master
+**** first test
+#+begin_src yaml :tangle ./.github/workflows/test-data.yml
+name: test-data
+
+on:
+  pull_request:
+    paths:
+      - "tools/get_test_data.sh"
+      - "tests/**"
+      - ".github/workflows/test-data.yml"
+  schedule:
+    - cron: "0 4 * * 1"   # Mondays 04:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: test-data-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: ShellCheck get_test_data.sh
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Run shellcheck
+        run: shellcheck -x tools/get_test_data.sh
+
+  run:
+    name: Run get_test_data.sh and verify outputs
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache test data (optional)
+        id: cache-testdata
+        uses: actions/cache@v4
+        with:
+          path: tests/full
+          key: testdata-${{ hashFiles('tools/get_test_data.sh') }}
+
+      - name: Make script executable
+        run: chmod +x tools/get_test_data.sh
+
+      - name: Execute script
+        run: ./tools/get_test_data.sh
+
+      - name: Sanity checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d tests/full || (echo "tests/full not created" >&2; exit 1)
+
+          # Expect ≥4 tiny paired FASTQs
+          fq_count=$(find tests/full -type f -name "*fastq.gz" | wc -l)
+          if (( fq_count < 4 )); then
+            echo "Expected ≥4 FASTQs, found ${fq_count}" >&2
+            find tests/full -maxdepth 3 -type f -print
+            exit 1
+          fi
+
+          # Expect at least one reference FASTA (chr22/lambda/pUC19)
+          fasta_count=$(find tests/full \
+            -type f \( -name "*chr22*.fa*" -o -name "*lambda*.fa*" -o -name "*pUC19*.fa*" \) \
+            | wc -l)
+          if (( fasta_count < 1 )); then
+            echo "Expected ≥1 reference FASTA (chr22/lambda/pUC19); none found" >&2
+            find tests/full -maxdepth 3 -type f -print
+            exit 1
+          fi
+
+          echo "OK: test data present."
+
+#+end_src
+
 *** README
 :PROPERTIES:
 :ID:       bda70cff-0713-4e32-8da1-ee83924b8f00
@@ -383,6 +465,9 @@ Current stable version tested with minimal in-repo example is tagged emseq.v3.0.
 
 **** Prerequisites
 **** Change Log
+- Dev
+  - [2025-09-19 Fri] Added a first github workflow test
+  - [2025-09-19 Fri] Robust annotation of methylkit outputs validated as rscript
 - [2025-09-19 Fri] Updated EM-seq main pipeline to wf/emseq/v3.0.0.
   - Includes in-repo small test data for a complete run of emseq.smk
   - Includes test.smk wrapper and corresponding test.yaml for in-repo small test run
@@ -443,7 +528,13 @@ dependencies:
   - r-argparse
   - bioconductor-methylkit
   - r-data.table=1.15.4
-
+  - r-tidyverse
+  - bioconductor-genomicranges
+  - bioconductor-annotatr
+  - bioconductor-txdb.hsapiens.ucsc.hg38.knowngene
+  - bioconductor-org.hs.eg.db
+  - bioconductor-genomation
+  - r-arrow
 #+end_src
 *** Mosdepth
 #+begin_src yaml :tangle ./config/mosdepth-conda-env.yaml
@@ -5176,45 +5267,776 @@ for (i in seq_along(pages)) {
 }
 dev.off()
 #+end_src
-*** Methylkit
+*** Methylkit output annotation
 https:/www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/methylKit.html
 - get nearest TSS
 - get region annotation
 
-#+begin_src snakemake :tangle no
-rule make_methylkit_diff_db:
-    input:
-        mkit_lib_db = lambda wildcards: expand(
-            f"{data_dir}/analysis/emseq/meth/{{library_id}}.{{ref_name}}.{{align_method}}.{{meth_caller}}.txt.bgz",
-            library_id = meth_map[wildcards.experiment]['libs'],
-            ref_name = meth_map[wildcards.experiment]['ref_name'],
-            align_method = meth_map[wildcards.experiment]['align_method'],
-            meth_caller = meth_map[wildcards.experiment]['meth_caller']),
-    log:
-        f"{config['log-dir']}/{{experiment}}.{{ref_name}}.{{align_method}}.{{meth_caller}}_make_methylkit_diff_db.log",
-    output:
-        unite = f"{emseq_dir}/diff/methylBase_{{experiment}}.txt.bgz",
-        diff = f"{emseq_dir}/diff/methylDiff_{{experiment}}.txt.bgz",
-    params:
-        library_id = lambda wildcards: " ".join(meth_map[wildcards.experiment]['libs']),
-        treatment_list = lambda wildcards: meth_map[wildcards.experiment]['tx'],
-        mincov = lambda wildcards: meth_map[wildcards.experiment]['mincov'],
-        assembly = lambda wildcards: meth_map[wildcards.experiment]['assembly'],
-        out_dir = f"{emseq_dir}/diff",
-        script = f"{config['emseq-script-dir']}/make_methylkit_diff_db.R",
-    shell:
-        """
-        Rscript {params.script} \
-        --lib_db_list "{input.mkit_lib_db}" \
-        --lib_id_list "{params.library_id}" \
-        --treatment_list "{params.treatment_list}" \
-        --cores 32 \
-        --out_dir {params.out_dir} \
-        --suffix {wildcards.experiment} > {log} 2>&1
-        """
+
+#+begin_src R
+## --- deps ---
+library(methylKit)
+library(GenomicRanges)
+library(dplyr)
+library(tidyr)
+
+# CpG context
+library(annotatr)
+
+# Gene parts + TSS
+library(genomation)  # (for distanceToNearest helper; also loads GenomicRanges)
+library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+library(GenomeInfoDb)
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+
+## --- 0) load methylKit base-resolution object ---
+# md should be methylBase/methylBaseDB at base resolution (not tiles)
+md <- methylKit:::readMethylDB(
+  "~/repos/emseq/tests/full/emseq/dmr/diff/methylDiff_test.txt.bgz"
+)
+
+gr <- as(md, "GRanges")
+mcols(gr)$qid <- seq_along(gr)   # stable key per CpG
+
+## --- 1) CpG context flags: island / shore / shelf / inter (open sea) ---
+ann_cpg <- build_annotations(genome = "hg38", annotations = "hg38_cpgs")
+
+a <- annotate_regions(gr, ann_cpg, ignore.strand = TRUE, quiet = TRUE) |>
+  as_tibble() |>
+  transmute(
+    q_chr   = as.character(seqnames),
+    q_start = start,
+    q_end   = end,
+    type    = annot.type
+  )
+
+keys <- tibble(
+  q_chr   = as.character(GenomicRanges::seqnames(gr)),
+  q_start = GenomicRanges::start(gr),
+  q_end   = GenomicRanges::end(gr),
+  qid     = mcols(gr)$qid
+)
+
+cpg_flags <- a |>
+  right_join(keys, by = c("q_chr","q_start","q_end")) |>
+  group_by(qid) |>
+  summarize(
+    is_island  = any(type == "hg38_cpg_islands",  na.rm = TRUE),
+    is_shore   = any(type == "hg38_cpg_shores",   na.rm = TRUE),
+    is_shelf   = any(type == "hg38_cpg_shelves",  na.rm = TRUE),
+    is_opensea = any(type == "hg38_cpg_inter",    na.rm = TRUE),
+    .groups = "drop"
+  )
+
+## --- 2) Gene parts + nearest TSS (strand-aware) ---
+txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
+
+ex    <- exons(txdb)
+intr  <- unlist(intronsByTranscript(txdb), use.names = FALSE)
+utr5  <- unlist(fiveUTRsByTranscript(txdb), use.names = FALSE)
+utr3  <- unlist(threeUTRsByTranscript(txdb), use.names = FALSE)
+prom  <- promoters(txdb, upstream = 2000, downstream = 500)  # tweak widths
+tsspt <- promoters(txdb, upstream = 0,    downstream = 1)    # 1bp TSS
+
+# harmonize naming; drop to seqlevels present in gr
+for (x in list(ex,intr,utr5,utr3,prom,tsspt)) seqlevelsStyle(x) <- seqlevelsStyle(gr)
+ex    <- keepStandardChromosomes(ex,   pruning.mode = "coarse")
+intr  <- keepStandardChromosomes(intr, pruning.mode = "coarse")
+utr5  <- keepStandardChromosomes(utr5, pruning.mode = "coarse")
+utr3  <- keepStandardChromosomes(utr3, pruning.mode = "coarse")
+prom  <- keepStandardChromosomes(prom, pruning.mode = "coarse")
+tsspt <- keepStandardChromosomes(tsspt, pruning.mode = "coarse")
+
+wanted <- intersect(seqlevels(gr), seqlevels(ex))
+ex    <- keepSeqlevels(ex,    wanted, pruning.mode = "coarse")
+intr  <- keepSeqlevels(intr,  wanted, pruning.mode = "coarse")
+utr5  <- keepSeqlevels(utr5,  wanted, pruning.mode = "coarse")
+utr3  <- keepSeqlevels(utr3,  wanted, pruning.mode = "coarse")
+prom  <- keepSeqlevels(prom,  wanted, pruning.mode = "coarse")
+tsspt <- keepSeqlevels(tsspt, wanted, pruning.mode = "coarse")
+
+# per-CpG flags
+is_prom   <- countOverlaps(gr, prom) > 0
+is_exon   <- countOverlaps(gr, ex)   > 0
+is_intron <- countOverlaps(gr, intr) > 0
+is_5utr   <- countOverlaps(gr, utr5) > 0
+is_3utr   <- countOverlaps(gr, utr3) > 0
+
+gene_part_primary <- ifelse(is_prom,  "promoter",
+                       ifelse(is_exon,  "exon",
+                       ifelse(is_intron,"intron",
+                       ifelse(is_5utr,  "5UTR",
+                       ifelse(is_3utr,  "3UTR", "intergenic")))))
+
+# nearest TSS distance + symbol
+nn <- distanceToNearest(gr, tsspt, ignore.strand = FALSE)
+dist_tbl <- tibble(
+  qid         = mcols(gr)$qid[queryHits(nn)],
+  dist_to_TSS = mcols(nn)$distance,
+  tss_idx     = subjectHits(nn)
+)
+
+# map TSS to gene symbols (TxDb uses Entrez gene_id)
+gs <- genes(txdb); gs <- keepSeqlevels(gs, wanted, pruning.mode = "coarse")
+sub_hits <- findOverlaps(tsspt[unique(dist_tbl$tss_idx)], gs, select = "first")
+entrez   <- mcols(gs)$gene_id[sub_hits]
+sym_map  <- AnnotationDbi::select(org.Hs.eg.db,
+                                  keys = unique(na.omit(entrez)),
+                                  keytype = "ENTREZID", columns = "SYMBOL")
+sym_lut  <- setNames(sym_map$SYMBOL, sym_map$ENTREZID)
+nearest_symbol <- unname(sym_lut[entrez])
+
+tss_key <- tibble(
+  tss_idx = unique(dist_tbl$tss_idx),
+  nearest_gene_symbol = nearest_symbol
+)
+
+dist_tbl <- dist_tbl |>
+  left_join(tss_key, by = "tss_idx") |>
+  dplyr::select(-tss_idx)
+
+gene_flags <- tibble(
+  qid = mcols(gr)$qid,
+  is_promoter = is_prom,
+  is_exon     = is_exon,
+  is_intron   = is_intron,
+  is_5utr     = is_5utr,
+  is_3utr     = is_3utr,
+  gene_part_primary = gene_part_primary
+) |>
+  left_join(dist_tbl, by = "qid")
+
+## --- 3) Final one-row-per-CpG table (no writing yet) ---
+out <- as_tibble(getData(md)) |>
+  mutate(qid = row_number()) |>
+  left_join(cpg_flags,  by = "qid") |>
+  left_join(gene_flags, by = "qid")
+
+out
 #+end_src
 
+#+begin_src R
+# ------- inputs: mb_base (base-resolution methylBase/DB for cohort) -------
+library(methylKit)
+library(GenomicRanges)
+library(annotatr)
+library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+library(GenomeInfoDb)
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+library(dplyr)
+library(arrow)  # or fst/feather
 
+# 1) cohort CpG set from mb_base
+dt <- as.data.frame(getData(mb_base))      # chr,start,end,strand, counts...
+gr <- GRanges(dt$chr, IRanges(dt$start, dt$end), strand = dt$strand)
+cpg_id <- paste(dt$chr, dt$start, sep=":")
+
+# 2) CpG-context flags via annotatr (island/shore/shelf/inter)
+ann_cpg <- build_annotations(genome="hg38", annotations="hg38_cpgs")
+a <- annotate_regions(gr, ann_cpg, ignore.strand=TRUE, quiet=TRUE) |>
+     as_tibble() |>
+     transmute(q_chr=as.character(seqnames), q_start=start, type=annot.type)
+keys <- tibble(q_chr=as.character(seqnames(gr)), q_start=start(gr), qid=seq_along(gr))
+cpg_ctx <- a |>
+  right_join(keys, by=c("q_chr","q_start")) |>
+  group_by(qid) |>
+  summarise(
+    is_island  = any(type=="hg38_cpg_islands"),
+    is_shore   = any(type=="hg38_cpg_shores"),
+    is_shelf   = any(type=="hg38_cpg_shelves"),
+    is_opensea = any(type=="hg38_cpg_inter"),
+    .groups="drop"
+  )
+
+# 3) Gene parts + TSS (strand-aware) via TxDb
+txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
+ex    <- keepStandardChromosomes(exons(txdb),   pruning.mode="coarse")
+intr  <- keepStandardChromosomes(unlist(intronsByTranscript(txdb), use.names=FALSE), pruning.mode="coarse")
+utr5  <- keepStandardChromosomes(unlist(fiveUTRsByTranscript(txdb), use.names=FALSE), pruning.mode="coarse")
+utr3  <- keepStandardChromosomes(unlist(threeUTRsByTranscript(txdb), use.names=FALSE), pruning.mode="coarse")
+prom  <- keepStandardChromosomes(promoters(txdb, 2000, 500), pruning.mode="coarse")
+tsspt <- keepStandardChromosomes(promoters(txdb, 0, 1), pruning.mode="coarse")
+for (x in list(ex,intr,utr5,utr3,prom,tsspt)) seqlevelsStyle(x) <- seqlevelsStyle(gr)
+wanted <- intersect(seqlevels(gr), seqlevels(ex))
+ex<-keepSeqlevels(ex,wanted,pruning.mode="coarse"); intr<-keepSeqlevels(intr,wanted,"coarse")
+utr5<-keepSeqlevels(utr5,wanted,"coarse"); utr3<-keepSeqlevels(utr3,wanted,"coarse")
+prom<-keepSeqlevels(prom,wanted,"coarse"); tsspt<-keepSeqlevels(tsspt,wanted,"coarse")
+
+is_prom   <- countOverlaps(gr, prom) > 0
+is_exon   <- countOverlaps(gr, ex)   > 0
+is_intron <- countOverlaps(gr, intr) > 0
+is_5utr   <- countOverlaps(gr, utr5) > 0
+is_3utr   <- countOverlaps(gr, utr3) > 0
+gene_primary <- ifelse(is_prom,"promoter",
+                  ifelse(is_exon,"exon",
+                  ifelse(is_intron,"intron",
+                  ifelse(is_5utr,"5UTR",
+                  ifelse(is_3utr,"3UTR","intergenic")))))
+
+nn <- distanceToNearest(gr, tsspt, ignore.strand=FALSE)
+dist_tbl <- tibble(qid = queryHits(nn), dist_to_TSS = mcols(nn)$distance, tss_idx = subjectHits(nn))
+gs <- genes(txdb); gs <- keepSeqlevels(gs, wanted, pruning.mode="coarse")
+map <- findOverlaps(tsspt[unique(dist_tbl$tss_idx)], gs, select="first")
+entrez <- mcols(gs)$gene_id[map]
+sym <- AnnotationDbi::select(org.Hs.eg.db, keys=unique(na.omit(entrez)),
+                             keytype="ENTREZID", columns="SYMBOL")
+sym_lut <- setNames(sym$SYMBOL, sym$ENTREZID)
+tss_key <- tibble(tss_idx = unique(dist_tbl$tss_idx),
+                  nearest_gene_symbol = unname(sym_lut[entrez]))
+dist_tbl <- left_join(dist_tbl, tss_key, by="tss_idx") |> select(-tss_idx)
+
+gene_flags <- tibble(
+  qid = seq_along(gr),
+  is_promoter = is_prom, is_exon = is_exon, is_intron = is_intron,
+  is_5utr = is_5utr, is_3utr = is_3utr,
+  gene_part_primary = gene_primary
+) |>
+  left_join(dist_tbl, by="qid")
+
+# 4) Persist CpG annotation keyed by cpg_id (chr:start)
+cpg_anno <- tibble(
+  cpg_id = cpg_id
+) |>
+  mutate(qid = row_number()) |>
+  left_join(cpg_ctx,  by="qid") |>
+  left_join(gene_flags, by="qid") |>
+  dplyr::select(-qid)
+
+write_parquet(cpg_anno, "/tmp/cpg_annotation_hg38.parquet")   # <— reuse for every diff file
+
+#+end_src
+
+#+begin_src R :tangle /tmp/test.R
+#!/usr/bin/env Rscript
+
+suppressPackageStartupMessages({
+  library(argparse)
+  library(methylKit)
+  library(GenomicRanges)
+  library(GenomeInfoDb)
+  library(dplyr)
+  library(tidyr)
+  library(annotatr)
+  library(genomation)
+  library(TxDb.Hsapiens.UCSC.hg38.knownGene)
+  library(AnnotationDbi)
+  library(org.Hs.eg.db)
+})
+
+## --- 1) CLI arguments ---
+parser <- ArgumentParser(description = "Annotate base-resolution methylKit objects with CpG context, gene parts, and TSS info")
+
+parser$add_argument("--db", required = TRUE,
+  help = "Path to methylKit base-resolution DB file (.txt.bgz)")
+parser$add_argument("--prom-up", type = "integer", default = 2000,
+  help = "Promoter upstream bp [default: 2000]")
+parser$add_argument("--prom-dn", type = "integer", default = 500,
+  help = "Promoter downstream bp [default: 500]")
+parser$add_argument("--with-symbols", action = "store_true",
+  help = "Also map nearest TSS to HGNC gene symbol")
+parser$add_argument("--out", required = TRUE,
+  help = "Output TSV with annotations")
+
+args <- parser$parse_args()
+
+## --- 2) Load methylKit DB ---
+md <- methylKit:::readMethylDB(args$db)
+
+gr <- as(md, "GRanges")
+mcols(gr)$qid <- seq_along(gr)
+
+## --- 3) CpG context (island/shore/shelf/opensea) ---
+ann_cpg <- build_annotations(genome = "hg38", annotations = "hg38_cpgs")
+
+a <- annotate_regions(gr, ann_cpg, ignore.strand = TRUE, quiet = TRUE) %>%
+  as_tibble() %>%
+  transmute(
+    q_chr   = as.character(seqnames),
+    q_start = start,
+    q_end   = end,
+    type    = annot.type
+  )
+
+keys <- tibble(
+  q_chr   = as.character(seqnames(gr)),
+  q_start = start(gr),
+  q_end   = end(gr),
+  qid     = mcols(gr)$qid
+)
+
+cpg_flags <- a %>%
+  right_join(keys, by = c("q_chr","q_start","q_end")) %>%
+  group_by(qid) %>%
+  summarise(
+    is_island  = any(type == "hg38_cpg_islands",  na.rm = TRUE),
+    is_shore   = any(type == "hg38_cpg_shores",   na.rm = TRUE),
+    is_shelf   = any(type == "hg38_cpg_shelves",  na.rm = TRUE),
+    is_opensea = any(type == "hg38_cpg_inter",    na.rm = TRUE),
+    .groups = "drop"
+  )
+
+## --- 4) Gene parts + nearest TSS ---
+txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
+
+ex    <- exons(txdb)
+intr  <- unlist(intronsByTranscript(txdb), use.names = FALSE)
+utr5  <- unlist(fiveUTRsByTranscript(txdb),  use.names = FALSE)
+utr3  <- unlist(threeUTRsByTranscript(txdb), use.names = FALSE)
+prom  <- promoters(txdb, upstream = args$prom_up, downstream = args$prom_dn)
+tsspt <- promoters(txdb, upstream = 0, downstream = 1)
+
+for (x in list(ex,intr,utr5,utr3,prom,tsspt)) seqlevelsStyle(x) <- seqlevelsStyle(gr)
+ex    <- keepStandardChromosomes(ex,   pruning.mode = "coarse")
+intr  <- keepStandardChromosomes(intr, pruning.mode = "coarse")
+utr5  <- keepStandardChromosomes(utr5, pruning.mode = "coarse")
+utr3  <- keepStandardChromosomes(utr3, pruning.mode = "coarse")
+prom  <- keepStandardChromosomes(prom, pruning.mode = "coarse")
+tsspt <- keepStandardChromosomes(tsspt, pruning.mode = "coarse")
+
+wanted <- intersect(seqlevels(gr), seqlevels(ex))
+ex    <- keepSeqlevels(ex,    wanted, pruning.mode = "coarse")
+intr  <- keepSeqlevels(intr,  wanted, pruning.mode = "coarse")
+utr5  <- keepSeqlevels(utr5,  wanted, pruning.mode = "coarse")
+utr3  <- keepSeqlevels(utr3,  wanted, pruning.mode = "coarse")
+prom  <- keepSeqlevels(prom,  wanted, pruning.mode = "coarse")
+tsspt <- keepSeqlevels(tsspt, wanted, pruning.mode = "coarse")
+
+is_prom   <- countOverlaps(gr, prom) > 0
+is_exon   <- countOverlaps(gr, ex)   > 0
+is_intron <- countOverlaps(gr, intr) > 0
+is_5utr   <- countOverlaps(gr, utr5) > 0
+is_3utr   <- countOverlaps(gr, utr3) > 0
+
+gene_part_primary <- ifelse(is_prom,  "promoter",
+                        ifelse(is_exon,  "exon",
+                        ifelse(is_intron,"intron",
+                        ifelse(is_5utr,  "5UTR",
+                        ifelse(is_3utr,  "3UTR", "intergenic")))))
+
+nn <- distanceToNearest(gr, tsspt, ignore.strand = FALSE)
+dist_tbl <- tibble(
+  qid         = mcols(gr)$qid[queryHits(nn)],
+  dist_to_TSS = mcols(nn)$distance,
+  tss_idx     = subjectHits(nn)
+)
+
+if (args$with_symbols) {
+  gs <- genes(txdb) %>% keepSeqlevels(wanted, pruning.mode = "coarse")
+  sub_hits <- findOverlaps(tsspt[unique(dist_tbl$tss_idx)], gs, select = "first")
+  entrez   <- mcols(gs)$gene_id[sub_hits]
+  sym_map  <- AnnotationDbi::select(org.Hs.eg.db,
+                                    keys = unique(na.omit(entrez)),
+                                    keytype = "ENTREZID", columns = "SYMBOL")
+  sym_lut  <- setNames(sym_map$SYMBOL, sym_map$ENTREZID)
+  nearest_symbol <- unname(sym_lut[entrez])
+
+  tss_key <- tibble(
+    tss_idx = unique(dist_tbl$tss_idx),
+    nearest_gene_symbol = nearest_symbol
+  )
+
+  dist_tbl <- dist_tbl %>%
+    left_join(tss_key, by = "tss_idx") %>%
+    dplyr::select(-tss_idx)
+} else {
+  dist_tbl <- dist_tbl %>%
+    dplyr::select(-tss_idx)
+}
+
+gene_flags <- tibble(
+  qid = mcols(gr)$qid,
+  is_promoter = is_prom,
+  is_exon     = is_exon,
+  is_intron   = is_intron,
+  is_5utr     = is_5utr,
+  is_3utr     = is_3utr,
+  gene_part_primary = gene_part_primary
+) %>%
+  left_join(dist_tbl, by = "qid")
+
+## --- 5) Assemble and write output ---
+out <- as_tibble(getData(md)) %>%
+  mutate(qid = dplyr::row_number()) %>%
+  left_join(cpg_flags,  by = "qid") %>%
+  left_join(gene_flags, by = "qid") %>%
+  dplyr::select(
+    chr, start, end, strand,
+    qid,
+    dplyr::starts_with("is_"),
+    gene_part_primary,
+    dist_to_TSS,
+    dplyr::everything()
+  )
+
+readr::write_tsv(out, args$out)
+
+#+end_src
+
+#+begin_src R :tangle /tmp/test.R
+#!/usr/bin/env Rscript
+
+suppressPackageStartupMessages({
+  library(argparse)
+  library(methylKit)
+  library(GenomicRanges)
+  library(GenomeInfoDb)
+  library(dplyr)
+  library(tidyr)
+  library(annotatr)                               # CpG context (hg38_cpgs)
+  library(genomation)                             # distanceToNearest()
+  library(TxDb.Hsapiens.UCSC.hg38.knownGene)      # promoters/exons/introns/UTRs/TSS
+  library(AnnotationDbi)
+  library(org.Hs.eg.db)                           # ENTREZ↔SYMBOL/ENSEMBL
+  library(readr)
+})
+
+# ----------------------------- CLI -----------------------------
+parser <- ArgumentParser(
+  description = "Annotate base-resolution methylKit DB with CpG context, gene parts, and TSS info"
+)
+parser$add_argument("--db", required = TRUE,
+  help = "Path to methylKit tabix DB (.txt.bgz) for base-resolution or methylDiff")
+parser$add_argument("--prom-up", type = "integer", default = 2000,
+  help = "Promoter upstream bp [default: 2000]")
+parser$add_argument("--prom-dn", type = "integer", default = 500,
+  help = "Promoter downstream bp [default: 500]")
+parser$add_argument("--with-symbols", action = "store_true",
+  help = "Also map nearest TSS to SYMBOL and ENSEMBL (via org.Hs.eg.db)")
+parser$add_argument("--out", required = TRUE,
+  help = "Output TSV path")
+args <- parser$parse_args()
+
+# ----------------------- Load loci (STRICT) ----------------------
+# You told me to always use this reader. Done.
+md <- methylKit:::readMethylDB(args$db)
+gr <- as(md, "GRanges")
+mcols(gr)$qid <- seq_along(gr)   # stable key per CpG locus
+
+# -------------------- CpG context (annotatr) --------------------
+# hg38_cpgs yields *disjoint* classes: islands, shores, shelves, inter
+ann_cpg <- build_annotations(genome = "hg38", annotations = "hg38_cpgs")
+
+a <- annotate_regions(gr, ann_cpg, ignore.strand = TRUE, quiet = TRUE) %>%
+  as_tibble() %>%
+  transmute(
+    q_chr   = as.character(seqnames),
+    q_start = start,
+    q_end   = end,
+    type    = annot.type
+  )
+
+keys <- tibble(
+  q_chr   = as.character(seqnames(gr)),
+  q_start = start(gr),
+  q_end   = end(gr),
+  qid     = mcols(gr)$qid
+)
+
+cpg_flags <- a %>%
+  right_join(keys, by = c("q_chr","q_start","q_end")) %>%
+  group_by(qid) %>%
+  summarise(
+    is_island  = any(type == "hg38_cpg_islands",  na.rm = TRUE),
+    is_shore   = any(type == "hg38_cpg_shores",   na.rm = TRUE),
+    is_shelf   = any(type == "hg38_cpg_shelves",  na.rm = TRUE),
+    is_opensea = any(type == "hg38_cpg_inter",    na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# --------------- Gene parts + nearest TSS (TxDb) ----------------
+txdb <- TxDb.Hsapiens.UCSC.hg38.knownGene
+
+# Transcript-level features
+ex    <- exons(txdb)
+intr  <- unlist(intronsByTranscript(txdb), use.names = FALSE)
+utr5  <- unlist(fiveUTRsByTranscript(txdb),  use.names = FALSE)
+utr3  <- unlist(threeUTRsByTranscript(txdb), use.names = FALSE)
+prom  <- promoters(txdb, upstream = args$prom_up, downstream = args$prom_dn)
+tsspt <- promoters(txdb, upstream = 0, downstream = 1)  # 1-bp TSS; has tx_id
+
+# Harmonize naming + limit to chromosomes we actually have
+for (x in list(ex,intr,utr5,utr3,prom,tsspt)) seqlevelsStyle(x) <- seqlevelsStyle(gr)
+ex    <- keepStandardChromosomes(ex,   pruning.mode = "coarse")
+intr  <- keepStandardChromosomes(intr, pruning.mode = "coarse")
+utr5  <- keepStandardChromosomes(utr5, pruning.mode = "coarse")
+utr3  <- keepStandardChromosomes(utr3, pruning.mode = "coarse")
+prom  <- keepStandardChromosomes(prom, pruning.mode = "coarse")
+tsspt <- keepStandardChromosomes(tsspt, pruning.mode = "coarse")
+
+wanted <- intersect(seqlevels(gr), seqlevels(ex))
+ex    <- keepSeqlevels(ex,    wanted, pruning.mode = "coarse")
+intr  <- keepSeqlevels(intr,  wanted, pruning.mode = "coarse")
+utr5  <- keepSeqlevels(utr5,  wanted, pruning.mode = "coarse")
+utr3  <- keepSeqlevels(utr3,  wanted, pruning.mode = "coarse")
+prom  <- keepSeqlevels(prom,  wanted, pruning.mode = "coarse")
+tsspt <- keepSeqlevels(tsspt, wanted, pruning.mode = "coarse")
+
+# Fast boolean flags (no many-to-many expansion)
+is_prom   <- countOverlaps(gr, prom) > 0L
+is_exon   <- countOverlaps(gr, ex)   > 0L
+is_intron <- countOverlaps(gr, intr) > 0L
+is_5utr   <- countOverlaps(gr, utr5) > 0L
+is_3utr   <- countOverlaps(gr, utr3) > 0L
+
+# Precedence (explicit, reproducible):
+# promoter > exon > intron > 5UTR > 3UTR > intergenic
+gene_part_primary <- ifelse(is_prom,  "promoter",
+                        ifelse(is_exon,  "exon",
+                        ifelse(is_intron,"intron",
+                        ifelse(is_5utr,  "5UTR",
+                        ifelse(is_3utr,  "3UTR", "intergenic")))))
+
+# Nearest TSS distance (strand-aware)
+nn <- distanceToNearest(gr, tsspt, ignore.strand = FALSE)
+dist_tbl <- tibble(
+  qid         = mcols(gr)$qid[queryHits(nn)],
+  dist_to_TSS = mcols(nn)$distance,
+  tss_idx     = subjectHits(nn)
+)
+
+# Map nearest TSS transcript -> ENTREZID -> SYMBOL/ENSEMBL
+# (TxDb promoters carry tx_id; use TxDb::select to map TXID -> GENEID/ENTREZ)
+tx_for_tss <- mcols(tsspt)$tx_id[unique(dist_tbl$tss_idx)]
+tx_map <- AnnotationDbi::select(
+  x       = txdb,
+  keys    = as.character(tx_for_tss),
+  keytype = "TXID",
+  columns = c("TXID","GENEID")
+)
+# Keep first mapping per TSS index
+tss2tx <- tibble(
+  tss_idx = unique(dist_tbl$tss_idx),
+  TXID    = as.character(mcols(tsspt)$tx_id[unique(dist_tbl$tss_idx)])
+) %>%
+  left_join(tx_map, by = "TXID") %>%
+  distinct(tss_idx, .keep_all = TRUE)
+
+# Add SYMBOL and ENSEMBL
+if (args$with_symbols) {
+  gene_map <- AnnotationDbi::select(
+    org.Hs.eg.db,
+    keys    = unique(na.omit(tss2tx$GENEID)),
+    keytype = "ENTREZID",
+    columns = c("SYMBOL","ENSEMBL")
+  )
+  gene_map <- gene_map %>%
+    distinct(ENTREZID, .keep_all = TRUE) %>%
+    rename(ENTREZID = ENTREZID)
+  tss2tx <- tss2tx %>%
+    rename(ENTREZID = GENEID) %>%
+    left_join(gene_map, by = "ENTREZID")
+} else {
+  tss2tx <- tss2tx %>% rename(ENTREZID = GENEID)
+}
+
+dist_tbl <- dist_tbl %>%
+  left_join(tss2tx %>% dplyr::select(tss_idx, ENTREZID, dplyr::any_of(c("SYMBOL","ENSEMBL"))),
+            by = "tss_idx") %>%
+  dplyr::select(-tss_idx)
+
+gene_flags <- tibble(
+  qid = mcols(gr)$qid,
+  is_promoter = is_prom,
+  is_exon     = is_exon,
+  is_intron   = is_intron,
+  is_5utr     = is_5utr,
+  is_3utr     = is_3utr,
+  gene_part_primary = gene_part_primary
+) %>%
+  left_join(dist_tbl, by = "qid")
+
+# -------------------- Assemble & write --------------------------
+out <- as_tibble(getData(md)) %>%
+  mutate(qid = dplyr::row_number()) %>%
+  left_join(cpg_flags,  by = "qid") %>%
+  left_join(gene_flags, by = "qid") %>%
+  # put useful columns first (your style: dplyr::select)
+  dplyr::select(
+    chr, start, end, strand,
+    qid,
+    dplyr::starts_with("is_"),
+    gene_part_primary,
+    dist_to_TSS,
+    dplyr::any_of(c("ENTREZID","SYMBOL","ENSEMBL")),
+    dplyr::everything()
+  )
+
+readr::write_tsv(out, args$out)
+
+# --------------------- Notes (sources) --------------------------
+# CpG context: annotatr::hg38_cpgs (islands/shores/shelves/inter) – disjoint classes.
+# Gene models: TxDb.Hsapiens.UCSC.hg38.knownGene (UCSC knownGene; transcript-centric).
+# TSS: 1-bp promoters(txdb, 0, 1); nearest computed strand-aware with distanceToNearest().
+# ID mapping: org.Hs.eg.db (ENTREZID↔SYMBOL/ENSEMBL).
+# Overlap/precedence: booleans may all be TRUE for a locus (e.g., exon & promoter overlap);
+#   we report all flags and a primary label using:
+#   promoter > exon > intron > 5UTR > 3UTR > intergenic (fixed).
+
+#+end_src
+
+#+begin_src R :tangle /tmp/test.R
+#!/usr/bin/env Rscript
+
+suppressPackageStartupMessages({
+  library(argparse)
+  library(methylKit)
+  library(GenomicRanges); library(GenomeInfoDb)
+  library(dplyr); library(tidyr); library(readr)
+  library(annotatr)                               # CpG context (hg38_cpgs)
+  suppressWarnings(library(genomation))           # hush Biostrings::pattern clash
+  library(TxDb.Hsapiens.UCSC.hg38.knownGene)      # gene parts / TSS
+  library(AnnotationDbi); library(org.Hs.eg.db)   # ENTREZ ↔ SYMBOL/ENSEMBL
+})
+
+# ----- CLI -----
+parser <- ArgumentParser(description="Annotate methylKit DB with CpG context, gene parts, TSS, and IDs")
+parser$add_argument("--db",  required=TRUE, help="Path to methylKit tabix DB (.txt.bgz)")
+parser$add_argument("--out", required=TRUE, help="Output TSV")
+parser$add_argument("--prom-up", type="integer", default=2000, help="Promoter upstream bp [2000]")
+parser$add_argument("--prom-dn", type="integer", default=500,  help="Promoter downstream bp [500]")
+args <- parser$parse_args()
+
+# ----- noise filter for seqinfo ALT/decoy warnings -----
+muffle_outofbound <- function(expr) {
+  withCallingHandlers(expr, warning=function(w){
+    if (grepl("out-of-bound ranges located on sequences", conditionMessage(w)))
+      invokeRestart("muffleWarning")
+  })
+}
+
+# ----- Load loci (STRICT reader) -----
+md <- methylKit:::readMethylDB(args$db)
+gr <- as(md, "GRanges"); mcols(gr)$qid <- seq_along(gr)
+
+# ----- CpG context (disjoint) -----
+ann_cpg <- suppressMessages(build_annotations(genome="hg38", annotations="hg38_cpgs"))
+
+a <- annotate_regions(gr, ann_cpg, ignore.strand=TRUE, quiet=TRUE) |>
+  as_tibble() |>
+  transmute(q_chr=as.character(seqnames), q_start=start, q_end=end, type=annot.type)
+
+keys <- tibble(q_chr=as.character(seqnames(gr)), q_start=start(gr), q_end=end(gr), qid=mcols(gr)$qid)
+
+cpg_flags <- a |>
+  right_join(keys, by=c("q_chr","q_start","q_end")) |>
+  group_by(qid) |>
+  summarise(
+    is_island  = any(type=="hg38_cpg_islands",  na.rm=TRUE),
+    is_shore   = any(type=="hg38_cpg_shores",   na.rm=TRUE),
+    is_shelf   = any(type=="hg38_cpg_shelves",  na.rm=TRUE),
+    is_opensea = any(type=="hg38_cpg_inter",    na.rm=TRUE),
+    .groups="drop"
+  )
+
+# ----- Gene parts + nearest TSS -----
+txdb  <- TxDb.Hsapiens.UCSC.hg38.knownGene
+ex    <- exons(txdb)
+intr  <- unlist(intronsByTranscript(txdb), use.names=FALSE)
+utr5  <- unlist(fiveUTRsByTranscript(txdb),  use.names=FALSE)
+utr3  <- unlist(threeUTRsByTranscript(txdb), use.names=FALSE)
+prom  <- promoters(txdb, upstream=args$prom_up, downstream=args$prom_dn)
+tsspt <- promoters(txdb, upstream=0, downstream=1)
+
+for (x in list(ex,intr,utr5,utr3,prom,tsspt)) seqlevelsStyle(x) <- seqlevelsStyle(gr)
+muffle_outofbound({
+  ex    <- keepStandardChromosomes(ex,   pruning.mode="coarse")
+  intr  <- keepStandardChromosomes(intr, pruning.mode="coarse")
+  utr5  <- keepStandardChromosomes(utr5, pruning.mode="coarse")
+  utr3  <- keepStandardChromosomes(utr3, pruning.mode="coarse")
+  prom  <- keepStandardChromosomes(prom, pruning.mode="coarse")
+  tsspt <- keepStandardChromosomes(tsspt,pruning.mode="coarse")
+
+  wanted <- intersect(seqlevels(gr), seqlevels(ex))
+  ex    <- keepSeqlevels(ex,    wanted, pruning.mode="coarse")
+  intr  <- keepSeqlevels(intr,  wanted, pruning.mode="coarse")
+  utr5  <- keepSeqlevels(utr5,  wanted, pruning.mode="coarse")
+  utr3  <- keepSeqlevels(utr3,  wanted, pruning.mode="coarse")
+  prom  <- keepSeqlevels(prom,  wanted, pruning.mode="coarse")
+  tsspt <- keepSeqlevels(tsspt, wanted, pruning.mode="coarse")
+})
+
+is_prom     <- countOverlaps(gr, prom) > 0L
+is_5utr     <- countOverlaps(gr, utr5) > 0L
+is_3utr     <- countOverlaps(gr, utr3) > 0L
+is_exon_raw <- countOverlaps(gr, ex)   > 0L
+is_exon     <- is_exon_raw & !is_5utr & !is_3utr   # UTR ⊂ exon → exclude
+is_intron   <- countOverlaps(gr, intr) > 0L
+
+# Corrected precedence: promoter > 5UTR > 3UTR > exon > intron > intergenic
+gene_part_primary <- ifelse(is_prom, "promoter",
+                        ifelse(is_5utr, "5UTR",
+                        ifelse(is_3utr, "3UTR",
+                        ifelse(is_exon, "exon",
+                        ifelse(is_intron, "intron", "intergenic")))))
+
+# nearest TSS (strand-aware)
+nn <- distanceToNearest(gr, tsspt, ignore.strand=FALSE)
+dist_tbl <- tibble(
+  qid         = mcols(gr)$qid[queryHits(nn)],
+  dist_to_TSS = mcols(nn)$distance,
+  tss_idx     = subjectHits(nn)
+)
+
+# TSS -> TXID -> ENTREZID -> SYMBOL/ENSEMBL
+tx_for_tss <- mcols(tsspt)$tx_id[unique(dist_tbl$tss_idx)]
+tx_map <- suppressMessages(AnnotationDbi::select(
+  x=txdb, keys=as.character(tx_for_tss),
+  keytype="TXID", columns=c("TXID","GENEID")
+))
+
+tss2tx <- tibble(
+  tss_idx = unique(dist_tbl$tss_idx),
+  TXID    = as.character(mcols(tsspt)$tx_id[unique(dist_tbl$tss_idx)])
+) |>
+  left_join(tx_map, by="TXID") |>
+  distinct(tss_idx, .keep_all=TRUE) |>
+  rename(ENTREZID = GENEID)
+
+gene_map <- suppressMessages(AnnotationDbi::select(
+  org.Hs.eg.db,
+  keys    = unique(na.omit(tss2tx$ENTREZID)),
+  keytype = "ENTREZID",
+  columns = c("SYMBOL","ENSEMBL")
+)) |>
+  distinct(ENTREZID, .keep_all=TRUE)
+
+tss2tx <- tss2tx |> left_join(gene_map, by="ENTREZID")
+
+dist_tbl <- dist_tbl |>
+  left_join(tss2tx |> dplyr::select(tss_idx, ENTREZID, SYMBOL, ENSEMBL), by="tss_idx") |>
+  dplyr::select(-tss_idx)
+
+gene_flags <- tibble(
+  qid = mcols(gr)$qid,
+  is_promoter = is_prom,
+  is_5utr     = is_5utr,
+  is_3utr     = is_3utr,
+  is_exon     = is_exon,
+  is_intron   = is_intron,
+  gene_part_primary = gene_part_primary
+) |>
+  left_join(dist_tbl, by="qid")
+
+# ----- Assemble; DROP coverage/numC/numT -----
+raw_dt <- as_tibble(getData(md))
+
+out <- raw_dt |>
+  mutate(qid = dplyr::row_number()) |>
+  left_join(cpg_flags,  by="qid") |>
+  left_join(gene_flags, by="qid") |>
+  dplyr::select(
+    chr, start, end, strand, qid,
+    dplyr::starts_with("is_"),
+    gene_part_primary, dist_to_TSS,
+    ENTREZID, SYMBOL, ENSEMBL,
+    dplyr::everything(),
+    -dplyr::matches("^(coverage|numCs?|numTs?)\\d*$", ignore.case=TRUE)
+  )
+
+readr::write_tsv(out, args$out)
+#+end_src
 
 *** Biscuit
 **** Index

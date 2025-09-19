@@ -7,3 +7,10 @@ dependencies:
   - r-argparse
   - bioconductor-methylkit
   - r-data.table=1.15.4
+  - r-tidyverse
+  - bioconductor-genomicranges
+  - bioconductor-annotatr
+  - bioconductor-txdb.hsapiens.ucsc.hg38.knowngene
+  - bioconductor-org.hs.eg.db
+  - bioconductor-genomation
+  - r-arrow

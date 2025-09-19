@@ -1,0 +1,77 @@
+name: test-data
+
+on:
+  pull_request:
+    paths:
+      - "tools/get_test_data.sh"
+      - "tests/**"
+      - ".github/workflows/test-data.yml"
+  schedule:
+    - cron: "0 4 * * 1"   # Mondays 04:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: test-data-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: ShellCheck get_test_data.sh
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Run shellcheck
+        run: shellcheck -x tools/get_test_data.sh
+
+  run:
+    name: Run get_test_data.sh and verify outputs
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache test data (optional)
+        id: cache-testdata
+        uses: actions/cache@v4
+        with:
+          path: tests/full
+          key: testdata-${{ hashFiles('tools/get_test_data.sh') }}
+
+      - name: Make script executable
+        run: chmod +x tools/get_test_data.sh
+
+      - name: Execute script
+        run: ./tools/get_test_data.sh
+
+      - name: Sanity checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d tests/full || (echo "tests/full not created" >&2; exit 1)
+
+          # Expect ≥4 tiny paired FASTQs
+          fq_count=$(find tests/full -type f -name "*fastq.gz" | wc -l)
+          if (( fq_count < 4 )); then
+            echo "Expected ≥4 FASTQs, found ${fq_count}" >&2
+            find tests/full -maxdepth 3 -type f -print
+            exit 1
+          fi
+
+          # Expect at least one reference FASTA (chr22/lambda/pUC19)
+          fasta_count=$(find tests/full \
+            -type f \( -name "*chr22*.fa*" -o -name "*lambda*.fa*" -o -name "*pUC19*.fa*" \) \
+            | wc -l)
+          if (( fasta_count < 1 )); then
+            echo "Expected ≥1 reference FASTA (chr22/lambda/pUC19); none found" >&2
+            find tests/full -maxdepth 3 -type f -print
+            exit 1
+          fi
+
+          echo "OK: test data present."

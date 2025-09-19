@@ -418,15 +418,13 @@ jobs:
 
       - name: Snakemake dry-run
         run: |
-          set -euo pipefail
           micromamba run -n emseq snakemake \
-            -s workflows/test.smk \
-            --configfile config/test.yaml \
-            --cores 4 \
-            --dry-run \
-            --printshellcmds \
-            --rerun-incomplete \
-            --resources concurrency=50
+          -s workflows/test.smk \
+          --configfile config/test.yaml \
+          --config repos.emseq=. envs.emseq=config/emseq-conda-env.yaml \
+          --cores 4 \
+          --dry-run --printshellcmds --rerun-incomplete \
+          --resources concurrency=50
 
       - name: Summary
         if: always()

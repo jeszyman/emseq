@@ -8,7 +8,7 @@ on:
       - ".github/workflows/test-data.yml"
   schedule:
     - cron: "0 4 * * 1"   # Mondays 04:00 UTC
-  workflow_dispatch: {}     # <-- this makes the "Run workflow" button appear
+  workflow_dispatch: {}
 
 concurrency:
   group: test-data-${{ github.ref }}
@@ -21,20 +21,21 @@ jobs:
   run:
     name: Run get_test_data.sh and verify outputs
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up micromamba with samtools
-        uses: mamba-org/setup-micromamba@v2
+      # Build the same env you use locally (adjust path if needed)
+      - name: Setup Conda (Mambaforge) with repo env
+        uses: conda-incubator/setup-miniconda@v3
         with:
-          environment-name: test-env
-          create-args: >-
-            samtools
-            htslib
-          cache-environment: true
-          cache-downloads: true
+          miniforge-variant: Mambaforge
+          auto-activate-base: false
+          use-mamba: true
+          activate-environment: emseq
+          environment-file: config/emseq-conda-env.yaml
 
+      # Optional: cache generated fixtures to speed reruns
       - name: Cache test data (optional)
         id: cache-testdata
         uses: actions/cache@v4
@@ -45,10 +46,13 @@ jobs:
       - name: Make script executable
         run: chmod +x tools/get_test_data.sh
 
+      # NOTE: shell: bash -l logs into the conda-enabled shell so env is active
       - name: Execute script
-        run: micromamba run -n test-env ./tools/get_test_data.sh
+        shell: bash -l {0}
+        run: ./tools/get_test_data.sh
 
       - name: Sanity checks
+        shell: bash -l {0}
         run: |
           set -euo pipefail
           test -d tests/full || (echo "tests/full not created" >&2; exit 1)

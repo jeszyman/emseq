@@ -366,6 +366,25 @@ To github.com:jeszyman/emseq.git
    4862c0c..6ded313  master -> master
 **** first test
 #+begin_src yaml :tangle ./.github/workflows/test-data.yml
+name: test-data
+
+on:
+  pull_request:
+    paths:
+      - "tools/get_test_data.sh"
+      - "tests/**"
+      - ".github/workflows/test-data.yml"
+  schedule:
+    - cron: "0 4 * * 1"   # Mondays 04:00 UTC
+  workflow_dispatch: {}     # <-- this makes the "Run workflow" button appear
+
+concurrency:
+  group: test-data-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   run:
     name: Run get_test_data.sh and verify outputs
@@ -402,23 +421,12 @@ jobs:
           set -euo pipefail
           test -d tests/full || (echo "tests/full not created" >&2; exit 1)
 
-          # Expect ≥4 tiny paired FASTQs
           fq_count=$(find tests/full -type f -name "*fastq.gz" | wc -l)
-          if (( fq_count < 4 )); then
-            echo "Expected ≥4 FASTQs, found ${fq_count}" >&2
-            find tests/full -maxdepth 3 -type f -print
-            exit 1
-          fi
+          (( fq_count >= 4 )) || { echo "Expected ≥4 FASTQs, got ${fq_count}"; exit 1; }
 
-          # Expect at least one reference FASTA (chr22/lambda/pUC19)
           fasta_count=$(find tests/full \
-            -type f \( -name "*chr22*.fa*" -o -name "*lambda*.fa*" -o -name "*pUC19*.fa*" \) \
-            | wc -l)
-          if (( fasta_count < 1 )); then
-            echo "Expected ≥1 reference FASTA (chr22/lambda/pUC19); none found" >&2
-            find tests/full -maxdepth 3 -type f -print
-            exit 1
-          fi
+            -type f \( -name "*chr22*.fa*" -o -name "*lambda*.fa*" -o -name "*pUC19*.fa*" \) | wc -l)
+          (( fasta_count >= 1 )) || { echo "Expected ≥1 reference FASTA"; exit 1; }
 
           echo "OK: test data present."
 #+end_src

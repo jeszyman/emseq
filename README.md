@@ -1,9 +1,17 @@
+
+# Table of Contents
+
+1.  [Continuous Integration](#orgd82c350)
+2.  [Change Log](#org3993251)
+
 The EM-seq repository contains modular workflows intended to be run from within a over-wrapping snakemake workflow.  
 
 Current stable version tested with minimal in-repo example is tagged emseq.v3.1.0.  
 
 ![img](resources/test_smk.png)  
 
+
+<a id="orgd82c350"></a>
 
 # Continuous Integration
 
@@ -14,10 +22,7 @@ Current stable version tested with minimal in-repo example is tagged emseq.v3.1.
 [![smk-dry](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-dry.yaml?branch=master&label=smk-dry)](https://github.com/jeszyman/emseq/actions/workflows/smk-dry.yaml)
 
 
-[![test-data](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/test-data.yaml?branch=master&label=test-data)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yaml)
-
-[![smk-dry](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-dry.yaml?branch=master&label=smk-dry)](https://github.com/jeszyman/emseq/actions/workflows/smk-dry.yaml)
-
+<a id="org3993251"></a>
 
 # Change Log
 
@@ -26,7 +31,7 @@ Current stable version tested with minimal in-repo example is tagged emseq.v3.1.
 -   wf/emseq/v3.1.0  
     -   <span class="timestamp-wrapper"><span class="timestamp">[2025-09-19 Fri] </span></span> Added a first github workflow test
     -   <span class="timestamp-wrapper"><span class="timestamp">[2025-09-19 Fri] </span></span> Robust annotation of methylkit outputs validated as rscript
-    -   <span class="timestamp-wrapper"><span class="timestamp">[2025-09-19 Fri] </span></span> Added mature github tests for building in-repo test data and smk\_dry
+    -   <span class="timestamp-wrapper"><span class="timestamp">[2025-09-19 Fri] </span></span> Added mature github tests for building in-repo test data and smk<sub>dry</sub>
 -   <span class="timestamp-wrapper"><span class="timestamp">[2025-09-19 Fri] </span></span> Updated EM-seq main pipeline to wf/emseq/v3.0.0.  
     -   Includes in-repo small test data for a complete run of emseq.smk
     -   Includes test.smk wrapper and corresponding test.yaml for in-repo small test run

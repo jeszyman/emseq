@@ -3921,7 +3921,7 @@ envs:
   methylkit: "config/methylkit-conda-env.yaml"
 
 repos:
-  emseq: "./"
+  emseq: ".."
 
 # -----------------------------
 # Sample set and region filters

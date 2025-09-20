@@ -58,9 +58,3 @@ jobs:
           --printshellcmds \
           --rerun-incomplete \
           --resources concurrency=50
-
-      - name: Summary
-        if: always()
-        run: |
-          micromamba run -n emseq snakemake \
-            -s workflows/test.smk --summary --cores 1 --dry-run

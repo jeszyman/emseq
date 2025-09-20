@@ -326,7 +326,7 @@ echo "  - Keep BED:     ${KEEP_BED}"
 echo "  - Exclude BED:  ${EXCL_BED}"
 #+end_src
 
-*** Git
+*** Git and GitHub
 #+name: git-workflow-up
 #+begin_src bash :results replace raw
 source ~/repos/basecamp/lib/basecamp_functions.sh
@@ -427,11 +427,6 @@ jobs:
           --rerun-incomplete \
           --resources concurrency=50
 
-      - name: Summary
-        if: always()
-        run: |
-          micromamba run -n emseq snakemake \
-            -s workflows/test.smk --summary --cores 1 --dry-run
 #+end_src
 
 #+begin_src yaml :tangle ./.github/workflows/test-data.yml

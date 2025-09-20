@@ -4,7 +4,6 @@
 :END:
 ** [[id:bda70cff-0713-4e32-8da1-ee83924b8f00][README]]
 ** [[elisp:(let ((window-config (current-window-configuration))) (async-shell-command "bash ~/repos/mpnst/tools/shell/org_update.sh") (set-window-configuration window-config))][org update]]
-
 ** [[elisp:(progn (org-babel-goto-named-src-block "git-workflow-up") (org-babel-execute-src-block))][Run git workflow up]]
 ** Repository setup and administration
 *** Org update
@@ -271,6 +270,9 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 
 **** Continuous Integration
 # emseq
+
+[![test-data](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml/badge.svg?branch=main)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml)
+[![ci-snakemake](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml/badge.svg?branch=main)](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml)
 
 [![test-data](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml/badge.svg?branch=main)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml)
 [![ci-snakemake](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml/badge.svg?branch=main)](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml)

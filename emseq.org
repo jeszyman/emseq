@@ -208,22 +208,23 @@ See [[id:93585550-c78e-45e1-8adc-92b4efbebbae][Generate test data test]]
 :ID:       bda70cff-0713-4e32-8da1-ee83924b8f00
 :export_file_name: README
 :END:
-[[file:README.md]]
-#+begin_src bash
-python3 ~/repos/basecamp/scripts/emacs_export_header_to_markdown.py --org_file ~/repos/emseq/emseq.org --node_id bda70cff-0713-4e32-8da1-ee83924b8f00
-
-#+end_src
 
 The EM-seq repository contains modular workflows intended to be run from within a over-wrapping snakemake workflow.
 
-Current stable version tested with minimal in-repo example is tagged emseq.v3.0.0.
+Current stable version tested with minimal in-repo example is tagged emseq.v3.1.0.
 
 [[file:resources/test_smk.png]]
+**** Utilities :noexport:
+[[file:README.md]]
+#+begin_src bash
+python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/repos/emseq/emseq.org --node_id bda70cff-0713-4e32-8da1-ee83924b8f00
+
+#+end_src
 
 **** Prerequisites
 **** Change Log
 - Development since last tag
-- wf/emseq/v3.0.0
+- wf/emseq/v3.1.0
   - [2025-09-19 Fri] Added a first github workflow test
   - [2025-09-19 Fri] Robust annotation of methylkit outputs validated as rscript
   - [2025-09-19 Fri] Added mature github tests for building in-repo test data and smk_dry

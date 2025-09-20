@@ -1,29 +1,30 @@
 
 # Table of Contents
 
-1.  [Prerequisites](#orged28da9)
-2.  [Change Log](#orga4121ee)
-
-<README.md>  
-
-    python3 ~/repos/basecamp/scripts/emacs_export_header_to_markdown.py --org_file ~/repos/emseq/emseq.org --node_id bda70cff-0713-4e32-8da1-ee83924b8f00
+1.  [Prerequisites](#org2026ca3)
+2.  [Change Log](#org3b5ad1d)
 
 The EM-seq repository contains modular workflows intended to be run from within a over-wrapping snakemake workflow.  
 
-Current stable version tested with minimal in-repo example is tagged emseq.v3.0.0.  
+Current stable version tested with minimal in-repo example is tagged emseq.v3.1.0.  
 
 ![img](resources/test_smk.png)  
 
 
-<a id="orged28da9"></a>
+<a id="org2026ca3"></a>
 
 # Prerequisites
 
 
-<a id="orga4121ee"></a>
+<a id="org3b5ad1d"></a>
 
 # Change Log
 
+-   Development since last tag
+-   wf/emseq/v3.1.0  
+    -   <span class="timestamp-wrapper"><span class="timestamp">[2025-09-19 Fri] </span></span> Added a first github workflow test
+    -   <span class="timestamp-wrapper"><span class="timestamp">[2025-09-19 Fri] </span></span> Robust annotation of methylkit outputs validated as rscript
+    -   <span class="timestamp-wrapper"><span class="timestamp">[2025-09-19 Fri] </span></span> Added mature github tests for building in-repo test data and smk<sub>dry</sub>
 -   <span class="timestamp-wrapper"><span class="timestamp">[2025-09-19 Fri] </span></span> Updated EM-seq main pipeline to wf/emseq/v3.0.0.  
     -   Includes in-repo small test data for a complete run of emseq.smk
     -   Includes test.smk wrapper and corresponding test.yaml for in-repo small test run

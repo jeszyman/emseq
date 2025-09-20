@@ -2,133 +2,10 @@
 :PROPERTIES:
 :ID:       cd9489fd-c6e7-4c64-8317-e3d9a283b36c
 :END:
-#+begin_src emacs-lisp
-;; In the problem buffers:
-(setq-local org-element-use-cache nil)          ;; disable cache for this buffer
-(remove-hook 'before-save-hook 'org-table-recalculate-buffer-tables t)
-(remove-hook 'org-babel-post-tangle-hook #'remove-property-drawers-from-tangled-file)
-(with-eval-after-load 'org-alert (org-alert-disable))  ;; pause org-alert
-(remove-hook 'flyspell-post-command-hook #'flyspell-post-command-hook t)  ;; turn off flyspell in this buffer
-
-#+end_src
 ** [[id:bda70cff-0713-4e32-8da1-ee83924b8f00][README]]
 ** [[elisp:(progn (org-babel-goto-named-src-block "git-workflow-up") (org-babel-execute-src-block))][Run git workflow up]]
-*** Resource Used and Concurrency
-
-EM-seq workflows use Snakemake's resources feature to control how many jobs of a given rule can run simultaneously. Each rule specifies a concurrency value, and a global limit is set at runtime. For example:
-
-resources:
-    concurrency=100
-
-Run the workflow with a system-wide concurrency cap:
-
-snakemake --resources concurrency=200
-
-This setup allows Snakemake to schedule up to two jobs requiring concurrency=100 in parallel (200 / 100 = 2). This mechanism helps manage disk I/O, memory pressure, and other shared system resources.
-
-The system is calibrated around a ~96-core machine, where rules requiring concurrency=100 are designed to run one at a time. On larger systems (e.g., 300 cores), multiple such jobs can run concurrently. Lighter-weight rules (e.g., fastp) may specify lower concurrency values (e.g., concurrency=10), allowing many to run in parallel relative to available resources.
-
-Other jobs are better managed by a set CPU number, e.g. samtools sorting is I/O constrained so each job is limited to a set 8 cores. Threads are rule-specific and declared at the rule for such instances.
-*** Input data structures
-When aggregating library-level outputs into experiment-level analyses, workflows use nested Python dictionaries (dict of dicts) to define experiment metadata. For example:
-
-#+begin_src python
-meth_map = {
-"test": {
-"build": "hg38",
-"mincov": "5",
-"libs": library_ids,
-"tx": "0,1"
-}
-}
-#+end_src
-
-Each top-level key in meth_map (e.g. "test") represents a single experiment — a defined set of libraries run under shared conditions. The associated value is a dictionary containing metadata and parameters for that experiment.
-
-These maps are accessed dynamically in Snakemake rules using the wildcards.experiment variable. For example:
-
-meth_caller = meth_map[wildcards.experiment]["meth_caller"]
-
-This design enables flexible reuse of libraries across multiple experimental contexts, making it easy to reprocess the same samples under different parameter settings or analytical strategies.
-
-*** Miscellaneous pipeline nuances
-
-Most paths are relative to a common $data_dir and outputs have a set directory structure.
-
-The emseq_bam_dir is individually declared. This allows for workflows where multiple sequencing lanes are merged per-sample at the bam level.
-
-For example, so data_dir=/mnt/data/projects/nf1 and we run the pipeline for sample emseq_09. An output tree would look like:
-
-/mnt/data/projects/nf1/
-├── analysis
-│   └── emseq
-│       ├── fastqs
-│       │   ├── emseq_09_failed.fastq.gz
-│       │   ├── emseq_09_raw_R1.fastq.gz
-│       │   ├── emseq_09_raw_R2.fastq.gz
-│       │   ├── emseq_09_trimmed_R1.fastq.gz
-│       │   └── emseq_09_trimmed_R2.fastq.gz
-│       └── spike
-│           ├── emseq_09.puc19.bwa_meth.coorsorted.bam
-│           ├── emseq_09.puc19.bwa_meth.coorsorted.bam.bai
-│           ├── emseq_09.puc19.bwa_meth_methyldackel_CpG.methylKit
-│           ├── emseq_09.unmeth_lambda.bwa_meth.coorsorted.bam
-│           ├── emseq_09.unmeth_lambda.bwa_meth.coorsorted.bam.bai
-│           └── emseq_09.unmeth_lambda.bwa_meth_methyldackel_CpG.methylKit
-├── inputs
-│   ├── 9_em_seq_pilot_5_S9_R1_001.fastq.gz
-│   ├── 9_em_seq_pilot_5_S9_R2_001.fastq.gz
-│   ├── GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fa.gz
-│   ├── Lambda_NEB.fa.gz
-│   └── pUC19.fa.gz
-├── logs
-│   ├── emseq_09-emseq-fastp.html
-│   ├── emseq_09-emseq-fastp.json
-│   ├── emseq_09-emseq-fastp.log
-│   ├── emseq_09.puc19.emseq_align_bwameth_spike.log
-│   ├── emseq_09.unmeth_lambda.emseq_align_bwameth_spike.log
-│   ├── emseq_09_puc19_bwa_meth_methyldackel.log
-│   ├── emseq_09_raw_R1_fastqc.log
-│   ├── emseq_09_raw_R2_fastqc.log
-│   ├── emseq_09_trimmed_R1_fastqc.log
-│   ├── emseq_09_trimmed_R2_fastqc.log
-│   ├── emseq_09_unmeth_lambda_bwa_meth_methyldackel.log
-│   ├── puc19_bwa_meth_index.log
-│   └── unmeth_lambda_bwa_meth_index.log
-├── qc
-│   ├── emseq_09_raw_R1_fastqc.html
-│   ├── emseq_09_raw_R1_fastqc.zip
-│   ├── emseq_09_raw_R2_fastqc.html
-│   ├── emseq_09_raw_R2_fastqc.zip
-│   ├── emseq_09_trimmed_R1_fastqc.html
-│   ├── emseq_09_trimmed_R1_fastqc.zip
-│   ├── emseq_09_trimmed_R2_fastqc.html
-│   └── emseq_09_trimmed_R2_fastqc.zip
-└── ref
-    └── bwa_meth
-        ├── puc19
-        │   ├── puc19.fa
-        │   ├── puc19.fa.bwameth.c2t
-        │   ├── puc19.fa.bwameth.c2t.0123
-        │   ├── puc19.fa.bwameth.c2t.amb
-        │   ├── puc19.fa.bwameth.c2t.ann
-        │   ├── puc19.fa.bwameth.c2t.bwt.2bit.64
-        │   ├── puc19.fa.bwameth.c2t.pac
-        │   └── puc19.fa.fai
-        └── unmeth_lambda
-            ├── unmeth_lambda.fa
-            ├── unmeth_lambda.fa.bwameth.c2t
-            ├── unmeth_lambda.fa.bwameth.c2t.0123
-            ├── unmeth_lambda.fa.bwameth.c2t.amb
-            ├── unmeth_lambda.fa.bwameth.c2t.ann
-            ├── unmeth_lambda.fa.bwameth.c2t.bwt.2bit.64
-            ├── unmeth_lambda.fa.bwameth.c2t.pac
-            └── unmeth_lambda.fa.fai
-
-
-Alignments to spiked DNA references are specialized for fast accurate global methylation counts for these small references.
-
-** Repository administration
+** Repository setup and administration
+*** Tool to get in-repo test data
 #+begin_src bash :tangle ./tools/get_test_data.sh
 #!/usr/bin/env bash
 # setup_test_data.sh — chr22 subset + lambda + pUC19 FASTA, plus 4 tiny paired WGBS FASTQs
@@ -325,7 +202,37 @@ echo "  - FASTA subset: ${OUT_FA} (+ ${FA_UNGZ} + .fai)"
 echo "  - Keep BED:     ${KEEP_BED}"
 echo "  - Exclude BED:  ${EXCL_BED}"
 #+end_src
+See [[id:93585550-c78e-45e1-8adc-92b4efbebbae][Generate test data test]]
+*** README
+:PROPERTIES:
+:ID:       bda70cff-0713-4e32-8da1-ee83924b8f00
+:export_file_name: README
+:END:
+[[file:README.md]]
+#+begin_src bash
+python3 ~/repos/basecamp/scripts/emacs_export_header_to_markdown.py --org_file ~/repos/emseq/emseq.org --node_id bda70cff-0713-4e32-8da1-ee83924b8f00
 
+#+end_src
+
+The EM-seq repository contains modular workflows intended to be run from within a over-wrapping snakemake workflow.
+
+Current stable version tested with minimal in-repo example is tagged emseq.v3.0.0.
+
+[[file:resources/test_smk.png]]
+
+**** Prerequisites
+**** Change Log
+- Development since last tag
+- wf/emseq/v3.0.0
+  - [2025-09-19 Fri] Added a first github workflow test
+  - [2025-09-19 Fri] Robust annotation of methylkit outputs validated as rscript
+  - [2025-09-19 Fri] Added mature github tests for building in-repo test data and smk_dry
+- [2025-09-19 Fri] Updated EM-seq main pipeline to wf/emseq/v3.0.0.
+  - Includes in-repo small test data for a complete run of emseq.smk
+  - Includes test.smk wrapper and corresponding test.yaml for in-repo small test run
+  - emseq.smk expanded to include differential methylation from nested list map
+  - Many small fixes for consistent naming and run condition optimization
+- [2025-09-18 Thu] Updated EM-seq main pipeline to wf/emseq/v2.0.0. Mainly improved and simplified variable naming.
 *** Git and GitHub
 #+name: git-workflow-up
 #+begin_src bash :results replace raw
@@ -342,29 +249,7 @@ echo -e "$(date)\n$output"
 
 #+end_src
 
-#+RESULTS: git-workflow-up
-Tue Jul 29 10:29:51 AM CDT 2025
-[master 5f2f3ee] .
- 2 files changed, 34 insertions(+), 2 deletions(-)
- create mode 100644 README.md
-To github.com:jeszyman/emseq.git
-   c8a1914..5f2f3ee  master -> master
-Fri Jul 25 07:52:01 PM CDT 2025
-[master 8b5da07] .
- 7 files changed, 1 insertion(+), 107 deletions(-)
-To github.com:jeszyman/emseq.git
-   c61d380..8b5da07  master -> master
-Tue Jun 10 12:09:57 PM CDT 2025
-[master dac7ee5] .
- 2 files changed, 4 insertions(+), 4 deletions(-)
-To github.com:jeszyman/emseq.git
-   1095335..dac7ee5  master -> master
-Mon Jun  9 09:24:27 AM CDT 2025
-[master 6ded313] .
- 2 files changed, 2 insertions(+), 2 deletions(-)
-To github.com:jeszyman/emseq.git
-   4862c0c..6ded313  master -> master
-**** first test
+**** Dry run test
 #+begin_src yaml :tangle ./.github/workflows/smk-dry.yaml
 name: ci-snakemake
 
@@ -428,6 +313,11 @@ jobs:
           --resources concurrency=50
 
 #+end_src
+
+**** Generate test data test
+:PROPERTIES:
+:ID:       93585550-c78e-45e1-8adc-92b4efbebbae
+:END:
 
 #+begin_src yaml :tangle ./.github/workflows/test-data.yml
 name: test-data
@@ -522,34 +412,6 @@ jobs:
           echo "OK: test data present."
 #+end_src
 
-*** README
-:PROPERTIES:
-:ID:       bda70cff-0713-4e32-8da1-ee83924b8f00
-:export_file_name: README
-:END:
-[[file:README.md]]
-#+begin_src bash
-python3 ~/repos/basecamp/scripts/emacs_export_header_to_markdown.py --org_file ~/repos/emseq/emseq.org --node_id bda70cff-0713-4e32-8da1-ee83924b8f00
-
-#+end_src
-
-The EM-seq repository contains modular workflows intended to be run from within a over-wrapping snakemake workflow.
-
-Current stable version tested with minimal in-repo example is tagged emseq.v3.0.0.
-
-[[file:resources/test_smk.png]]
-
-**** Prerequisites
-**** Change Log
-- Dev
-  - [2025-09-19 Fri] Added a first github workflow test
-  - [2025-09-19 Fri] Robust annotation of methylkit outputs validated as rscript
-- [2025-09-19 Fri] Updated EM-seq main pipeline to wf/emseq/v3.0.0.
-  - Includes in-repo small test data for a complete run of emseq.smk
-  - Includes test.smk wrapper and corresponding test.yaml for in-repo small test run
-  - emseq.smk expanded to include differential methylation from nested list map
-  - Many small fixes for consistent naming and run condition optimization
-- [2025-09-18 Thu] Updated EM-seq main pipeline to wf/emseq/v2.0.0. Mainly improved and simplified variable naming.
 ** Conda environmental YAMLs
 *** EM-seq
 #+begin_src yaml :tangle ./config/emseq-conda-env.yaml
@@ -624,134 +486,6 @@ dependencies:
   - r-r.utils
 #+end_src
 
-** Input data model
-#+begin_src yaml
-defaults:
-  required: false       # Default: fields are not required unless specified
-  primary_key: false    # Default: fields are not primary keys unless specified
-
-entities:
-  - name: subjects
-    attributes:
-      - name: subject_id
-        type: string
-        primary_key: true      # Unique identifier for each subject
-        required: true
-
-  - name: samples
-    attributes:
-      - name: sample_id
-        type: string
-        primary_key: true      # Unique ID for each sample
-        required: true
-      - name: subject_id
-        type: string
-        foreign_key: subjects.subject_id   # Link back to subject
-        required: true
-      - name: sample_type
-        type: enum
-        values: [biofluid, tissue]         # Sample subtype
-        required: true
-      - name: collection_date
-        type: datetime                         # When sample was collected
-
-  - name: biofluid
-    attributes:
-      - name: sample_id
-        type: string
-        primary_key: true
-        foreign_key: samples.sample_id     # Must match a sample of type biofluid
-        required: true
-      - name: biofluid_type
-        type: enum
-        values: [plasma, serum, csf, drain, urine, other]   # Specific fluid type
-      - name: cfdna_conc
-        type: float
-        unit: ng/uL                         # Concentration of cfDNA
-
-  - name: biofluid_derivative
-    attributes:
-      - name: aliquot_id
-        type: string
-        primary_key: true                  # Unique ID for each aliquot
-        required: true
-      - name: sample_id
-        type: string
-        foreign_key: biofluid.sample_id    # Parent biofluid sample
-        required: true
-      - name: biofluid_derivative_type
-        type: enum
-        values: [ppp, pfp, other]          # Processing method
-      - name: derivative_processing_date
-        type: date                         # When derivative was processed
-
-  - name: tissue
-    attributes:
-      - name: sample_id
-        type: string
-        primary_key: true
-        foreign_key: samples.sample_id     # Must match a sample of type tissue
-        required: true
-
-  - name: libraries
-    attributes:
-      - name: library_id
-        type: string
-        primary_key: true                  # Unique ID for each library
-        required: true
-      - name: sample_id
-        type: string
-        foreign_key: samples.sample_id     # Source sample for this library
-        required: true
-      - name: pcr_cycltes
-        type: integer
-      - name: expected_coverage
-        type: integer
-
-  - name: sequencing
-    attributes:
-      - name: seq_run_id
-        type: string
-        primary_key: true                  # Unique ID for sequencing run
-        required: true
-      - name: library_id
-        type: string
-        foreign_key: libraries.library_id  # Library used in sequencing
-        required: true
-      - name: run_date
-        type: date                         # When sequencing occurred
-      - name: read_length
-        type: integer                      # Read length (e.g. 150)
-        required: true
-      - name: paired_end
-        type: boolean                      # True if paired-end sequencing
-        required: true
-
-relationships:
-  - from: subjects
-    to: samples
-    type: one-to-many       # One subject can have many samples
-
-  - from: samples
-    to: libraries
-    type: one-to-many       # One sample can yield multiple libraries
-
-  - from: samples
-    to: biofluid
-    type: one-to-one        # A sample is either biofluid or tissue
-
-  - from: samples
-    to: tissue
-    type: one-to-one        # "
-
-  - from: biofluid
-    to: biofluid_derivative
-    type: one-to-many       # Each biofluid must have at least one aliquot
-
-  - from: libraries
-    to: sequencing
-    type: one-to-many       # A library can be sequenced multiple times
-#+end_src
 ** Methylation sequence processing
 :PROPERTIES:
 :ID:       92e64b67-c219-4146-a89b-a8710d91a634
@@ -3675,229 +3409,6 @@ ggplot(meth_df, aes(x = group, y = methylation, fill = group)) +
 
 
 
-** cfDNA methylation and fragmentation
-- [cite:@noe2024]
-
-*** An 2023 methylation and fragmentation patterns
-
-
-#+begin_src bash
-#ssh jeff-nf1
-
-#mamba install -c bioconda -c conda-forge bismark -n emseq
-
-conda activate emseq
-
-
-
-# ---- settings ----
-GENOME_NAME=ncbi_hg38
-GENOME_ROOT=/mnt/data/projects/nf1/ref/bismark
-GENOME_DIR=$GENOME_ROOT/$GENOME_NAME
-INDEX_DIR=$GENOME_DIR/bismark_index
-THREADS=16
-
-# ---- prep dirs ----
-mkdir -p "$INDEX_DIR"
-
-# By default, bismark expects fasta(s) in the target folder.
-# So place the FASTA there (symlink is fine) BEFORE running:
-
-cd /mnt/data/projects/nf1/inputs
-
-wget https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz
-
-gunzip -c GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz.1 > ../ref/bismark/ncbi_hg38/bismark_index/GCA_000001405.15_GRCh38_no_alt_analysis_set.fa
-
-cd "$GENOME_DIR"
-
-# ---- build the Bismark index (Bowtie2) ----
-# (Requires: bismark, bowtie2, perl)
-bismark_genome_preparation \
-  --bowtie2 \
-  --parallel "$THREADS" \
-  --verbose \
-  "$INDEX_DIR"
-
-
-# ---- sanity check: index files should now exist ----
-ls -1 "$INDEX_DIR" | grep -E 'Bisulfite_Genome|.bt2$'
-
-mkdir -p /mnt/data/projects/nf1/tmp
-
-cd /mnt/data/projects/nf1/tmp/bismark_out
-
-# these write to dir of action
-bismark --non_directional \
-  -p 24 \
-  /mnt/data/projects/nf1/ref/bismark/ncbi_hg38/bismark_index \
-  -1 /mnt/data/projects/nf1/emseq/fastqs/emseq_05.raw_R1.fastq.gz \
-  -2 /mnt/data/projects/nf1/emseq/fastqs/emseq_05.raw_R2.fastq.gz \
-  -o /mnt/data/projects/nf1/tmp/bismark_out
-
-nohup bismark --non_directional \
-  -p 24 \
-  /mnt/data/projects/nf1/ref/bismark/ncbi_hg38/bismark_index \
-  -1 /mnt/data/projects/nf1/emseq/fastqs/emseq_05.raw_R1.fastq.gz \
-  -2 /mnt/data/projects/nf1/emseq/fastqs/emseq_05.raw_R2.fastq.gz \
-  -o /mnt/data/projects/nf1/tmp/bismark_out \
-  > bismark_emseq05.log 2>&1 &
-
-nohup bismark --non_directional \
-  -p 24 \
-  /mnt/data/projects/nf1/ref/bismark/ncbi_hg38/bismark_index \
-  -1 /mnt/data/projects/nf1/emseq/fastqs/emseq_06.raw_R1.fastq.gz \
-  -2 /mnt/data/projects/nf1/emseq/fastqs/emseq_06.raw_R2.fastq.gz \
-  -o /mnt/data/projects/nf1/tmp/bismark_out \
-  > bismark_emseq06.log 2>&1 &
-
-##########1##########2##########3##########4##########5##########6##########7##########8
-cp /mnt/data/projects/nf1/tmp/bismark_out/emseq_05.raw_R1_bismark_bt2_pe.bam /mnt/data/projects/nf1/tmp/an/emseq_05.bam
-
-cp /mnt/data/projects/nf1/tmp/bismark_out/emseq_06.raw_R1_bismark_bt2_pe.bam /mnt/data/projects/nf1/tmp/an/emseq_06.bam
-
-cd /mnt/data/projects/nf1/tmp/an
-ls
-
-samtools view -h emseq_05.bam | samtools view -b -o emseq_05_repaired.bam
-
-samtools view -h emseq_06.bam | samtools view -b -o emseq_06_repaired.bam
-
-python3 test3.py emseq_05_repaired.bam 10 > /tmp/emseq_05_meth_and_frag.tsv
-
-python3 test3.py emseq_06_repaired.bam 10 > /tmp/emseq_06_meth_and_frag.tsv
-
-python3 test3.py emseq_05_repaired.bam > /tmp/emseq_05_meth_and_frag.tsv
-
-python3 test3.py emseq_06_repaired.bam > /tmp/emseq_06_meth_and_frag.tsv
-
-##########1##########2##########3##########4##########5##########6##########7##########8
-# 2) Deduplicate the Bismark BAM (paired-end)
-deduplicate_bismark --bam --paired \
-  --output_dir /mnt/data/projects/nf1/tmp/bismark_out \
-  /mnt/data/projects/nf1/tmp/bismark_out/emseq_12.raw_R1_bismark_bt2_pe.bam
-
-#+end_src
-
-#+begin_src R
-library(tidyverse)
-
-pn = read_tsv("/tmp/emseq_05_meth_and_frag.tsv") %>% mutate(dx = "pn")
-mpnst = read_tsv("/tmp/emseq_06_meth_and_frag.tsv") %>% mutate(dx = "mpnst")
-
-test=rbind(pn, mpnst)
-
-test %>%
-  filter(label != "mid") %>%
-  filter(tlen < 167) %>%
-  ggplot(aes(x = dx, fill = label)) +
-  geom_bar(position = "fill") +
-  labs(x = "Diagnosis", y = "Proportion", fill = "Methylation category")
-
-
-test %>%
-  mutate(tlen_bin = cut(tlen, breaks = seq(0, 400, 10))) %>%
-  group_by(tlen_bin) %>%
-  summarise(mean_cpg = mean(cpg_frac, na.rm = TRUE), .groups = "drop") %>%
-  ggplot(aes(x = tlen_bin, y = mean_cpg, group = 1)) +
-  geom_line() +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
-
-test %>%
-  mutate(tlen_bin = cut(tlen, breaks = seq(150, 300, 5))) %>%
-  group_by(dx, tlen_bin) %>%
-  summarise(mean_cpg = mean(cpg_frac, na.rm = TRUE), .groups = "drop") %>%
-  ggplot(aes(x = tlen_bin, y = mean_cpg, color = dx, group = dx)) +
-  #geom_line() +
-  geom_smooth(se=F) +
-  labs(x = "Fragment length (bp bins)", y = "Mean CpG fraction") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
-
-test %>%
-  mutate(tlen_bin = cut(tlen, breaks = seq(0, 400, 10))) %>%
-  group_by(dx, tlen_bin) %>%
-  summarise(mean_cpg = mean(cpg_frac, na.rm = TRUE), .groups = "drop") %>%
-  ggplot(aes(x = tlen_bin, y = mean_cpg, group = dx, color = dx)) +
-  geom_line() +
-  facet_wrap(~dx) +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
-
-test %>%
-  filter(label != "mid") %>%
-  filter(tlen > 167) %>%
-  ggplot(aes(x = dx, fill = label)) +
-  geom_bar(position = "fill") +
-  labs(x = "Diagnosis", y = "Proportion", fill = "Methylation category")
-
-
-test %>%
-  mutate(frag_bin = ifelse(tlen < 167, "<167", ">167")) %>%
-  group_by(dx, frag_bin) %>%
-  summarise(frac_hyper = mean(label == "hypo"), .groups = "drop") %>%
-  tidyr::pivot_wider(
-    names_from = frag_bin,
-    values_from = frac_hyper
-  )
-
-test %>%
-  mutate(frag_bin = ifelse(tlen < 167, "<167", ">167")) %>%
-  group_by(frag_bin) %>%
-  summarise(frac_hyper = mean(label == "hypo"), .groups = "drop") %>%
-  tidyr::pivot_wider(
-    names_from = frag_bin,
-    values_from = frac_hyper
-  )
-
-test %>%
-  filter(label != "mid") %>%
-  filter(tlen > 250) %>%
-  count(dx, label) %>%
-  ggplot(aes(x = dx, y = n, fill = label)) +
-  geom_bar(stat = "identity") +
-  labs(x = "Diagnosis", y = "Count", fill = "Methylation category")
-
-test %>%
-  filter(label != "mid") %>%
-  ggplot(., aes(x=tlen, color = label)) + geom_density()
-
-test %>%
-  ggplot(aes(x = tlen, color = label)) +
-  geom_density(adjust = 0.7) +
-  facet_wrap(~dx)
-
-test %>%
-  filter(tlen >155, tlen <250) %>%
-  ggplot(aes(x = tlen, color = dx)) +
-  geom_density(adjust = 0.6) +
-  facet_wrap(~label)
-
-
-test %>%
-  filter(tlen < 200, label != "mid") %>%
-  ggplot(aes(x = tlen, fill = label)) +
-  geom_histogram(position = "identity", alpha = 0.4, bins = 50)
-
-df %>%
-  filter(tlen < 200, label != "mid") %>%
-  ggplot(aes(x = tlen, color = label)) +
-  geom_density(adjust = 0.7)   # smaller = less smooth, more jagged
-
-df %>%
-  filter(tlen < 200, label != "mid") %>%
-  ggplot(aes(x = tlen, color = label)) +
-  geom_freqpoly(binwidth = 1)
-
-
-#########1#########2#########3#########4#########5#########6#########7#########8
-
-meth=read_tsv("/tmp/meth.tsv")
-
-meth <- meth %>% rename(global_meth = `global%meth`)
-
-# Run two-sample t-test
-t.test(global_meth ~ dx, data = meth)
-#+end_src
-
 ** Test
 #+begin_src yaml :tangle ./config/test.yaml
 # -----------------------------
@@ -4374,6 +3885,7 @@ Original EM-seq methods paper - [cite:@vaisvila2021]. Code is in the repo at [[f
 
 EM-seq and WGBS are not compatible- have different unique methylated CpGs at 8x [[/home/jeszyman/repos/emseq/emseq.org_20250605_135724.png][./resources/vaisvila2021fig4c.png]]
 ** Ideas
+The emseq_bam_dir is individually declared. This allows for workflows where multiple sequencing lanes are merged per-sample at the bam level.
 - config optinos as switches
 - Mosdepth aggregator
   #+begin_src snakemake :tangle no
@@ -6247,3 +5759,353 @@ myobj= methRead(args$bismark_cov_bed,
 
 *** variant calling
 - https:/pmc.ncbi.nlm.nih.gov/articles/PMC10072131/
+*** Input data model
+#+begin_src yaml
+defaults:
+  required: false       # Default: fields are not required unless specified
+  primary_key: false    # Default: fields are not primary keys unless specified
+
+entities:
+  - name: subjects
+    attributes:
+      - name: subject_id
+        type: string
+        primary_key: true      # Unique identifier for each subject
+        required: true
+
+  - name: samples
+    attributes:
+      - name: sample_id
+        type: string
+        primary_key: true      # Unique ID for each sample
+        required: true
+      - name: subject_id
+        type: string
+        foreign_key: subjects.subject_id   # Link back to subject
+        required: true
+      - name: sample_type
+        type: enum
+        values: [biofluid, tissue]         # Sample subtype
+        required: true
+      - name: collection_date
+        type: datetime                         # When sample was collected
+
+  - name: biofluid
+    attributes:
+      - name: sample_id
+        type: string
+        primary_key: true
+        foreign_key: samples.sample_id     # Must match a sample of type biofluid
+        required: true
+      - name: biofluid_type
+        type: enum
+        values: [plasma, serum, csf, drain, urine, other]   # Specific fluid type
+      - name: cfdna_conc
+        type: float
+        unit: ng/uL                         # Concentration of cfDNA
+
+  - name: biofluid_derivative
+    attributes:
+      - name: aliquot_id
+        type: string
+        primary_key: true                  # Unique ID for each aliquot
+        required: true
+      - name: sample_id
+        type: string
+        foreign_key: biofluid.sample_id    # Parent biofluid sample
+        required: true
+      - name: biofluid_derivative_type
+        type: enum
+        values: [ppp, pfp, other]          # Processing method
+      - name: derivative_processing_date
+        type: date                         # When derivative was processed
+
+  - name: tissue
+    attributes:
+      - name: sample_id
+        type: string
+        primary_key: true
+        foreign_key: samples.sample_id     # Must match a sample of type tissue
+        required: true
+
+  - name: libraries
+    attributes:
+      - name: library_id
+        type: string
+        primary_key: true                  # Unique ID for each library
+        required: true
+      - name: sample_id
+        type: string
+        foreign_key: samples.sample_id     # Source sample for this library
+        required: true
+      - name: pcr_cycltes
+        type: integer
+      - name: expected_coverage
+        type: integer
+
+  - name: sequencing
+    attributes:
+      - name: seq_run_id
+        type: string
+        primary_key: true                  # Unique ID for sequencing run
+        required: true
+      - name: library_id
+        type: string
+        foreign_key: libraries.library_id  # Library used in sequencing
+        required: true
+      - name: run_date
+        type: date                         # When sequencing occurred
+      - name: read_length
+        type: integer                      # Read length (e.g. 150)
+        required: true
+      - name: paired_end
+        type: boolean                      # True if paired-end sequencing
+        required: true
+
+relationships:
+  - from: subjects
+    to: samples
+    type: one-to-many       # One subject can have many samples
+
+  - from: samples
+    to: libraries
+    type: one-to-many       # One sample can yield multiple libraries
+
+  - from: samples
+    to: biofluid
+    type: one-to-one        # A sample is either biofluid or tissue
+
+  - from: samples
+    to: tissue
+    type: one-to-one        # "
+
+  - from: biofluid
+    to: biofluid_derivative
+    type: one-to-many       # Each biofluid must have at least one aliquot
+
+  - from: libraries
+    to: sequencing
+    type: one-to-many       # A library can be sequenced multiple times
+#+end_src
+*** cfDNA methylation and fragmentation
+- [cite:@noe2024]
+
+**** An 2023 methylation and fragmentation patterns
+
+
+#+begin_src bash
+#ssh jeff-nf1
+
+#mamba install -c bioconda -c conda-forge bismark -n emseq
+
+conda activate emseq
+
+
+
+# ---- settings ----
+GENOME_NAME=ncbi_hg38
+GENOME_ROOT=/mnt/data/projects/nf1/ref/bismark
+GENOME_DIR=$GENOME_ROOT/$GENOME_NAME
+INDEX_DIR=$GENOME_DIR/bismark_index
+THREADS=16
+
+# ---- prep dirs ----
+mkdir -p "$INDEX_DIR"
+
+# By default, bismark expects fasta(s) in the target folder.
+# So place the FASTA there (symlink is fine) BEFORE running:
+
+cd /mnt/data/projects/nf1/inputs
+
+wget https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz
+
+gunzip -c GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz.1 > ../ref/bismark/ncbi_hg38/bismark_index/GCA_000001405.15_GRCh38_no_alt_analysis_set.fa
+
+cd "$GENOME_DIR"
+
+# ---- build the Bismark index (Bowtie2) ----
+# (Requires: bismark, bowtie2, perl)
+bismark_genome_preparation \
+  --bowtie2 \
+  --parallel "$THREADS" \
+  --verbose \
+  "$INDEX_DIR"
+
+
+# ---- sanity check: index files should now exist ----
+ls -1 "$INDEX_DIR" | grep -E 'Bisulfite_Genome|.bt2$'
+
+mkdir -p /mnt/data/projects/nf1/tmp
+
+cd /mnt/data/projects/nf1/tmp/bismark_out
+
+# these write to dir of action
+bismark --non_directional \
+  -p 24 \
+  /mnt/data/projects/nf1/ref/bismark/ncbi_hg38/bismark_index \
+  -1 /mnt/data/projects/nf1/emseq/fastqs/emseq_05.raw_R1.fastq.gz \
+  -2 /mnt/data/projects/nf1/emseq/fastqs/emseq_05.raw_R2.fastq.gz \
+  -o /mnt/data/projects/nf1/tmp/bismark_out
+
+nohup bismark --non_directional \
+  -p 24 \
+  /mnt/data/projects/nf1/ref/bismark/ncbi_hg38/bismark_index \
+  -1 /mnt/data/projects/nf1/emseq/fastqs/emseq_05.raw_R1.fastq.gz \
+  -2 /mnt/data/projects/nf1/emseq/fastqs/emseq_05.raw_R2.fastq.gz \
+  -o /mnt/data/projects/nf1/tmp/bismark_out \
+  > bismark_emseq05.log 2>&1 &
+
+nohup bismark --non_directional \
+  -p 24 \
+  /mnt/data/projects/nf1/ref/bismark/ncbi_hg38/bismark_index \
+  -1 /mnt/data/projects/nf1/emseq/fastqs/emseq_06.raw_R1.fastq.gz \
+  -2 /mnt/data/projects/nf1/emseq/fastqs/emseq_06.raw_R2.fastq.gz \
+  -o /mnt/data/projects/nf1/tmp/bismark_out \
+  > bismark_emseq06.log 2>&1 &
+
+##########1##########2##########3##########4##########5##########6##########7##########8
+cp /mnt/data/projects/nf1/tmp/bismark_out/emseq_05.raw_R1_bismark_bt2_pe.bam /mnt/data/projects/nf1/tmp/an/emseq_05.bam
+
+cp /mnt/data/projects/nf1/tmp/bismark_out/emseq_06.raw_R1_bismark_bt2_pe.bam /mnt/data/projects/nf1/tmp/an/emseq_06.bam
+
+cd /mnt/data/projects/nf1/tmp/an
+ls
+
+samtools view -h emseq_05.bam | samtools view -b -o emseq_05_repaired.bam
+
+samtools view -h emseq_06.bam | samtools view -b -o emseq_06_repaired.bam
+
+python3 test3.py emseq_05_repaired.bam 10 > /tmp/emseq_05_meth_and_frag.tsv
+
+python3 test3.py emseq_06_repaired.bam 10 > /tmp/emseq_06_meth_and_frag.tsv
+
+python3 test3.py emseq_05_repaired.bam > /tmp/emseq_05_meth_and_frag.tsv
+
+python3 test3.py emseq_06_repaired.bam > /tmp/emseq_06_meth_and_frag.tsv
+
+##########1##########2##########3##########4##########5##########6##########7##########8
+# 2) Deduplicate the Bismark BAM (paired-end)
+deduplicate_bismark --bam --paired \
+  --output_dir /mnt/data/projects/nf1/tmp/bismark_out \
+  /mnt/data/projects/nf1/tmp/bismark_out/emseq_12.raw_R1_bismark_bt2_pe.bam
+
+#+end_src
+
+#+begin_src R
+library(tidyverse)
+
+pn = read_tsv("/tmp/emseq_05_meth_and_frag.tsv") %>% mutate(dx = "pn")
+mpnst = read_tsv("/tmp/emseq_06_meth_and_frag.tsv") %>% mutate(dx = "mpnst")
+
+test=rbind(pn, mpnst)
+
+test %>%
+  filter(label != "mid") %>%
+  filter(tlen < 167) %>%
+  ggplot(aes(x = dx, fill = label)) +
+  geom_bar(position = "fill") +
+  labs(x = "Diagnosis", y = "Proportion", fill = "Methylation category")
+
+
+test %>%
+  mutate(tlen_bin = cut(tlen, breaks = seq(0, 400, 10))) %>%
+  group_by(tlen_bin) %>%
+  summarise(mean_cpg = mean(cpg_frac, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(x = tlen_bin, y = mean_cpg, group = 1)) +
+  geom_line() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+
+test %>%
+  mutate(tlen_bin = cut(tlen, breaks = seq(150, 300, 5))) %>%
+  group_by(dx, tlen_bin) %>%
+  summarise(mean_cpg = mean(cpg_frac, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(x = tlen_bin, y = mean_cpg, color = dx, group = dx)) +
+  #geom_line() +
+  geom_smooth(se=F) +
+  labs(x = "Fragment length (bp bins)", y = "Mean CpG fraction") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+
+test %>%
+  mutate(tlen_bin = cut(tlen, breaks = seq(0, 400, 10))) %>%
+  group_by(dx, tlen_bin) %>%
+  summarise(mean_cpg = mean(cpg_frac, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(x = tlen_bin, y = mean_cpg, group = dx, color = dx)) +
+  geom_line() +
+  facet_wrap(~dx) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
+
+test %>%
+  filter(label != "mid") %>%
+  filter(tlen > 167) %>%
+  ggplot(aes(x = dx, fill = label)) +
+  geom_bar(position = "fill") +
+  labs(x = "Diagnosis", y = "Proportion", fill = "Methylation category")
+
+
+test %>%
+  mutate(frag_bin = ifelse(tlen < 167, "<167", ">167")) %>%
+  group_by(dx, frag_bin) %>%
+  summarise(frac_hyper = mean(label == "hypo"), .groups = "drop") %>%
+  tidyr::pivot_wider(
+    names_from = frag_bin,
+    values_from = frac_hyper
+  )
+
+test %>%
+  mutate(frag_bin = ifelse(tlen < 167, "<167", ">167")) %>%
+  group_by(frag_bin) %>%
+  summarise(frac_hyper = mean(label == "hypo"), .groups = "drop") %>%
+  tidyr::pivot_wider(
+    names_from = frag_bin,
+    values_from = frac_hyper
+  )
+
+test %>%
+  filter(label != "mid") %>%
+  filter(tlen > 250) %>%
+  count(dx, label) %>%
+  ggplot(aes(x = dx, y = n, fill = label)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Diagnosis", y = "Count", fill = "Methylation category")
+
+test %>%
+  filter(label != "mid") %>%
+  ggplot(., aes(x=tlen, color = label)) + geom_density()
+
+test %>%
+  ggplot(aes(x = tlen, color = label)) +
+  geom_density(adjust = 0.7) +
+  facet_wrap(~dx)
+
+test %>%
+  filter(tlen >155, tlen <250) %>%
+  ggplot(aes(x = tlen, color = dx)) +
+  geom_density(adjust = 0.6) +
+  facet_wrap(~label)
+
+
+test %>%
+  filter(tlen < 200, label != "mid") %>%
+  ggplot(aes(x = tlen, fill = label)) +
+  geom_histogram(position = "identity", alpha = 0.4, bins = 50)
+
+df %>%
+  filter(tlen < 200, label != "mid") %>%
+  ggplot(aes(x = tlen, color = label)) +
+  geom_density(adjust = 0.7)   # smaller = less smooth, more jagged
+
+df %>%
+  filter(tlen < 200, label != "mid") %>%
+  ggplot(aes(x = tlen, color = label)) +
+  geom_freqpoly(binwidth = 1)
+
+
+#########1#########2#########3#########4#########5#########6#########7#########8
+
+meth=read_tsv("/tmp/meth.tsv")
+
+meth <- meth %>% rename(global_meth = `global%meth`)
+
+# Run two-sample t-test
+t.test(global_meth ~ dx, data = meth)
+#+end_src

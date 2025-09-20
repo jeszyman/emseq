@@ -7,11 +7,8 @@ Current stable version tested with minimal in-repo example is tagged emseq.v3.1.
 
 # Continuous Integration
 
-[\![test-data](![img](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml/badge.svg?branch=main))](<https://github.com/jeszyman/emseq/actions/workflows/test-data.yml>)  
-[\![ci-snakemake](![img](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml/badge.svg?branch=main))](<https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml>)  
-
-[\![test-data](![img](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml/badge.svg?branch=main))](<https://github.com/jeszyman/emseq/actions/workflows/test-data.yml>)  
-[\![ci-snakemake](![img](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml/badge.svg?branch=main))](<https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml>)  
+[![test-data](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml/badge.svg?branch=main)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml)
+[![ci-snakemake](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml/badge.svg?branch=main)](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml)
 
 
 # Change Log

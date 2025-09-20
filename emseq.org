@@ -292,7 +292,7 @@ The EM-seq repository contains modular workflows intended to be run from within 
 Current stable version tested with minimal in-repo example is tagged emseq.v3.1.0.
 
 [[file:resources/test_smk.png]]
-**** Utilities :noexport:
+**** Utilities                                                     :noexport:
 [[file:README.md]]
 #+begin_src bash
 python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/repos/emseq/emseq.org --node_id bda70cff-0713-4e32-8da1-ee83924b8f00
@@ -303,13 +303,15 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 
 #+begin_export md
 
-[![test-data](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/test-data.yml?branch=master&label=test-data)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml)
+[![test-data](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/test-data.yaml?branch=master&label=test-data)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yaml)
 
 
-[![smk-dry](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-dry.yml?branch=master&label=smk-dry)](https://github.com/jeszyman/emseq/actions/workflows/smk-dry.yml)
+[![smk-dry](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-dry.yaml?branch=master&label=smk-dry)](https://github.com/jeszyman/emseq/actions/workflows/smk-dry.yaml)
+
 #+end_export
 **** Change Log
 - Development since last tag
+  - Minor testing updates
 - wf/emseq/v3.1.0
   - [2025-09-19 Fri] Added a first github workflow test
   - [2025-09-19 Fri] Robust annotation of methylkit outputs validated as rscript
@@ -326,7 +328,7 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 :ID:       93585550-c78e-45e1-8adc-92b4efbebbae
 :END:
 
-#+begin_src yaml :tangle ./.github/workflows/test-data.yml
+#+begin_src yaml :tangle ./.github/workflows/test-data.yaml
 name: test-data
 
 on:

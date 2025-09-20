@@ -1,8 +1,8 @@
 
 # Table of Contents
 
-1.  [Prerequisites](#org2026ca3)
-2.  [Change Log](#org3b5ad1d)
+1.  [Prerequisites](#org93b72be)
+2.  [Change Log](#org0f7cf0a)
 
 The EM-seq repository contains modular workflows intended to be run from within a over-wrapping snakemake workflow.  
 
@@ -11,12 +11,12 @@ Current stable version tested with minimal in-repo example is tagged emseq.v3.1.
 ![img](resources/test_smk.png)  
 
 
-<a id="org2026ca3"></a>
+<a id="org93b72be"></a>
 
 # Prerequisites
 
 
-<a id="org3b5ad1d"></a>
+<a id="org0f7cf0a"></a>
 
 # Change Log
 

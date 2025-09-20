@@ -31,10 +31,10 @@ save_in_emacs() {
 }
 
 update_readme() {
-  python3 "$README_EXPORT" \
-    --org_file "$README_ORG" \
-    --node_id "$README_NODE"
+    python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/repos/emseq/emseq.org --node_id bda70cff-0713-4e32-8da1-ee83924b8f00
 }
+
+
 
 tangle_repo_org() {
   local repo=$1
@@ -65,12 +65,13 @@ git_update_repo() {
 }
 
 main() {
-  update_readme
+  save_in_emacs
 
   for repo in "${REPOS[@]}"; do
     tangle_repo_org "$repo"
   done
 
+  update_readme
   # Save again in case tangling opened/modified buffers
   save_in_emacs
 
@@ -301,11 +302,12 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 **** Continuous Integration
 
 #+begin_export md
-[![test-data](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml/badge.svg?branch=master)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml)
-[![ci-snakemake](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml/badge.svg?branch=master)](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml)
+
+[![test-data](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/test-data.yml?branch=master&label=test-data)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml)
+
+
+[![smk-run](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-run.yml?branch=master&label=smk-run)](https://github.com/jeszyman/emseq/actions/workflows/smk-run.yml)
 #+end_export
-
-
 **** Change Log
 - Development since last tag
 - wf/emseq/v3.1.0

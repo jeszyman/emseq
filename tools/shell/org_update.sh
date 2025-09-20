@@ -22,10 +22,10 @@ save_in_emacs() {
 }
 
 update_readme() {
-  python3 "$README_EXPORT" \
-    --org_file "$README_ORG" \
-    --node_id "$README_NODE"
+    python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/repos/emseq/emseq.org --node_id bda70cff-0713-4e32-8da1-ee83924b8f00
 }
+
+
 
 tangle_repo_org() {
   local repo=$1
@@ -56,12 +56,13 @@ git_update_repo() {
 }
 
 main() {
-  update_readme
+  save_in_emacs
 
   for repo in "${REPOS[@]}"; do
     tangle_repo_org "$repo"
   done
 
+  update_readme
   # Save again in case tangling opened/modified buffers
   save_in_emacs
 

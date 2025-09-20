@@ -4,7 +4,6 @@
 :END:
 ** [[id:bda70cff-0713-4e32-8da1-ee83924b8f00][README]]
 ** [[elisp:(let ((window-config (current-window-configuration))) (async-shell-command "bash ~/repos/mpnst/tools/shell/org_update.sh") (set-window-configuration window-config))][org update]]
-** [[elisp:(progn (org-babel-goto-named-src-block "git-workflow-up") (org-babel-execute-src-block))][Run git workflow up]]
 ** Repository setup and administration
 *** Org update
 #+begin_src bash :tangle ./tools/shell/org_update.sh
@@ -300,19 +299,12 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 #+end_src
 
 **** Continuous Integration
+
 #+begin_export md
-[![test-data](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml/badge.svg?branch=main)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml)
-[![ci-snakemake](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml/badge.svg?branch=main)](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml)
+[![test-data](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml/badge.svg?branch=master)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml)
+[![ci-snakemake](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml/badge.svg?branch=master)](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml)
 #+end_export
 
-[![test-data](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml/badge.svg?branch=main)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml)
-[![ci-snakemake](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml/badge.svg?branch=main)](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml)
-
-[![test-data](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml/badge.svg?branch=main)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml)
-[![ci-snakemake](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml/badge.svg?branch=main)](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml)
-
-[![test-data](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml/badge.svg?branch=main)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml)
-[![ci-snakemake](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml/badge.svg?branch=main)](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml)
 
 **** Change Log
 - Development since last tag
@@ -326,94 +318,7 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
   - emseq.smk expanded to include differential methylation from nested list map
   - Many small fixes for consistent naming and run condition optimization
 - [2025-09-18 Thu] Updated EM-seq main pipeline to wf/emseq/v2.0.0. Mainly improved and simplified variable naming.
-*** Git and GitHub
-#+name: git-workflow-up
-#+begin_src bash :results replace raw
-source ~/repos/basecamp/lib/basecamp_functions.sh
-cd ~/repos/emseq
-output=$(git_wkflow_up 2>&1)
-if [ $? -ne 0 ]; then
-    echo "Error running git_wkflow_up"
-    echo "$output"
-    exit 1
-fi
-
-echo -e "$(date)\n$output"
-
-#+end_src
-
-#+RESULTS: git-workflow-up
-Fri Sep 19 07:41:22 PM CDT 2025
-[master 794462e] .
- 1 file changed, 4 insertions(+), 4 deletions(-)
-To github.com:jeszyman/emseq.git
-   4ea1145..794462e  master -> master
-
-**** Dry run test
-#+begin_src yaml :tangle ./.github/workflows/smk-dry.yaml
-name: ci-snakemake
-
-on:
-  pull_request:
-    paths:
-      - "workflows/**"
-      - "config/**"
-      - "scripts/**"
-      - ".github/workflows/ci-snakemake.yml"
-  schedule:
-    - cron: "0 4 * * 1"
-  workflow_dispatch: {}
-
-concurrency:
-  group: ci-snakemake-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  contents: read
-
-jobs:
-  smoke:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-
-      # Install micromamba for fast, reliable environment management
-      - name: Set up micromamba
-        uses: mamba-org/setup-micromamba@v1
-        with:
-          environment-file: config/emseq-conda-env.yaml
-          environment-name: emseq
-          cache-environment: true
-
-      - name: Verify required files
-        run: |
-          set -euo pipefail
-          test -f config/emseq-conda-env.yaml
-          test -f workflows/test.smk
-          test -f config/test.yaml
-
-      - name: Show environment info
-        run: |
-          micromamba info
-          micromamba list -n emseq
-          micromamba run -n emseq python -V
-          micromamba run -n emseq snakemake --version
-          micromamba run -n emseq samtools --version || true
-
-      - name: Snakemake dry-run
-        run: |
-          micromamba run -n emseq snakemake \
-          -s workflows/test.smk \
-          --configfile config/test.yaml \
-          --cores 4 \
-          --dry-run \
-          --printshellcmds \
-          --rerun-incomplete \
-          --resources concurrency=50
-
-#+end_src
-
+*** GitHub tests
 **** Generate test data test
 :PROPERTIES:
 :ID:       93585550-c78e-45e1-8adc-92b4efbebbae
@@ -510,6 +415,71 @@ jobs:
           fasta_count=$(find tests/full -type f \( -name "*chr22*.fa*" -o -name "*lambda*.fa*" -o -name "*pUC19*.fa*" \) | wc -l)
           (( fasta_count >= 1 )) || { echo "Expected ≥1 reference FASTA"; exit 1; }
           echo "OK: test data present."
+#+end_src
+
+**** Dry run test
+#+begin_src yaml :tangle ./.github/workflows/smk-dry.yaml
+name: smk-dry
+
+on:
+  pull_request:
+    paths:
+      - "workflows/**"
+      - "config/**"
+      - "scripts/**"
+      - ".github/workflows/ci-snakemake.yml"
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-snakemake-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      # Install micromamba for fast, reliable environment management
+      - name: Set up micromamba
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: config/emseq-conda-env.yaml
+          environment-name: emseq
+          cache-environment: true
+
+      - name: Verify required files
+        run: |
+          set -euo pipefail
+          test -f config/emseq-conda-env.yaml
+          test -f workflows/test.smk
+          test -f config/test.yaml
+
+      - name: Show environment info
+        run: |
+          micromamba info
+          micromamba list -n emseq
+          micromamba run -n emseq python -V
+          micromamba run -n emseq snakemake --version
+          micromamba run -n emseq samtools --version || true
+
+      - name: Snakemake dry-run
+        run: |
+          micromamba run -n emseq snakemake \
+          -s workflows/test.smk \
+          --configfile config/test.yaml \
+          --cores 4 \
+          --dry-run \
+          --printshellcmds \
+          --rerun-incomplete \
+          --resources concurrency=50
+
 #+end_src
 
 ** Conda environmental YAMLs

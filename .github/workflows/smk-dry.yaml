@@ -1,4 +1,4 @@
-name: ci-snakemake
+name: smk-dry
 
 on:
   pull_request:

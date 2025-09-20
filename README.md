@@ -7,8 +7,12 @@ Current stable version tested with minimal in-repo example is tagged emseq.v3.1.
 
 # Continuous Integration
 
-[![test-data](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml/badge.svg?branch=main)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml)
-[![ci-snakemake](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml/badge.svg?branch=main)](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml)
+[![test-data](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml/badge.svg?branch=master)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml)
+[![ci-snakemake](https://github.com/jeszyman/emseq/actions/workflows/smk-run.yml/badge.svg?branch=master)](https://github.com/jeszyman/emseq/actions/workflows/smk-run.yml)
+
+
+[![test-data](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/test-data.yml?branch=master&label=test-data)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml)
+[![ci-snakemake](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/ci-snakemake.yml?branch=master&label=ci-snakemake)](https://github.com/jeszyman/emseq/actions/workflows/ci-snakemake.yml)
 
 
 # Change Log

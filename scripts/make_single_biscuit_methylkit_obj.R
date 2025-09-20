@@ -18,6 +18,7 @@ myobj= methRead(args$bismark_cov_bed,
                 assembly= "hg38",
                 dbtype = "tabix",
                 dbdir = args$out_dir)
+
 library(argparse)
 library(methylKit)
 

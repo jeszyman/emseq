@@ -5,6 +5,7 @@
 #########1#########2#########3#########4#########5#########6#########7#########8
 #
 # A snakefile for basic processing of EM-seq sequencing data
+
 rule emseq_align_bwameth_spike:
     message: "EM-seq bwameth (spike) for {wildcards.library_id} {wildcards.emseq_ref_name}"
     conda: ENV_EMSEQ
@@ -35,6 +36,7 @@ rule emseq_align_bwameth_spike:
         | samtools view -@ 8 -u -F 4 - \
         | samtools sort -@ 8 -T "{params.temp_prefix}" -o "{output.bam}"
         """
+
 rule emseq_methyldackel_spike:
     message: "EM-seq MethylDackel (spike) for {wildcards.library_id} {wildcards.emseq_ref_name} {wildcards.align_method}"
     conda: ENV_EMSEQ
@@ -65,6 +67,7 @@ rule emseq_methyldackel_spike:
           "{input.bam}" \
           -o "{params.out_prefix}"
         """
+
 # -------- Index (bwa-meth) --------
 rule bwa_meth_index:
     message: "bwa-meth index for {wildcards.emseq_ref_name}"
@@ -101,6 +104,7 @@ rule bwa_meth_index:
         samtools faidx "{params.fasta_target}"
         bwameth.py index-mem2 "{params.fasta_target}"
         """
+
 # -------- Align (bwa-meth) --------
 rule emseq_align_bwameth:
     message: "EM-seq bwameth for {wildcards.library_id} {wildcards.emseq_ref_name}"
@@ -134,6 +138,7 @@ rule emseq_align_bwameth:
         | samtools view -u - \
         | samtools sort -@ 8 -T "{params.temp_prefix}" -o "{output.bam}"
         """
+
 rule biscuit_index:
     message: "biscuit index for {wildcards.emseq_ref_name}"
     conda: ENV_EMSEQ
@@ -155,6 +160,7 @@ rule biscuit_index:
         biscuit index "{output.fasta}"
         touch "{output.biscuit_index_done}"
         """
+
 rule emseq_align_biscuit:
     message: "Biscuit alignment for {wildcards.emseq_ref_name}"
     conda: ENV_EMSEQ
@@ -181,6 +187,7 @@ rule emseq_align_biscuit:
             -T "{params.tmp_dir}/tmp/{wildcards.library_id}_sorttmp" \
             -o "{output.bam}"
         """
+
 rule emseq_fastp:
     message: "EM-seq fastp for {wildcards.library_id}"
     conda: ENV_EMSEQ
@@ -218,6 +225,7 @@ rule emseq_fastp:
           --thread {threads} \
           {params.extra}
         """
+
 rule emseq_fastqc:
     message: "EM-seq FastQC for {wildcards.library_id} {wildcards.processing} {wildcards.read}"
     conda: ENV_EMSEQ
@@ -244,6 +252,7 @@ rule emseq_fastqc:
           --threads {threads} \
           "{input.fq}"
         """
+
 rule emseq_mosdepth:
     message: "EM-seq mosdepth for {wildcards.library_id} {wildcards.emseq_ref_name} {wildcards.align_method}"
     conda: ENV_EMSEQ
@@ -283,6 +292,7 @@ rule emseq_mosdepth:
         '{params.quant_levels}' \
         {threads}
         """
+
 rule emseq_mbias:
     message: "EM-seq MethylDackel mbias for {wildcards.library_id} {wildcards.emseq_ref_name} {wildcards.align_method}"
     conda: ENV_EMSEQ
@@ -307,6 +317,7 @@ rule emseq_mbias:
           --noSVG \
           "{input.fasta}" "{input.bam}" > "{output.txt}"
         """
+
 rule emseq_dedup:
     message: "EM-seq dedup (dupsifter) for {wildcards.library_id} {wildcards.emseq_ref_name} {wildcards.align_method}"
     conda: ENV_EMSEQ
@@ -349,6 +360,7 @@ rule emseq_dedup:
 
         samtools index -@ {threads} "{output.bam}"
         """
+
 rule emseq_filter_bam:
     message: "Filtering deduped BAM for {wildcards.library_id}"
     conda: ENV_EMSEQ
@@ -369,6 +381,7 @@ rule emseq_filter_bam:
           > "{output.bam}"
         samtools index -@ {threads} "{output.bam}" "{output.bai}"
     """
+
 rule emseq_samtools_stats:
     message: "Samtools stats + flagstat for {wildcards.library_id}.{wildcards.emseq_ref_name}"
     conda: ENV_EMSEQ
@@ -389,6 +402,7 @@ rule emseq_samtools_stats:
         samtools stats -@ {threads} {input.bam} > {output.stats} 2>> {log}
         samtools flagstat -@ {threads} {input.bam} > {output.flagstat} 2>> {log}
         """
+
 # -------- Call methylation (MethylDackel) --------
 rule emseq_methyldackel:
     message: "EM-seq MethylDackel for {wildcards.library_id} {wildcards.emseq_ref_name} {wildcards.align_method}"
@@ -419,6 +433,7 @@ rule emseq_methyldackel:
           "{input.bam}" \
           -o "{params.out_prefix}"
         """
+
 # -------- Build single methylKit (R) --------
 rule make_single_methylkit_amp_obj:
     message: "Build tabix-backed methylKit object for {wildcards.library_id} {wildcards.emseq_ref_name} {wildcards.align_method}"
@@ -451,6 +466,7 @@ rule make_single_methylkit_amp_obj:
           --treatment {params.treatment} \
           --build {params.build}
         """
+
 rule emseq_multiqc:
     message: f"MultiQC report for EM-seq (n={len(emseq_library_ids)} libraries)"
     conda: ENV_EMSEQ
@@ -521,6 +537,7 @@ rule emseq_multiqc:
             --filename $(basename {output.html}) \
             &> {log}
         """
+
 rule make_methylkit_unite_db:
     conda: ENV_METHYLKIT
     threads: 32
@@ -560,6 +577,7 @@ rule make_methylkit_unite_db:
           --chunk_size {params.chunk_size} \
           > {log} 2>&1
         """
+
 rule make_methylkit_diff_db:
     conda: ENV_METHYLKIT
     threads: 32
@@ -585,6 +603,7 @@ rule make_methylkit_diff_db:
           --chunk_size {params.chunk_size} \
           > {log} 2>&1
         """
+
 rule make_methylkit_diff_db_tiled:
     conda: ENV_METHYLKIT
     input:

@@ -79,4 +79,5 @@ run_mosdepth() {
 }
 
 main "$@"
+
 # (can be just a trailing newline)

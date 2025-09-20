@@ -1,8 +1,8 @@
 
 # Table of Contents
 
-1.  [Continuous Integration](#org9c31ab2)
-2.  [Change Log](#org1768f23)
+1.  [Continuous Integration](#org47d5985)
+2.  [Change Log](#org07f11c2)
 
 The EM-seq repository contains modular workflows intended to be run from within a over-wrapping snakemake workflow.  
 
@@ -11,7 +11,7 @@ Current stable version tested with minimal in-repo example is tagged emseq.v3.1.
 ![img](resources/test_smk.png)  
 
 
-<a id="org9c31ab2"></a>
+<a id="org47d5985"></a>
 
 # Continuous Integration
 
@@ -19,10 +19,10 @@ Current stable version tested with minimal in-repo example is tagged emseq.v3.1.
 [![test-data](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/test-data.yml?branch=master&label=test-data)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yml)
 
 
-[![smk-run](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-run.yml?branch=master&label=smk-run)](https://github.com/jeszyman/emseq/actions/workflows/smk-run.yml)
+[![smk-dry](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-dry.yml?branch=master&label=smk-dry)](https://github.com/jeszyman/emseq/actions/workflows/smk-dry.yml)
 
 
-<a id="org1768f23"></a>
+<a id="org07f11c2"></a>
 
 # Change Log
 

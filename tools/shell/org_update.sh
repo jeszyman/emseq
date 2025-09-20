@@ -6,13 +6,13 @@ source ~/repos/basecamp/lib/basecamp_functions.sh
 REPOS=(emseq)
 
 # ---------- config ----------
-README_ORG=~/repos/emseq/emseq.org
+REPO_DIR=~/repos/emseq
+README_ORG="$REPO_DIR/emseq.org"
 README_NODE=bda70cff-0713-4e32-8da1-ee83924b8f00
 README_EXPORT=~/repos/emacs/scripts/emacs_export_header_to_markdown.py
 # ----------------------------
 
 save_in_emacs() {
-  # Save all modified buffers in a running Emacs server (non-interactive).
   if command -v emacsclient >/dev/null 2>&1 && emacsclient -e "(progn t)" >/dev/null 2>&1; then
     emacsclient -e "(save-some-buffers t)" >/dev/null
     echo "💾 saved buffers via emacsclient"
@@ -22,10 +22,11 @@ save_in_emacs() {
 }
 
 update_readme() {
-    python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/repos/emseq/emseq.org --node_id bda70cff-0713-4e32-8da1-ee83924b8f00
+  echo "📝 exporting README.md from $README_ORG"
+  pushd "$REPO_DIR" >/dev/null
+  python3 "$README_EXPORT" --org_file "$README_ORG" --node_id "$README_NODE"
+  popd >/dev/null
 }
-
-
 
 tangle_repo_org() {
   local repo=$1
@@ -34,7 +35,7 @@ tangle_repo_org() {
   echo "=== $repo ==="
   if [[ -f "$org_file" ]]; then
     echo "⏳ tangling $repo..."
-    tangle "$org_file" || echo "❌ tangle failed for $repo"
+    tangle "$org_file" || { echo "❌ tangle failed for $repo"; return 1; }
   else
     echo "⚠️  no $repo.org, skipping"
   fi
@@ -43,7 +44,7 @@ tangle_repo_org() {
 git_update_repo() {
   local repo=$1
   echo "🔄 updating $repo..."
-  pushd ~/repos/"$repo" >/dev/null || { echo "❌ cd failed for $repo"; return; }
+  pushd ~/repos/"$repo" >/dev/null || { echo "❌ cd failed for $repo"; return 1; }
 
   if ! output=$(git_wkflow_up 2>&1); then
     echo "❌ git_wkflow_up failed in $repo"
@@ -59,15 +60,14 @@ main() {
   save_in_emacs
 
   for repo in "${REPOS[@]}"; do
-    tangle_repo_org "$repo"
+    tangle_repo_org "$repo" || true
   done
 
   update_readme
-  # Save again in case tangling opened/modified buffers
   save_in_emacs
 
   for repo in "${REPOS[@]}"; do
-    git_update_repo "$repo"
+    git_update_repo "$repo" || true
   done
 }
 

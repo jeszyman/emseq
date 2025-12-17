@@ -565,8 +565,10 @@ dependencies:
 :ID:       92e64b67-c219-4146-a89b-a8710d91a634
 :header-args:snakemake: :tangle ./workflows/emseq.smk
 :END:
-[[file:workflows/emseq.smk]]
+- https://chatgpt.com/c/69161244-a164-832f-9b06-598bd9ae3556
 
+[[file:workflows/emseq.smk]]
+[[file:resources/test_smk.png]]
 #+begin_src python :results output replace
 import re
 from pathlib import Path
@@ -1426,6 +1428,7 @@ rule emseq_multiqc:
 
 #+end_src
 *** Methylkit
+Methylkit DMR requires EXACT same genome - can't mix e.g. hg38 / hg38 decoy
 See for stranding https://claude.ai/chat/c39b78cc-5b2f-49ed-9f02-ed349824a07a
 **** Per base
 ***** United per sample
@@ -3484,6 +3487,8 @@ ggplot(meth_df, aes(x = group, y = methylation, fill = group)) +
 
 
 ** Test
+- https://chatgpt.com/c/68ceb2e8-4d64-832a-9bc2-8bc08c9d37b3
+
 #+begin_src yaml :tangle ./config/test.yaml
 # -----------------------------
 # Global runtime/config knobs
@@ -3959,8 +3964,9 @@ Original EM-seq methods paper - [cite:@vaisvila2021]. Code is in the repo at [[f
 
 EM-seq and WGBS are not compatible- have different unique methylated CpGs at 8x [[/home/jeszyman/repos/emseq/emseq.org_20250605_135724.png][./resources/vaisvila2021fig4c.png]]
 ** Ideas
-Prerequisites in readme
-The emseq_bam_dir is individually declared. This allows for workflows where multiple sequencing lanes are merged per-sample at the bam level.
+- Prerequisites in readme
+- linter ci https://chatgpt.com/c/68ce07ea-83fc-8326-bd29-774b8da4d25c
+- The emseq_bam_dir is individually declared. This allows for workflows where multiple sequencing lanes are merged per-sample at the bam level.
 - config optinos as switches
 - Mosdepth aggregator
   #+begin_src snakemake :tangle no

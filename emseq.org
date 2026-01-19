@@ -311,7 +311,7 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 #+end_export
 **** Change Log
 - Development since last tag
-  - None
+  - [ ] Added a full run CI test
 - wf/emseq/v4.0.0
   - Minor testing updates
   - Fixed test.yaml file locations
@@ -492,7 +492,7 @@ jobs:
 #+end_src
 
 **** Full test run
-#+begin_src yaml
+#+begin_src yaml :tangle ./github/workflows/smk-run.yaml
 name: smk-run
 on:
   pull_request:

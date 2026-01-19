@@ -11,6 +11,8 @@ The EM-seq repository contains modular workflows intended to be run from within 
 
 [![smk-dry](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-dry.yaml?branch=master&label=smk-dry)](https://github.com/jeszyman/emseq/actions/workflows/smk-dry.yaml)
 
+[![smk-run](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-run.yaml?branch=master&label=smk-run)](https://github.com/jeszyman/emseq/actions/workflows/smk-run.yaml)
+
 
 # Change Log
 

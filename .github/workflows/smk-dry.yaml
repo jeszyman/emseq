@@ -1,7 +1,6 @@
 name: smk-dry
 
 on:
-  workflow_dispatch:
   pull_request:
     paths:
       - "workflows/**"

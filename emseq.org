@@ -306,6 +306,8 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 
 [![smk-dry](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-dry.yaml?branch=master&label=smk-dry)](https://github.com/jeszyman/emseq/actions/workflows/smk-dry.yaml)
 
+[![smk-run](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-run.yaml?branch=master&label=smk-run)](https://github.com/jeszyman/emseq/actions/workflows/smk-run.yaml)
+
 #+end_export
 **** Change Log
 - Development since last tag
@@ -424,7 +426,6 @@ jobs:
           (( fasta_count >= 1 )) || { echo "Expected ≥1 reference FASTA"; exit 1; }
           echo "OK: test data present."
 #+end_src
-
 **** Dry run test
 #+begin_src yaml :tangle ./.github/workflows/smk-dry.yaml
 name: smk-dry
@@ -488,6 +489,53 @@ jobs:
           --rerun-incomplete \
           --resources concurrency=50
 
+#+end_src
+
+**** Full test run
+#+begin_src yaml
+name: smk-run
+on:
+  pull_request:
+    paths:
+      - "workflows/**"
+      - "config/**"
+      - "scripts/**"
+      - ".github/workflows/smk-run.yaml"
+  schedule:
+    - cron: "0 5 * * 1"
+  workflow_dispatch: {}
+concurrency:
+  group: smk-run-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up micromamba
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: config/emseq-conda-env.yaml
+          environment-name: emseq
+          cache-environment: true
+      - name: Verify required files
+        run: |
+          set -euo pipefail
+          test -f config/emseq-conda-env.yaml
+          test -f workflows/test.smk
+          test -f config/test.yaml
+      - name: Snakemake run
+        run: |
+          micromamba run -n emseq snakemake \
+            -s workflows/test.smk \
+            --configfile config/test.yaml \
+            --cores 4 \
+            --printshellcmds \
+            --rerun-incomplete \
+            --resources concurrency=50
 #+end_src
 
 ** Conda environmental YAMLs

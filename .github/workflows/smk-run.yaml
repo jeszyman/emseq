@@ -40,4 +40,5 @@ jobs:
             --cores 4 \
             --printshellcmds \
             --rerun-incomplete \
+            --use-conda \
             --resources concurrency=50

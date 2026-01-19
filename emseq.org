@@ -535,6 +535,7 @@ jobs:
             --cores 4 \
             --printshellcmds \
             --rerun-incomplete \
+            --use-conda \
             --resources concurrency=50
 #+end_src
 
@@ -579,6 +580,7 @@ channels:
   - bioconda
 
 dependencies:
+  - htslib
   - r-argparse
   - bioconductor-methylkit
   - r-data.table=1.15.4

@@ -492,7 +492,7 @@ jobs:
 #+end_src
 
 **** Full test run
-#+begin_src yaml :tangle ./github/workflows/smk-run.yaml
+#+begin_src yaml :tangle ./.github/workflows/smk-run.yaml
 name: smk-run
 on:
   pull_request:

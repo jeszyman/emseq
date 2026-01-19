@@ -289,8 +289,6 @@ See [[id:93585550-c78e-45e1-8adc-92b4efbebbae][Generate test data test]]
 
 The EM-seq repository contains modular workflows intended to be run from within a over-wrapping snakemake workflow.
 
-Current stable version tested with minimal in-repo example is tagged emseq.v3.1.0.
-
 [[file:resources/test_smk.png]]
 **** Utilities                                                     :noexport:
 [[file:README.md]]
@@ -311,6 +309,7 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 #+end_export
 **** Change Log
 - Development since last tag
+  - None
 - wf/emseq/v4.0.0
   - Minor testing updates
   - Fixed test.yaml file locations
@@ -431,6 +430,7 @@ jobs:
 name: smk-dry
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "workflows/**"

@@ -88,7 +88,7 @@ tiled_obj <- unite(
   tiled_raw,
   destrand = FALSE,
   save.db  = TRUE,
-  suffix   = paste0(args$suffix, "_tiled"),
+  suffix   = paste0(args$suffix, ".tiled"),
   dbdir    = args$out_dir,
   min.per.group = min_per_grp,
   mc.cores = cores

@@ -311,7 +311,12 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 #+end_export
 **** Change Log
 - Development since last tag
+- wf/emseq/v4.0.0
   - Minor testing updates
+  - Fixed test.yaml file locations
+  - Changed bam filtering step to remove duplicates marked by dupsifter. So rule emseq_dedup MARKS duplicates while rule emseq_filter_bam removes them as part of `samtools view -@ {threads} -u -f 2 -q 30 -F 3840 "{input.bam}`
+  - Changed mosdepth to take filtered bam and quantify by keep.bed, ignoring filtered regions in depth calculation.
+  - Conforms to [[https://github.com/jeszyman/basecamp/blob/v1.3.0/docs/snakemake-style-guide.md][v1.3 snakemake style guide]]
 - wf/emseq/v3.1.0
   - [2025-09-19 Fri] Added a first github workflow test
   - [2025-09-19 Fri] Robust annotation of methylkit outputs validated as rscript
@@ -665,63 +670,57 @@ The spike workflow uses bwa-meth to quickly align to phage reference genomes. Co
 **** Align
 #+begin_src snakemake
 rule emseq_align_bwameth_spike:
-    message: "EM-seq bwameth (spike) for {wildcards.library_id} {wildcards.emseq_ref_name}"
+    message: "EM-seq bwameth on spike-in reference with simple samtools piping and no duplicate calls"
     conda: ENV_EMSEQ
-    threads: 48
-    params:
-        temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}"
-    resources:
-        concurrency=50
     input:
         r1  = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
         r2  = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
         ref = f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa",
-    output:
-        bam = f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.bwa_meth.coorsort.bam",
     log:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}_emseq_align_bwameth_spike.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}_emseq_align_bwameth_spike.tsv"
+    params:
+        temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}"
+    threads: 48
+    resources:
+        concurrency = 50
+    output:
+        bam = f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.bwa_meth.coorsort.bam",
     shell:
-        r"""
-
+        """
         exec &>> "{log.cmd}"
         echo "[bwameth-spike] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} threads={threads}"
-
         bwameth.py --threads {threads} \
           --reference "{input.ref}" \
           "{input.r1}" "{input.r2}" \
         | samtools view -@ 8 -u -F 4 - \
         | samtools sort -@ 8 -T "{params.temp_prefix}" -o "{output.bam}"
         """
-
 #+end_src
 
 **** Call methylation
 #+begin_src snakemake
 rule emseq_methyldackel_spike:
-    message: "EM-seq MethylDackel (spike) for {wildcards.library_id} {wildcards.emseq_ref_name} {wildcards.align_method}"
+    message: "MethylDackel CpG extraction on spike-in alignments, allowing duplicates"
     conda: ENV_EMSEQ
-    threads: 8
     input:
         bam   = f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.bam",
         fasta = f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa",
-    output:
-        bed = f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
     log:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_methyldackel_spike.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_methyldackel_spike.tsv"
     params:
         out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0]
+    threads: 8
+    output:
+        bed = f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
     shell:
-        r"""
-        mkdir -p "$(dirname "{params.out_prefix}")"
-
-
+        """
         exec &>> "{log.cmd}"
         echo "[methyldackel-spike] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
-
+        mkdir -p "$(dirname "{params.out_prefix}")"
         MethylDackel extract \
           -@ {threads} \
           --methylKit \
@@ -730,7 +729,6 @@ rule emseq_methyldackel_spike:
           -o "{params.out_prefix}"
         """
 #+end_src
-
 
 *** BWA-Meth
 
@@ -744,12 +742,18 @@ Reference
 **** Index
 
 #+begin_src snakemake
-# -------- Index (bwa-meth) --------
-rule bwa_meth_index:
-    message: "bwa-meth index for {wildcards.emseq_ref_name}"
+rule emseq_bwa_meth_index:
+    message: "Build bwa-meth bisulfite index from reference FASTA"
     conda: ENV_EMSEQ
     input:
-        lambda wc: f"{D_INPUTS}/{config['emseq_ref_assemblies'][wc. emseq_ref_name]['input']}"
+        lambda wc: f"{D_INPUTS}/{EMSEQ_REF_INPUTS[wc.emseq_ref_name]}"
+    log:
+        cmd = f"{D_LOGS}/{{emseq_ref_name}}_emseq_bwa_meth_index.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{emseq_ref_name}}_emseq_bwa_meth_index.tsv"
+    params:
+        fasta_target = lambda wc: f"{D_REF}/bwa_meth/{wc.emseq_ref_name}/{wc.emseq_ref_name}.fa"
+    threads: 1
     output:
         f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t",
         f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t.0123",
@@ -759,24 +763,15 @@ rule bwa_meth_index:
         f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t.pac",
         f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa",
         f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.fai",
-    params:
-        fasta_target = lambda wc: f"{D_REF}/bwa_meth/{wc.emseq_ref_name}/{wc.emseq_ref_name}.fa"
-    log:
-        cmd = f"{D_LOGS}/{{emseq_ref_name}}_bwa_meth_index.log",
-    benchmark:
-        f"{D_BENCHMARK}/{{emseq_ref_name}}_bwa_meth_index.tsv"
     shell:
-        r"""
+        """
         exec &>> "{log.cmd}"
-        echo "[bwa-meth index] $(date) emseq_ref_name={wildcards.emseq_ref_name} threads={threads}"
-
-
+        echo "[bwa-meth-index] $(date) ref={wildcards.emseq_ref_name} threads={threads}"
         if file -b "{input}" | grep -qi gzip; then
             zcat "{input}" > "{params.fasta_target}"
         else
             cat "{input}" > "{params.fasta_target}"
         fi
-
         samtools faidx "{params.fasta_target}"
         bwameth.py index-mem2 "{params.fasta_target}"
         """
@@ -785,33 +780,30 @@ rule bwa_meth_index:
 **** Align
 
 #+begin_src snakemake
-# -------- Align (bwa-meth) --------
 rule emseq_align_bwameth:
-    message: "EM-seq bwameth for {wildcards.library_id} {wildcards.emseq_ref_name}"
+    message: "BWA-meth bisulfite alignment to human reference with coordinate-sorted BAM output"
     conda: ENV_EMSEQ
-    threads: min(workflow.cores, 48)
-    params:
-        temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}",
-    resources:
-        concurrency = 50,
     input:
         r1  = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
         r2  = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
         ref = f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa",
         c2t = f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}_emseq_align_bwameth.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}_emseq_align_bwameth.tsv"
+    params:
+        temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}",
+    threads: min(workflow.cores, 48)
+    resources:
+        concurrency = 50,
     output:
         bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.bwa_meth.coorsort.bam",
-    log:
-        cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}_bwameth.log",
-    benchmark:
-        f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}_bwameth.tsv"
     shell:
-        r"""
+        """
         exec &>> "{log.cmd}"
         echo "[bwameth] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} threads={threads}"
-
         mkdir -p "$(dirname "{params.temp_prefix}")"
-
         bwameth.py --threads {threads} \
           --reference "{input.ref}" \
           "{input.r1}" "{input.r2}" \
@@ -827,21 +819,25 @@ rule emseq_align_bwameth:
 *** Biscuit
 **** Index
 #+begin_src snakemake
-rule biscuit_index:
-    message: "biscuit index for {wildcards.emseq_ref_name}"
+rule emseq_biscuit_index:
+    message: "Build BISCUIT bisulfite index from reference FASTA"
     conda: ENV_EMSEQ
     input:
-        lambda wc: f"{D_INPUTS}/{config['emseq_ref_assemblies'][wc.emseq_ref_name]['input']}"
+        lambda wc: f"{D_INPUTS}/{EMSEQ_REF_INPUTS[wc.emseq_ref_name]}"
+    log:
+        cmd = f"{D_LOGS}/{{emseq_ref_name}}_emseq_biscuit_index.log"
+    benchmark:
+        f"{D_BENCHMARK}/{{emseq_ref_name}}_emseq_biscuit_index.tsv"
+    threads: 1
     output:
         fasta = f"{D_REF}/biscuit/{{emseq_ref_name}}/{{emseq_ref_name}}.fa",
         fai = f"{D_REF}/biscuit/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.fai",
         index = f"{D_REF}/biscuit/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.par.sa",
         biscuit_index_done = f"{D_REF}/biscuit/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.biscuit.index.done"
-    log:
-        cmd = f"{D_LOGS}/{{emseq_ref_name}}_biscuit_index.log"
     shell:
-        r"""
+        """
         exec &>> "{log.cmd}"
+        echo "[biscuit-index] $(date) ref={wildcards.emseq_ref_name} threads={threads}"
         mkdir -p "$(dirname "{output.fasta}")"
         zcat "{input}" > "{output.fasta}"
         samtools faidx "{output.fasta}"
@@ -852,32 +848,34 @@ rule biscuit_index:
 **** Align
 #+begin_src snakemake
 rule emseq_align_biscuit:
-    message: "Biscuit alignment for {wildcards.emseq_ref_name}"
+    message: "BISCUIT bisulfite alignment to human reference with coordinate-sorted BAM output"
     conda: ENV_EMSEQ
-    threads: min(workflow.cores, 48)
     input:
         r1 = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
         r2 = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
         fasta = f"{D_REF}/biscuit/{{emseq_ref_name}}/{{emseq_ref_name}}.fa",
         index = f"{D_REF}/biscuit/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.par.sa",
     log:
-        cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.biscuit.coorsort.log",
-    output:
-        bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.biscuit.coorsort.bam",
+        cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}_emseq_align_biscuit.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}_emseq_align_biscuit.tsv"
     params:
         tmp_dir = D_DATA,
+    threads: min(workflow.cores, 48)
     resources:
         concurrency = 100
+    output:
+        bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.biscuit.coorsort.bam",
     shell:
-        r"""
+        """
         exec &>> "{log.cmd}"
+        echo "[biscuit-align] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} threads={threads}"
         mkdir -p "{params.tmp_dir}/tmp"
         biscuit align -@ {threads} "{input.fasta}" "{input.r1}" "{input.r2}" \
         | samtools sort -@ {threads} -m 2G \
             -T "{params.tmp_dir}/tmp/{wildcards.library_id}_sorttmp" \
             -o "{output.bam}"
         """
-
 #+end_src
 
 **** Post-align
@@ -889,32 +887,28 @@ rule emseq_align_biscuit:
 ***** Fastp
 #+begin_src snakemake
 rule emseq_fastp:
-    message: "EM-seq fastp for {wildcards.library_id}"
+    message: "Adapter trimming and QC metrics with fastp for EM-seq reads"
     conda: ENV_EMSEQ
-    threads: 8
-    params:
-        extra = config.get("fastp", {}).get("extra", ""),
     input:
         r1 = f"{D_EMSEQ}/fastqs/{{library_id}}.raw_R1.fastq.gz",
         r2 = f"{D_EMSEQ}/fastqs/{{library_id}}.raw_R2.fastq.gz",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}_emseq_fastp.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}_emseq_fastp.tsv"
+    params:
+        extra = FASTP_EXTRA,
+    threads: 8
     output:
         failed = f"{D_EMSEQ}/fastqs/{{library_id}}.failed.fastq.gz",
         html = f"{D_EMSEQ}/qc/{{library_id}}_emseq_fastp.html",
         json = f"{D_EMSEQ}/qc/{{library_id}}_emseq_fastp.json",
-        r1     = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
-        r2     = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
-    log:
-        cmd  = f"{D_LOGS}/{{library_id}}_emseq_fastp.log",
-    benchmark:
-        f"{D_BENCHMARK}/{{library_id}}_emseq_fastp.tsv"
+        r1 = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
+        r2 = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
     shell:
-        r"""
-
-        # Logging and console output
+        """
         exec &>> "{log.cmd}"
         echo "[fastp] $(date) lib={wildcards.library_id} threads={threads}"
-
-        # Main
         fastp \
           --detect_adapter_for_pe \
           --disable_quality_filtering \
@@ -930,48 +924,51 @@ rule emseq_fastp:
 ***** FastQC
 #+begin_src snakemake
 rule emseq_fastqc:
-    message: "EM-seq FastQC for {wildcards.library_id} {wildcards.processing} {wildcards.read}"
+    message: "FastQC quality assessment on raw or trimmed FASTQ files"
     conda: ENV_EMSEQ
-    threads: 4
-    resources:
-        concurrency = 25
     input:
         fq = f"{D_EMSEQ}/fastqs/{{library_id}}.{{processing}}_{{read}}.fastq.gz",
-    output:
-        html = f"{D_EMSEQ}/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.html",
-        zip  = f"{D_EMSEQ}/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.zip",
     log:
         cmd = f"{D_LOGS}/{{library_id}}.{{processing}}_{{read}}_emseq_fastqc.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{processing}}_{{read}}_emseq_fastqc.tsv"
+    threads: 4
+    resources:
+        concurrency = 25
+    output:
+        html = f"{D_EMSEQ}/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.html",
+        zip  = f"{D_EMSEQ}/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.zip",
     shell:
-        r"""
+        """
         exec &>> "{log.cmd}"
         echo "[fastqc] $(date) lib={wildcards.library_id} proc={wildcards.processing} read={wildcards.read} threads={threads}"
-
         fastqc \
           --outdir "$(dirname "{output.html}")" \
           --quiet \
           --threads {threads} \
           "{input.fq}"
         """
-
 #+end_src
 **** Common alignment processing
 ***** Depth
 #+begin_src snakemake
 rule emseq_mosdepth:
-    message: "EM-seq mosdepth for {wildcards.library_id} {wildcards.emseq_ref_name} {wildcards.align_method}"
+    message: "Coverage depth profiling with mosdepth on filtered BAM"
     conda: ENV_EMSEQ
+    input:
+        bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.filt.bam",
+        index = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.filt.bam.bai",
+        regions_bed = KEEP_BED,
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mosdepth.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mosdepth.tsv"
+    params:
+        script       = f"{R_EMSEQ}/scripts/emseq_mosdepth.sh",
+        quant_levels = MOSDEPTH_QUANT_LEVELS,
     threads: 8
     resources:
         concurrency = 20
-    params:
-        script       = f"{R_EMSEQ}/scripts/emseq_mosdepth.sh",
-        quant_levels = config.get("mosdepth-quant-levels", ""),
-    input:
-        bam   = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam",
-        index = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
     output:
         summary       = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.mosdepth.summary.txt",
         global_dist   = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.mosdepth.global.dist.txt",
@@ -982,29 +979,22 @@ rule emseq_mosdepth:
         quantized_idx = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.quantized.bed.gz.csi",
         thresholds    = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.thresholds.bed.gz",
         thresholds_idx= f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.thresholds.bed.gz.csi",
-    log:
-        cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mosdepth.log",
-    benchmark:
-        f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mosdepth.tsv"
     shell:
-        r"""
-
+        """
         exec &>> "{log.cmd}"
         echo "[mosdepth] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
-
         "{params.script}" \
         "{input.bam}" \
         "$(dirname "{output.summary}")" \
         "{wildcards.library_id}.{wildcards.emseq_ref_name}.{wildcards.align_method}" \
         '{params.quant_levels}' \
+        "{input.regions_bed}" \
         {threads}
         """
-
 #+end_src
 
-#+begin_src bash :tangle ./scripts/emseq_mosdepth.sh :tangle-mode (identity #o444)
+#+begin_src bash :tangle ./scripts/emseq_mosdepth.sh :tangle-mode (identity #o755)
 #!/usr/bin/env bash
-
 # -----------------------------------------------------------------------------
 # mosdepth-wrapper.sh
 #
@@ -1013,147 +1003,124 @@ rule emseq_mosdepth:
 #   - use median depth (`--use-median`)
 #   - run in fast mode (no per-base depth)
 #   - report thresholds and quantized bins
-#   - generate output in 1000bp windows
+#   - restrict to user-provided target regions
 #
 # Output files are written using a prefix of "mosdepth_<OUT_PREFIX>" in <OUT_DIR>.
 # Designed for use in explicit I/O workflows like Snakemake or manual batch calls.
 # -----------------------------------------------------------------------------
-
 print_usage() {
     cat <<EOF
-USAGE: mosdepth-wrapper.sh <BAM> <OUT_DIR> <OUT_PREFIX> <QUANT_LEVELS> [THREADS]
-
+USAGE: mosdepth-wrapper.sh <BAM> <OUT_DIR> <OUT_PREFIX> <QUANT_LEVELS> <REGIONS_BED> [THREADS]
 DESCRIPTION:
   Run mosdepth on a BAM file with EM-seq-appropriate settings.
   QUANT_LEVELS is a comma-separated string of coverage cutoffs (e.g. 1,5,10,20).
+  REGIONS_BED is a BED file defining target regions (e.g. autosomes minus blacklist).
   The OUT_PREFIX will be prepended with 'mosdepth_' before being passed to mosdepth.
   Output files (e.g. mosdepth_<OUT_PREFIX>.summary.txt) will be written to OUT_DIR.
   THREADS is optional (default: 8).
 EOF
 }
-
 main() {
     parse_args "$@"
     run_mosdepth
 }
-
 parse_args() {
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         print_usage
         exit 0
     fi
-
-    if [[ $# -lt 4 ]]; then
+    if [[ $# -lt 5 ]]; then
         echo "Error: Missing required arguments." >&2
         print_usage
         exit 1
     fi
-
-    declare -g bam_file="$1"                         # Input BAM file
-    declare -g out_dir="$2"                          # Output directory
-    declare -g user_prefix="$3"                      # Base prefix from user
-    declare -g quant_levels="$4"                     # Coverage thresholds (e.g. 1,5,10)
-    declare -g threads="${5:-8}"                     # Optional threads param (default: 8)
-
+    declare -g bam_file="$1"
+    declare -g out_dir="$2"
+    declare -g user_prefix="$3"
+    declare -g quant_levels="$4"
+    declare -g regions_bed="$5"
+    declare -g threads="${6:-8}"
     [[ -f "$bam_file" ]] || { echo "Error: BAM file not found: $bam_file" >&2; exit 1; }
-
+    [[ -f "$regions_bed" ]] || { echo "Error: Regions BED not found: $regions_bed" >&2; exit 1; }
     mkdir -p "$out_dir"
-
-    declare -g out_prefix="mosdepth_${user_prefix}"  # Final output prefix
-    declare -g out_path="${out_dir%/}/${out_prefix}" # Full path to output base
-    declare -g quant_str="0:${quant_levels/,/:}"    # Convert to colon-delimited format
+    declare -g out_prefix="mosdepth_${user_prefix}"
+    declare -g out_path="${out_dir%/}/${out_prefix}"
+    declare -g quant_str="0:${quant_levels/,/:}"
 }
-
 run_mosdepth() {
     echo "[INFO] PID $$ running mosdepth on $bam_file" >&2
     echo "[INFO] Output prefix: $out_path" >&2
+    echo "[INFO] Regions BED: $regions_bed" >&2
     echo "[INFO] Quantize string: $quant_str" >&2
     echo "[INFO] Threads: $threads" >&2
-
     mosdepth \
         --threads "$threads" \
         --no-per-base \
         --fast-mode \
         --use-median \
         --quantize "$quant_str" \
-        --by 1000 \
+        --by "$regions_bed" \
         --thresholds "$quant_levels" \
         "$out_path" "$bam_file"
-
     echo "[INFO] mosdepth complete for PID $$" >&2
 }
-
 main "$@"
-#+end_src
-#+begin_src bash :tangle ./scripts/emseq_mosdepth.sh :tangle-mode (identity #o777) :comments no
-# (can be just a trailing newline)
 #+end_src
 
 ***** M-bias
 #+begin_src snakemake
 rule emseq_mbias:
-    message: "EM-seq MethylDackel mbias for {wildcards.library_id} {wildcards.emseq_ref_name} {wildcards.align_method}"
+    message: "MethylDackel M-bias detection for position-dependent methylation artifacts"
     conda: ENV_EMSEQ
-    threads: 10
     input:
         bam   = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam",
         fasta = f"{D_REF}/{{align_method}}/{{emseq_ref_name}}/{{emseq_ref_name}}.fa",
-    output:
-        txt = f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.txt",
     log:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.tsv"
+    threads: 10
+    output:
+        txt = f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.txt",
     shell:
-        r"""
-
+        """
         exec &>> "{log.cmd}"
         echo "[mbias] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
-
         MethylDackel mbias \
           -@ {threads} \
           --noSVG \
           "{input.fasta}" "{input.bam}" > "{output.txt}"
         """
-
 #+end_src
-***** De-duplicate
+***** Call duplicates
 :PROPERTIES:
 :ID:       4ac48779-f505-4291-b7bf-cc950d3339e6
 :END:
 #+begin_src snakemake
 rule emseq_dedup:
-    message: "EM-seq dedup (dupsifter) for {wildcards.library_id} {wildcards.emseq_ref_name} {wildcards.align_method}"
+    message: "Mark duplicates with dupsifter (marks only, does not remove) on bisulfite-aligned BAM"
     conda: ENV_EMSEQ
-    threads: 8
-    resources:
-        concurrency = 25
-    params:
-        temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}.{wc.align_method}.coorsort"
     input:
         bam   = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.bam",
         fasta = f"{D_REF}/{{align_method}}/{{emseq_ref_name}}/{{emseq_ref_name}}.fa",
-    output:
-        bam   = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam",
-        index = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
     log:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_dedup.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_dedup.tsv"
+    params:
+        temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}.{wc.align_method}.coorsort"
+    threads: 8
+    resources:
+        concurrency = 25
+    output:
+        bam   = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam",
+        index = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
     shell:
-        r"""
-
-        mkdir -p "$(dirname "{params.temp_prefix}")"
-
-        # append all stdout+stderr to the command log
-        exec >> "{log.cmd}" 2>&1    # use this if you want POSIX; otherwise: exec &>> "{log.cmd}"
-
+        """
+        exec >> "{log.cmd}" 2>&1
         echo "[dedup] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
-
-        # Clean previous temp chunks (unquoted glob on purpose)
+        mkdir -p "$(dirname "{params.temp_prefix}")"
         rm -f {params.temp_prefix}.tmp.*
-
-        # Proper pairs -> name-sort (BAM) -> dupsifter -> coord-sort -> index
         samtools view -bh -f 0x2 "{input.bam}" \
         | samtools sort -n -@ {threads} -O BAM -T "{params.temp_prefix}.tmp" -o - \
         | dupsifter \
@@ -1161,7 +1128,6 @@ rule emseq_dedup:
         --stats-output "{log.cmd}.dupsifter.tsv" \
         "{input.fasta}" - \
         | samtools sort -@ {threads} -O BAM -T "{params.temp_prefix}.tmp" -o "{output.bam}"
-
         samtools index -@ {threads} "{output.bam}"
         """
 #+end_src
@@ -1170,87 +1136,59 @@ rule emseq_dedup:
 :PROPERTIES:
 :ID:       6a1d8806-5649-42e9-977d-c681a3106784
 :END:
-#+begin_src snakemake :tangle no
-rule emseq_filter_bam:
-    message: "Filtering of EM-seq deduplicated bam for {wildcards.library_id}."
-    conda: ENV_EMSEQ
-    input:
-        bam  = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam",
-        bai  = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
-        mask_bed = emseq_mask_bed,
-        fasta = lambda wc: f"{D_REF}/bwa_meth/{wc.emseq_ref_name}/{wc.emseq_ref_name}.fa",
-    output:
-        bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.filt.bam",
-        bai = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.filt.bam.bai",
-    log:
-        f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_filter_bam.log",
-    benchmark:
-        f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_filter_bam.tsv",
-    shell:
-        r"""
-        # build autosome bed from FASTA index
-        fai="{input.fasta}.fai"
-        if [ ! -s "$fai" ]; then
-        samtools faidx "{input.fasta}"
-        fi
-        awk 'BEGIN{{OFS="\t"}} $1 ~ /^chr([1-9]|1[0-9]|2[0-2])$/ {{print $1,0,$2}}' "$fai" > autosomes.bed
-
-        # filter BAM
-        samtools view -b -f 2 -q 30 -F 2816 "{input.bam}" \
-        | bedtools intersect -abam stdin -b "{input.mask_bed}" -v \
-        | bedtools intersect -abam stdin -b autosomes.bed \
-        > "{output.bam}"
-
-        samtools index "{output.bam}" "{output.bai}"
-        """
-
-#+end_src
 #+begin_src snakemake
 rule emseq_filter_bam:
-    message: "Filtering deduped BAM for {wildcards.library_id}"
+    message: "Filter BAM to proper pairs, MAPQ>=30, autosomes, excluding blacklist and duplicates"
     conda: ENV_EMSEQ
-    threads: 16
     input:
         bam   = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam",
         bai   = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
-        keep_bed    = KEEP_BED,     # from preamble, bedtools-sorted with this FAI
-        exclude_bed = EXCL_BED,     # from preamble, bedtools-sorted with this FAI
-        fai   = f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.fai",  # produced by your index rule
+        keep_bed    = KEEP_BED,
+        exclude_bed = EXCL_BED,
+        fai   = f"{D_REF}/{{align_method}}/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.fai",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_filter_bam.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_filter_bam.tsv"
+    threads: 16
     output:
         bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.filt.bam",
         bai = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.filt.bam.bai",
-    shell: r"""
-        samtools view -@ {threads} -u -f 2 -q 30 -F 2816 "{input.bam}" \
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[filter-bam] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
+        samtools view -@ {threads} -u -f 2 -q 30 -F 3840 "{input.bam}" \
           | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.exclude_bed}" -v -ubam \
-          | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.keep_bed}"    -ubam \
+          | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.keep_bed}" -ubam \
           > "{output.bam}"
         samtools index -@ {threads} "{output.bam}" "{output.bai}"
-    """
-
+        """
 #+end_src
 ***** Samstats
 #+begin_src snakemake
 rule emseq_samtools_stats:
-    message: "Samtools stats + flagstat for {wildcards.library_id}.{wildcards.emseq_ref_name}"
+    message: "Samtools stats and flagstat on filtered BAM for alignment QC metrics"
     conda: ENV_EMSEQ
     input:
         bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.filt.bam",
     log:
-        f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.samtools.stats.log",
-    output:
-        stats   = f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.samtools.stats.txt",
-        flagstat = f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.samtools.flagstat.txt",
-    params:
-        threads = 8,
+        cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_samtools_stats.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_samtools_stats.tsv"
     threads: 8
     resources:
-        concurrency=40
+        concurrency = 40
+    output:
+        stats    = f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.samtools.stats.txt",
+        flagstat = f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.samtools.flagstat.txt",
     shell:
-        r"""
-        samtools stats -@ {threads} {input.bam} > {output.stats} 2>> {log}
-        samtools flagstat -@ {threads} {input.bam} > {output.flagstat} 2>> {log}
         """
-
+        exec &>> "{log.cmd}"
+        echo "[samtools-stats] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
+        samtools stats -@ {threads} "{input.bam}" > "{output.stats}"
+        samtools flagstat -@ {threads} "{input.bam}" > "{output.flagstat}"
+        """
 #+end_src
 
 **** Call methylation
@@ -1258,29 +1196,27 @@ rule emseq_samtools_stats:
 :ID:       e645e8fb-1d2b-4d3c-9d6c-edcd8bf0d02c
 :END:
 #+begin_src snakemake
-# -------- Call methylation (MethylDackel) --------
 rule emseq_methyldackel:
-    message: "EM-seq MethylDackel for {wildcards.library_id} {wildcards.emseq_ref_name} {wildcards.align_method}"
+    message: "MethylDackel CpG methylation extraction in methylKit format from filtered BAM"
     conda: ENV_EMSEQ
-    threads: 20
-    resources:
-        concurrency = 25
     input:
         bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.filt.bam",
         fasta = f"{D_REF}/{{align_method}}/{{emseq_ref_name}}/{{emseq_ref_name}}.fa",
-    output:
-        bed = f"{D_EMSEQ}/meth/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
-    params:
-        out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0]
     log:
-        cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_methyldackel_dedup.log",
+        cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_methyldackel.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_methyldackel.tsv"
+    params:
+        out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0]
+    threads: 20
+    resources:
+        concurrency = 25
+    output:
+        bed = f"{D_EMSEQ}/meth/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
     shell:
-        r"""
+        """
         exec &>> "{log.cmd}"
         echo "[methyldackel] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
-
         MethylDackel extract \
           -@ {threads} \
           --methylKit \
@@ -1290,32 +1226,30 @@ rule emseq_methyldackel:
         """
 #+end_src
 #+begin_src snakemake
-# -------- Build single methylKit (R) --------
-rule make_single_methylkit_amp_obj:
-    message: "Build tabix-backed methylKit object for {wildcards.library_id} {wildcards.emseq_ref_name} {wildcards.align_method}"
+rule emseq_make_single_methylkit_amp_obj:
+    message: "Build tabix-backed methylKit object from MethylDackel AMP output"
     conda: ENV_METHYLKIT
-    threads: 1
     input:
-        f"{D_EMSEQ}/meth/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
+        amp = f"{D_EMSEQ}/meth/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_make_single_methylkit_amp_obj.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_make_single_methylkit_amp_obj.tsv"
+    params:
+        Rscript   = f"{R_EMSEQ}/scripts/make_single_amp_methylkit_obj.R",
+        mincov    = EMSEQ_MINCOV,
+        build     = lambda wc: wc.emseq_ref_name,
+        treatment = 1,
+    threads: 1
     output:
         bgz = f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz",
         tbi = f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz.tbi",
-    params:
-        Rscript   = f"{R_EMSEQ}/scripts/make_single_amp_methylkit_obj.R",
-        mincov    = emseq_mincov,
-        build     = lambda wc: {wc.emseq_ref_name},
-        treatment = 1,
-    log:
-        cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_single_methylkit_amp.log",
-    benchmark:
-        f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_single_methylkit_amp.tsv"
     shell:
-        r"""
+        """
         exec &>> "{log.cmd}"
-        echo "[methylKit-amp] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method}"
-
+        echo "[methylKit-amp] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
         Rscript "{params.Rscript}" \
-          --amp_file "{input}" \
+          --amp_file "{input.amp}" \
           --library_id "{wildcards.library_id}.{wildcards.emseq_ref_name}.{wildcards.align_method}.methyldackel" \
           --mincov {params.mincov} \
           --out_dir "$(dirname "{output.bgz}")" \
@@ -1356,7 +1290,7 @@ obj <- methRead(
 **** MultiQC
 #+begin_src snakemake
 rule emseq_multiqc:
-    message: f"MultiQC report for EM-seq (n={len(emseq_library_ids)} libraries)"
+    message: "Aggregate QC metrics into MultiQC report for EM-seq workflow"
     conda: ENV_EMSEQ
     input:
         fastqc = expand(
@@ -1403,29 +1337,31 @@ rule emseq_multiqc:
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
             align_method=["biscuit","bwa_meth"],
-            stat = ["stats","flagstat"]),
+            stat=["stats","flagstat"],
+        ),
     log:
-        f"{D_LOGS}/emseq_multiqc.log"
-    output:
-        html = f"{D_EMSEQ}/qc/multiqc.html",
-        data = directory(f"{D_EMSEQ}/qc/multiqc_data"),  # <-- match MultiQC
+        cmd = f"{D_LOGS}/emseq_multiqc.log",
+    benchmark:
+        f"{D_BENCHMARK}/emseq_multiqc.tsv"
     params:
         extra = "--force",
     threads: 4
     resources:
-        concurrency=20
+        concurrency = 20
+    output:
+        html = f"{D_EMSEQ}/qc/multiqc.html",
+        data = directory(f"{D_EMSEQ}/qc/multiqc_data"),
     shell:
-        r"""
-        mkdir -p $(dirname {output.html})
-
+        """
+        exec &>> "{log.cmd}"
+        echo "[multiqc] $(date) threads={threads}"
+        mkdir -p "$(dirname "{output.html}")"
         multiqc \
             {input} \
             {params.extra} \
-            --outdir $(dirname {output.html}) \
-            --filename $(basename {output.html}) \
-            &> {log}
+            --outdir "$(dirname "{output.html}")" \
+            --filename "$(basename "{output.html}")" \
         """
-
 #+end_src
 *** Methylkit
 Methylkit DMR requires EXACT same genome - can't mix e.g. hg38 / hg38 decoy
@@ -1433,33 +1369,36 @@ See for stranding https://claude.ai/chat/c39b78cc-5b2f-49ed-9f02-ed349824a07a
 **** Per base
 ***** United per sample
 #+begin_src snakemake
-rule make_methylkit_unite_db:
+rule emseq_make_methylkit_unite_db:
+    message: "Unite per-sample methylKit tabix databases into single methylBase for differential analysis"
     conda: ENV_METHYLKIT
-    threads: 32
     input:
-        mkit_lib_db=lambda wc: expand(
+        mkit_lib_db = lambda wc: expand(
             f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz",
             library_id=meth_map[wc.experiment]["libs"],
             emseq_ref_name=meth_map[wc.experiment]["emseq_ref_name"],
             align_method=meth_map[wc.experiment]["align_method"],
         ),
-    output:
-        mbase=f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
-    params:
-        library_id=lambda wc: " ".join(meth_map[wc.experiment]["libs"]),
-        treatment_list=lambda wc: " ".join(map(str, meth_map[wc.experiment]["tx"])),
-        script=f"{R_EMSEQ}/scripts/make_methylkit_unite_db.R",
-        mincov=lambda wc: meth_map[wc.experiment]["mincov"],
-        min_per_group=lambda wc: meth_map[wc.experiment]["mingroup"],
-        chunk_size=lambda wc: meth_map[wc.experiment]["chunksize"],
     log:
-        f"{D_LOGS}/{{experiment}}_make_methylkit_unite_db.log",
+        cmd = f"{D_LOGS}/{{experiment}}_emseq_make_methylkit_unite_db.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{experiment}}_emseq_make_methylkit_unite_db.tsv"
+    params:
+        library_id = lambda wc: " ".join(meth_map[wc.experiment]["libs"]),
+        treatment_list = lambda wc: " ".join(map(str, meth_map[wc.experiment]["tx"])),
+        script = f"{R_EMSEQ}/scripts/make_methylkit_unite_db.R",
+        mincov = lambda wc: meth_map[wc.experiment]["mincov"],
+        min_per_group = lambda wc: meth_map[wc.experiment]["mingroup"],
+        chunk_size = lambda wc: meth_map[wc.experiment]["chunksize"],
+    threads: 32
+    output:
+        mbase = f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
     shell:
-        r"""
-        # destructive pre-clean (script also unlinks)
-        rm -f {output.mbase}*
-
-        Rscript {params.script} \
+        """
+        exec &>> "{log.cmd}"
+        echo "[methylkit-unite] $(date) experiment={wildcards.experiment} threads={threads}"
+        rm -f "{output.mbase}"*
+        Rscript "{params.script}" \
           --lib_db_list "{input.mkit_lib_db}" \
           --lib_id_list "{params.library_id}" \
           --treatment_list "{params.treatment_list}" \
@@ -1469,10 +1408,8 @@ rule make_methylkit_unite_db:
           --assembly "hg38" \
           --mincov {params.mincov} \
           --min_per_group {params.min_per_group} \
-          --chunk_size {params.chunk_size} \
-          > {log} 2>&1
+          --chunk_size {params.chunk_size}
         """
-
 #+end_src
 
 #+begin_src R :tangle ./scripts/make_methylkit_unite_db.R
@@ -1560,30 +1497,32 @@ message("Done. methylBase: ", mbase_path)
 
 ***** Run differential methylation calling
 #+begin_src snakemake
-rule make_methylkit_diff_db:
+rule emseq_make_methylkit_diff_db:
+    message: "Calculate differential methylation from united methylBase using methylKit"
     conda: ENV_METHYLKIT
-    threads: 32
     input:
         mbase = f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
-    output:
-        mdiff = f"{D_EMSEQ}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
+    log:
+        cmd = f"{D_LOGS}/{{experiment}}_emseq_make_methylkit_diff_db.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{experiment}}_emseq_make_methylkit_diff_db.tsv"
     params:
         script     = f"{R_EMSEQ}/scripts/make_methylkit_diff_db.R",
         chunk_size = lambda wc: meth_map[wc.experiment]["chunksize"],
-    log:
-        f"{D_LOGS}/{{experiment}}_make_methylkit_diff_db.log",
+    threads: 32
+    output:
+        mdiff = f"{D_EMSEQ}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
     shell:
-        r"""
-        # destructive pre-clean
-        rm -f {output.mdiff} {output.mdiff}.tbi
-
-        Rscript {params.script} \
+        """
+        exec &>> "{log.cmd}"
+        echo "[methylkit-diff] $(date) experiment={wildcards.experiment} threads={threads}"
+        rm -f "{output.mdiff}" "{output.mdiff}.tbi"
+        Rscript "{params.script}" \
           --mbase "{input.mbase}" \
           --cores {threads} \
           --out_dir "$(dirname "{output.mdiff}")" \
           --suffix {wildcards.experiment} \
-          --chunk_size {params.chunk_size} \
-          > {log} 2>&1
+          --chunk_size {params.chunk_size}
         """
 #+end_src
 
@@ -1644,44 +1583,49 @@ message("Done. methylDiff: ", diff_path)
 **** Tiled
 
 #+begin_src snakemake
-rule make_methylkit_diff_db_tiled:
+rule emseq_make_methylkit_diff_db_tiled:
+    message: "Tile methylation data into windows and calculate differential methylation with methylKit"
     conda: ENV_METHYLKIT
     input:
-        mkit_lib_db = lambda wildcards: expand(f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz",
-                                               library_id = meth_map[wildcards.experiment]['libs'],
-                                               emseq_ref_name = meth_map[wildcards.experiment]['emseq_ref_name'],
-                                               align_method = meth_map[wildcards.experiment]['align_method']),
+        mkit_lib_db = lambda wc: expand(
+            f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz",
+            library_id=meth_map[wc.experiment]['libs'],
+            emseq_ref_name=meth_map[wc.experiment]['emseq_ref_name'],
+            align_method=meth_map[wc.experiment]['align_method'],
+        ),
     log:
-        f"{D_LOGS}/{{experiment}}_make_methylkit_diff_tiled_db.log",
-    output:
-        unite = f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}_tiled.txt.bgz",
-        diff = f"{D_EMSEQ}/dmr/diff/methylDiff_{{experiment}}_tiled.txt.bgz",
+        cmd = f"{D_LOGS}/{{experiment}}_emseq_make_methylkit_diff_db_tiled.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{experiment}}_emseq_make_methylkit_diff_db_tiled.tsv"
     params:
-        library_id = lambda wildcards: " ".join(meth_map[wildcards.experiment]['libs']),
+        library_id = lambda wc: " ".join(meth_map[wc.experiment]['libs']),
         treatment_list = lambda wc: " ".join(map(str, meth_map[wc.experiment]['tx'])),
         script = f"{R_EMSEQ}/scripts/make_methylkit_diff_tiled_db.R",
-        mincov=lambda wc: meth_map[wc.experiment]["mincov"],
-        chunk_size=lambda wc: meth_map[wc.experiment]["chunksize"],
-        min_per_group=lambda wc: meth_map[wc.experiment]["mingroup"],
+        mincov = lambda wc: meth_map[wc.experiment]["mincov"],
+        chunk_size = lambda wc: meth_map[wc.experiment]["chunksize"],
+        min_per_group = lambda wc: meth_map[wc.experiment]["mingroup"],
         win_size = lambda wc: meth_map[wc.experiment]["win_size"],
+    threads: 32
+    output:
+        unite = f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.tiled.txt.bgz",
+        diff = f"{D_EMSEQ}/dmr/diff/methylDiff_{{experiment}}.tiled.txt.bgz",
     shell:
         """
-        # remove old outputs if they exist
-        rm -f {output.unite}* {output.diff}*
-
-        Rscript {params.script} \
-        --lib_db_list "{input.mkit_lib_db}" \
-        --lib_id_list "{params.library_id}" \
-        --treatment_list "{params.treatment_list}" \
-        --cores {threads} \
-        --out_dir "$(dirname "{output.unite}")" \
-        --suffix {wildcards.experiment} \
-        --assembly "hg38" \
-        --mincov {params.mincov} \
-        --win_size {params.win_size} \
-        --min_per_group {params.min_per_group} \
-        --chunk_size {params.chunk_size} \
-        > {log} 2>&1
+        exec &>> "{log.cmd}"
+        echo "[methylkit-diff-tiled] $(date) experiment={wildcards.experiment} threads={threads}"
+        rm -f "{output.unite}"* "{output.diff}"*
+        Rscript "{params.script}" \
+          --lib_db_list "{input.mkit_lib_db}" \
+          --lib_id_list "{params.library_id}" \
+          --treatment_list "{params.treatment_list}" \
+          --cores {threads} \
+          --out_dir "$(dirname "{output.unite}")" \
+          --suffix {wildcards.experiment} \
+          --assembly "hg38" \
+          --mincov {params.mincov} \
+          --win_size {params.win_size} \
+          --min_per_group {params.min_per_group} \
+          --chunk_size {params.chunk_size}
         """
 #+end_src
 
@@ -1776,7 +1720,7 @@ tiled_obj <- unite(
   tiled_raw,
   destrand = FALSE,
   save.db  = TRUE,
-  suffix   = paste0(args$suffix, "_tiled"),
+  suffix   = paste0(args$suffix, ".tiled"),
   dbdir    = args$out_dir,
   min.per.group = min_per_grp,
   mc.cores = cores
@@ -3486,206 +3430,8 @@ ggplot(meth_df, aes(x = group, y = methylation, fill = group)) +
 
 
 
-** Test
+** Testing
 - https://chatgpt.com/c/68ceb2e8-4d64-832a-9bc2-8bc08c9d37b3
-
-#+begin_src yaml :tangle ./config/test.yaml
-# -----------------------------
-# Global runtime/config knobs
-# -----------------------------
-available-concurrency: 50
-threads: 24
-main-data-dir: "tests/full"
-mosdepth-quant-levels: "1,5"
-
-# -----------------------------
-# Environments and repositories
-# -----------------------------
-envs:
-  emseq: "config/emseq-conda-env.yaml"
-  methylkit: "config/methylkit-conda-env.yaml"
-
-repos:
-  emseq: ".."
-
-# -----------------------------
-# Sample set and region filters
-# -----------------------------
-library-ids: ["lib001", "lib002", "lib003", "lib004"]
-keep-bed: "tests/full/inputs/chr22.keep.bed"
-exclude-bed: "tests/full/inputs/chr22.exclude.blacklist.bed.gz"
-
-# -----------------------------
-# Reference assemblies (primary + spike)
-# -----------------------------
-emseq_ref_assemblies:
-  chr22:
-    url: https:/ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
-    name: chr22
-    input: chr22.test.fa.gz
-  unmeth_lambda:
-    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/lambdafsa.txt?rev=c0c6669b9bd340ddb674ebfd9d55c691&hash=7E6375924CFF9457D0157D0D87C9AC19
-    name: unmeth_lambda
-    input: lambda.fa.gz
-  puc19:
-    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/puc19fsa.txt?rev=6e10f4c4a4234d638e401cd2f4578ef0&hash=E71970068EEA191C175B3458DB99D7BB
-    name: puc19
-    input: pUC19.fa.gz
-
-# -----------------------------
-# Experiments (differential methylation experiments for methylKit;
-# i.e., groupings/contrasts used to build methylBase/methylDiff)
-# -----------------------------
-meth-map:
-  test:
-    libs:        ["lib001","lib003","lib003","lib004"]
-    emseq_ref_name:    ["chr22"]
-    align_method: bwa_meth
-    tx:          [0,0,1,1]
-    mincov:      10
-    mingroup:    1
-    chunksize:   "1e9"
-    win_size:    10000
-#+end_src
-
-#+begin_src snakemake :tangle ./workflows/test.smk
-# -----------------------------
-# Imports
-# -----------------------------
-import os
-
-# -----------------------------
-# Path expansion for strings in config (~, $VARS)
-# -----------------------------
-def resolve_config_paths(config_dict):
-    for k, v in config_dict.items():
-        if isinstance(v, str):
-            config_dict[k] = os.path.expandvars(os.path.expanduser(v))
-        elif isinstance(v, dict):
-            resolve_config_paths(v)
-        elif isinstance(v, list):
-            config_dict[k] = [os.path.expandvars(os.path.expanduser(i)) if isinstance(i, str) else i for i in v]
-
-resolve_config_paths(config)
-
-# -----------------------------
-# Environments
-# -----------------------------
-ENV_EMSEQ = config['envs']['emseq']
-ENV_METHYLKIT = config['envs']['methylkit']
-
-# -----------------------------
-# Repositories
-# -----------------------------
-R_EMSEQ = config['repos']['emseq']
-
-# -----------------------------
-# Data directories (derived from main-data-dir)
-# -----------------------------
-D_DATA = f"{config['main-data-dir']}"
-D_EMSEQ = f"{D_DATA}/emseq"
-D_REF = f"{D_DATA}/ref"
-D_LOGS = f"{D_DATA}/logs"
-D_BENCHMARK = f"{D_DATA}/benchmark"
-D_INPUTS = f"{D_DATA}/inputs"
-
-# -----------------------------
-# Tool/global params
-# -----------------------------
-mosdepth_quant_levels = config["mosdepth-quant-levels"]
-emseq_mincov = 2  # used by per-sample methylKit object rule
-
-# -----------------------------
-# Sample set (required by emseq.smk)
-# -----------------------------
-emseq_library_ids = config["library-ids"]
-
-# -----------------------------
-# Reference selections (kept explicit)
-# -----------------------------
-spike_builds = ["puc19", "unmeth_lambda"]
-emseq_ref_names = ["chr22"]
-
-# -----------------------------
-# Region filtering inputs
-# -----------------------------
-KEEP_BED = config["keep-bed"]
-EXCL_BED = config["exclude-bed"]
-
-# -----------------------------
-# Experiments map from YAML
-# (differential methylation experiments for methylKit)
-# -----------------------------
-meth_map = config["meth-map"]
-
-rule all:
-    input:
-        # FASTQs
-        expand(f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_{{read}}.fastq.gz",
-               library_id=emseq_library_ids,
-               read=["R1","R2"]),
-        #
-        # Alignment and methylation calling
-
-        expand(f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz",
-               library_id = emseq_library_ids,
-               emseq_ref_name = emseq_ref_names,
-               align_method = ["bwa_meth", "biscuit"]),
-        #
-        # Spike workflow
-        expand(f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
-               library_id = emseq_library_ids,
-               emseq_ref_name = spike_builds,
-               align_method = "bwa_meth"),
-
-        # QC
-        expand(f"{D_EMSEQ}/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.zip",
-               library_id = emseq_library_ids,
-               processing = ["raw","trimmed"],
-               read = ["R1","R2"]),
-
-        expand(f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.mosdepth.summary.txt",
-               library_id = emseq_library_ids,
-               emseq_ref_name = emseq_ref_names,
-               align_method = ["bwa_meth", "biscuit"]),
-
-        expand(f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.txt",
-               library_id = emseq_library_ids,
-               emseq_ref_name = emseq_ref_names,
-               align_method = ["bwa_meth", "biscuit"]),
-
-        f"{D_EMSEQ}/qc/multiqc.html",
-        # NOTE: MultiQC rule DOES NOT prompt inputs to run, need individual QC output calls
-        #
-        # MethylKit
-        expand(f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
-               experiment = meth_map.keys()),
-
-        expand(f"{D_EMSEQ}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
-               experiment = meth_map.keys()),
-
-        expand(f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}_tiled.txt.bgz",
-               experiment = meth_map.keys()),
-
-
-rule symlink_input_fastqs:
-    input:
-        r1=f"{D_DATA}/inputs/{{library_id}}.raw_R1.fastq.gz",
-        r2=f"{D_DATA}/inputs/{{library_id}}.raw_R2.fastq.gz",
-    output:
-        r1=f"{D_EMSEQ}/fastqs/{{library_id}}.raw_R1.fastq.gz",
-        r2=f"{D_EMSEQ}/fastqs/{{library_id}}.raw_R2.fastq.gz",
-    shell:
-        r'''
-        mkdir -p "$(dirname "{output.r1}")"
-        ln -sfr "{input.r1}" "{output.r1}"
-        ln -sfr "{input.r2}" "{output.r2}"
-        '''
-
-include: f"{R_EMSEQ}/workflows/emseq.smk"
-
-
-#+end_src
 
 #+begin_src snakemake
 
@@ -3828,6 +3574,237 @@ rule all:
 
 
 
+#+end_src
+*** Full test
+**** Configuration yaml
+#+begin_src yaml :tangle ./config/test.yaml
+# -----------------------------
+# Global runtime/config knobs
+# -----------------------------
+available-concurrency: 50
+threads: 24
+main-data-dir: "tests/full"
+mosdepth-quant-levels: "1,5"
+emseq-mincov: 2
+
+# -----------------------------
+# Environments and repositories
+# -----------------------------
+envs:
+  emseq: "../config/emseq-conda-env.yaml"
+  methylkit: "../config/methylkit-conda-env.yaml"
+repos:
+  emseq: "."
+
+# -----------------------------
+# Sample set and region filters
+# -----------------------------
+library-ids: ["lib001", "lib002", "lib003", "lib004"]
+keep-bed: "tests/full/inputs/chr22.keep.bed"
+exclude-bed: "tests/full/inputs/chr22.exclude.blacklist.bed.gz"
+
+# -----------------------------
+# Reference assemblies (primary + spike)
+# -----------------------------
+emseq_ref_assemblies:
+  chr22:
+    url: https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
+    name: chr22
+    input: chr22.test.fa.gz
+  unmeth_lambda:
+    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/lambdafsa.txt?rev=c0c6669b9bd340ddb674ebfd9d55c691&hash=7E6375924CFF9457D0157D0D87C9AC19
+    name: unmeth_lambda
+    input: lambda.fa.gz
+  puc19:
+    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/puc19fsa.txt?rev=6e10f4c4a4234d638e401cd2f4578ef0&hash=E71970068EEA191C175B3458DB99D7BB
+    name: puc19
+    input: pUC19.fa.gz
+
+# -----------------------------
+# Experiments (differential methylation experiments for methylKit)
+# NOTE: lib003 is intentionally duplicated to ensure overlapping CpG sites
+# across samples in this minimal test dataset for methylKit unite/diff testing.
+# -----------------------------
+meth-map:
+  test:
+    libs: ["lib001", "lib003", "lib003", "lib004"]
+    emseq_ref_name: ["chr22"]
+    align_method: ["bwa_meth"]
+    tx: [0, 0, 1, 1]
+    mincov: 10
+    mingroup: 1
+    chunksize: "1e9"
+    win_size: 10000
+#+end_src
+
+**** Snakefile
+#+begin_src snakemake :tangle ./workflows/test.smk
+# -----------------------------
+# Imports
+# -----------------------------
+import os
+
+# -----------------------------
+# Path expansion for strings in config (~, $VARS)
+# -----------------------------
+def resolve_config_paths(config_dict):
+    for k, v in config_dict.items():
+        if isinstance(v, str):
+            config_dict[k] = os.path.expandvars(os.path.expanduser(v))
+        elif isinstance(v, dict):
+            resolve_config_paths(v)
+        elif isinstance(v, list):
+            config_dict[k] = [os.path.expandvars(os.path.expanduser(i)) if isinstance(i, str) else i for i in v]
+
+resolve_config_paths(config)
+
+# -----------------------------
+# Environments
+# -----------------------------
+ENV_EMSEQ = config['envs']['emseq']
+ENV_METHYLKIT = config['envs']['methylkit']
+
+# -----------------------------
+# Repositories
+# -----------------------------
+R_EMSEQ = config['repos']['emseq']
+
+# -----------------------------
+# Data directories (derived from main-data-dir)
+# -----------------------------
+D_DATA = config['main-data-dir']
+D_EMSEQ = f"{D_DATA}/emseq"
+D_REF = f"{D_DATA}/ref"
+D_LOGS = f"{D_DATA}/logs"
+D_BENCHMARK = f"{D_DATA}/benchmark"
+D_INPUTS = f"{D_DATA}/inputs"
+
+# -----------------------------
+# Tool/global params (UPPERCASE for module consumption)
+# -----------------------------
+MOSDEPTH_QUANT_LEVELS = config.get("mosdepth-quant-levels", "1,5,10,20")
+EMSEQ_MINCOV = config.get("emseq-mincov", 2)
+FASTP_EXTRA = config.get("fastp", {}).get("extra", "")
+
+# -----------------------------
+# Reference assembly lookup (for index rules)
+# -----------------------------
+EMSEQ_REF_INPUTS = {k: v['input'] for k, v in config['emseq_ref_assemblies'].items()}
+
+# -----------------------------
+# Sample set (required by emseq.smk)
+# -----------------------------
+emseq_library_ids = config["library-ids"]
+
+# -----------------------------
+# Reference selections (kept explicit)
+# -----------------------------
+spike_builds = ["puc19", "unmeth_lambda"]
+emseq_ref_names = ["chr22"]
+
+# -----------------------------
+# Region filtering inputs
+# -----------------------------
+KEEP_BED = config["keep-bed"]
+EXCL_BED = config["exclude-bed"]
+
+# -----------------------------
+# Experiments map from YAML
+# (differential methylation experiments for methylKit)
+# -----------------------------
+meth_map = config["meth-map"]
+
+# -----------------------------
+# Rule all
+# -----------------------------
+rule all:
+    input:
+        # FASTQs
+        expand(
+            f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_{{read}}.fastq.gz",
+            library_id=emseq_library_ids,
+            read=["R1", "R2"],
+        ),
+        # Alignment and methylation calling
+        expand(
+            f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz",
+            library_id=emseq_library_ids,
+            emseq_ref_name=emseq_ref_names,
+            align_method=["bwa_meth", "biscuit"],
+        ),
+        # Spike workflow
+        expand(
+            f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
+            library_id=emseq_library_ids,
+            emseq_ref_name=spike_builds,
+            align_method="bwa_meth",
+        ),
+        # QC - FastQC
+        expand(
+            f"{D_EMSEQ}/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.zip",
+            library_id=emseq_library_ids,
+            processing=["raw", "trimmed"],
+            read=["R1", "R2"],
+        ),
+        # QC - mosdepth
+        expand(
+            f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.mosdepth.summary.txt",
+            library_id=emseq_library_ids,
+            emseq_ref_name=emseq_ref_names,
+            align_method=["bwa_meth", "biscuit"],
+        ),
+        # QC - M-bias
+        expand(
+            f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.txt",
+            library_id=emseq_library_ids,
+            emseq_ref_name=emseq_ref_names,
+            align_method=["bwa_meth", "biscuit"],
+        ),
+        # QC - MultiQC (does NOT prompt inputs to run)
+        f"{D_EMSEQ}/qc/multiqc.html",
+        # MethylKit - per-base
+        expand(
+            f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
+            experiment=meth_map.keys(),
+        ),
+        expand(
+            f"{D_EMSEQ}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
+            experiment=meth_map.keys(),
+        ),
+        # MethylKit - tiled
+        expand(
+            f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.tiled.txt.bgz",
+            experiment=meth_map.keys(),
+        ),
+
+# -----------------------------
+# Input symlinks
+# -----------------------------
+rule symlink_input_fastqs:
+    message: "Create symlinks for raw input FASTQs into workflow directory"
+    input:
+        r1 = f"{D_INPUTS}/{{library_id}}.raw_R1.fastq.gz",
+        r2 = f"{D_INPUTS}/{{library_id}}.raw_R2.fastq.gz",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}_symlink_input_fastqs.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}_symlink_input_fastqs.tsv"
+    output:
+        r1 = f"{D_EMSEQ}/fastqs/{{library_id}}.raw_R1.fastq.gz",
+        r2 = f"{D_EMSEQ}/fastqs/{{library_id}}.raw_R2.fastq.gz",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[symlink-fastqs] $(date) lib={wildcards.library_id}"
+        mkdir -p "$(dirname "{output.r1}")"
+        ln -sfr "{input.r1}" "{output.r1}"
+        ln -sfr "{input.r2}" "{output.r2}"
+        """
+
+# -----------------------------
+# Include module
+# -----------------------------
+include: "emseq.smk"
 #+end_src
 
 *** Example wrapper

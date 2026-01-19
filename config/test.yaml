@@ -5,16 +5,16 @@ available-concurrency: 50
 threads: 24
 main-data-dir: "tests/full"
 mosdepth-quant-levels: "1,5"
+emseq-mincov: 2
 
 # -----------------------------
 # Environments and repositories
 # -----------------------------
 envs:
-  emseq: "config/emseq-conda-env.yaml"
-  methylkit: "config/methylkit-conda-env.yaml"
-
+  emseq: "../config/emseq-conda-env.yaml"
+  methylkit: "../config/methylkit-conda-env.yaml"
 repos:
-  emseq: ".."
+  emseq: "."
 
 # -----------------------------
 # Sample set and region filters
@@ -28,7 +28,7 @@ exclude-bed: "tests/full/inputs/chr22.exclude.blacklist.bed.gz"
 # -----------------------------
 emseq_ref_assemblies:
   chr22:
-    url: https:/ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
+    url: https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
     name: chr22
     input: chr22.test.fa.gz
   unmeth_lambda:
@@ -41,16 +41,17 @@ emseq_ref_assemblies:
     input: pUC19.fa.gz
 
 # -----------------------------
-# Experiments (differential methylation experiments for methylKit;
-# i.e., groupings/contrasts used to build methylBase/methylDiff)
+# Experiments (differential methylation experiments for methylKit)
+# NOTE: lib003 is intentionally duplicated to ensure overlapping CpG sites
+# across samples in this minimal test dataset for methylKit unite/diff testing.
 # -----------------------------
 meth-map:
   test:
-    libs:        ["lib001","lib003","lib003","lib004"]
-    emseq_ref_name:    ["chr22"]
-    align_method: bwa_meth
-    tx:          [0,0,1,1]
-    mincov:      10
-    mingroup:    1
-    chunksize:   "1e9"
-    win_size:    10000
+    libs: ["lib001", "lib003", "lib003", "lib004"]
+    emseq_ref_name: ["chr22"]
+    align_method: ["bwa_meth"]
+    tx: [0, 0, 1, 1]
+    mincov: 10
+    mingroup: 1
+    chunksize: "1e9"
+    win_size: 10000

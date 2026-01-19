@@ -1,7 +1,5 @@
 The EM-seq repository contains modular workflows intended to be run from within a over-wrapping snakemake workflow.  
 
-Current stable version tested with minimal in-repo example is tagged emseq.v3.1.0.  
-
 ![img](resources/test_smk.png)  
 
 
@@ -16,7 +14,8 @@ Current stable version tested with minimal in-repo example is tagged emseq.v3.1.
 
 # Change Log
 
--   Development since last tag
+-   Development since last tag  
+    -   None
 -   wf/emseq/v4.0.0  
     -   Minor testing updates
     -   Fixed test.yaml file locations

@@ -49,7 +49,7 @@ parse_args() {
     mkdir -p "$out_dir"
     declare -g out_prefix="mosdepth_${user_prefix}"
     declare -g out_path="${out_dir%/}/${out_prefix}"
-    declare -g quant_str="0:${quant_levels/,/:}"
+    declare -g quant_str="0:${quant_levels//,/:}"
 }
 run_mosdepth() {
     echo "[INFO] PID $$ running mosdepth on $bam_file" >&2

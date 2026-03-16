@@ -2,6 +2,9 @@
 :PROPERTIES:
 :ID:       cd9489fd-c6e7-4c64-8317-e3d9a283b36c
 :END:
+
+https://teams.microsoft.com/l/message/19:meeting_ZWFhYjE4YzktYWM0Zi00NzllLTk1NWItYjA5YTJkYWQwN2Jj@thread.v2/1769216157607?context=%7B%22contextType%22%3A%22chat%22%7D
+
 ** [[id:bda70cff-0713-4e32-8da1-ee83924b8f00][README]]
 ** [[elisp:(let ((window-config (current-window-configuration))) (async-shell-command "bash ~/repos/mpnst/tools/shell/org_update.sh") (set-window-configuration window-config))][org update]]
 ** Repository setup and administration
@@ -311,7 +314,7 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 #+end_export
 **** Change Log
 - Development since last tag
-  - [ ] Added a full run CI test
+  - Added a full run CI test
 - wf/emseq/v4.0.0
   - Minor testing updates
   - Fixed test.yaml file locations
@@ -559,6 +562,7 @@ dependencies:
   - methyldackel
   - mosdepth
   - multiqc
+  - pandas
   - r-argparse
   - r-data.table
   - r-ggplot2
@@ -570,6 +574,7 @@ dependencies:
   - dupsifter=1.3.0.20241113
   - libdeflate=1.22
   - bedtools
+  - scipy
   - snakemake
 #+end_src
 *** MethylKit
@@ -583,6 +588,7 @@ dependencies:
   - htslib
   - r-argparse
   - bioconductor-methylkit
+  - r-dplyr
   - r-data.table=1.15.4
   - r-tidyverse
   - bioconductor-genomicranges
@@ -591,6 +597,7 @@ dependencies:
   - bioconductor-org.hs.eg.db
   - bioconductor-genomation
   - r-arrow
+  - bioconductor-genomation
 #+end_src
 *** Mosdepth
 #+begin_src yaml :tangle ./config/mosdepth-conda-env.yaml
@@ -619,6 +626,7 @@ dependencies:
 :ID:       92e64b67-c219-4146-a89b-a8710d91a634
 :header-args:snakemake: :tangle ./workflows/emseq.smk
 :END:
+
 - https://chatgpt.com/c/69161244-a164-832f-9b06-598bd9ae3556
 
 [[file:workflows/emseq.smk]]
@@ -1794,6 +1802,7 @@ https:/www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/m
 :ID:       f6cfad3a-21c6-4c33-94e2-0a6cb53a5fe3
 :header-args:snakemake: :tangle no
 :END:
+- [[id:28f0b200-7052-424f-a9ff-35e3c6234efb][Cross-modal methylation-fragmentomics enrichment (career.org)]]
 - note that multicq inputs cannot promp new runs
 - push methmap to config
 #+begin_src snakemake
@@ -3989,7 +3998,18 @@ Original EM-seq methods paper - [cite:@vaisvila2021]. Code is in the repo at [[f
 
 
 EM-seq and WGBS are not compatible- have different unique methylated CpGs at 8x [[/home/jeszyman/repos/emseq/emseq.org_20250605_135724.png][./resources/vaisvila2021fig4c.png]]
+** TODO After v4
+Issues and fixes surfaced while building a project wrapper around the emseq modular
+pipeline (breast PROMISE project, 2026-02-25).
+- *Shell strict mode*: =samtools view -@ N= emits SIGPIPE (exit 141) under =set -euo pipefail=; wrapper must add =shell.prefix("set -e; ")= — consider documenting or adding to canonical =test.smk=
+- *Blacklist BED sort order*: ENCODE blacklist v2 is lexicographically sorted; =bedtools intersect -sorted= requires FAI (version) order — pre-sort with =bedtools sort -g <fai>= or handle inside =emseq_filter_bam=
+- *bwa-mem2 index incomplete on reuse*: interrupted index leaves partial files (=.0123= present, =.bwt.2bit.64= absent), Snakemake won't rerun — declare =.bwt.2bit.64= in wrapper =rule all=
+- *hg38_autosomes.bed not generated*: filter step needs chromosome whitelist not produced by any rule — document one-time =awk= from FAI step, or add a rule
+- *mosdepth quantize string bug in emseq_mosdepth.sh*: bash =${var/,/:}= only replaces the first comma; must use =${var//,/:}= for global replacement — mosdepth exits 0 silently on bad quantize strings so outputs are simply absent (fixed in script)
+
 ** Ideas
+- Standardized bench protocol
+  - Pradeeps protocol mods - [[https://mail.google.com/mail/u/0/#inbox/FMfcgzQVxlRMrkdpbmdDQwTpXqLNjKdM][gmail]]
 - Prerequisites in readme
 - linter ci https://chatgpt.com/c/68ce07ea-83fc-8326-bd29-774b8da4d25c
 - The emseq_bam_dir is individually declared. This allows for workflows where multiple sequencing lanes are merged per-sample at the bam level.
@@ -4938,6 +4958,74 @@ for (i in seq_along(pages)) {
 }
 dev.off()
 #+end_src
+*** WGBS tools
+#+begin_src bash
+# Clone
+cd ~/repos
+git clone https://github.com/nloyfer/wgbs_tools.git
+cd wgbs_tools
+
+# compile
+python setup.py
+
+
+
+conda activate emseq
+
+# wgbstools init_genome GENOME_NAME --fasta_path /path/to/genome.fa
+
+./wgbstools init_genome hg38_decoy -f --fasta_path ~/data/projects/breast/ref/bwa_meth/ncbi_decoy_hg38/ncbi_decoy_hg38.fa
+
+
+./wgbstools bam2pat
+
+# will generate @ dir command is run from
+
+./wgbstools bam2pat ~/repos/emseq/tests/full/emseq/bams/lib001.chr22.bwa_meth.coorsort.filt.bam
+
+./wgbstools bam2pat ~/data/projects/breast/analysis/emseq/bams/PRO_6_L2.ncbi_decoy_hg38.bwa_meth.coorsort.deduped.bam
+
+./wgbstools bam2pat ~/data/projects/breast/analysis/emseq/bams/NH_15_L3.ncbi_decoy_hg38.bwa_meth.coorsort.deduped.bam
+
+
+./wgbstools vis PRO_6_L2.ncbi_decoy_hg38.bwa_meth.coorsort.deduped.pat.gz NH_15_L3.ncbi_decoy_hg38.bwa_meth.coorsort.deduped.pat.gz -r chr6:151805000-151807000
+
+./wgbstools vis
+./wgbstools vis PRO_6_L2.ncbi_decoy_hg38.bwa_meth.coorsort.deduped.beta -r chr3:119528843-119529245 --heatmap
+
+./wgbstools vis *.beta -r chr6:151805000-151807000 --heatmap
+
+
+##########1##########2##########3##########4##########5##########6##########7##########8
+
+cd ~/repos
+git clone https://github.com/nloyfer/UXM_deconv.git
+cd UXM_deconv/
+
+export PATH=${PATH}:/home/jeszyman/repos/wgbs_tools
+
+./uxm deconv ~/repos/wgbs_tools/PRO_6_L2.ncbi_decoy_hg38.bwa_meth.coorsort.deduped.pat.gz -o /tmp/test.csv
+
+./uxm plot /tmp/test.csv -o /tmp/test.pdf
+
+data/*pat.gz -o output.csv
+dumped atlas to output.csv
+
+# Optionally, add to PATH (or link "./uxm" to some directory in $PATH)
+export PATH=${PATH}:$PWD
+
+
+
+./wgbstools vis lib001.chr22.bwa_meth.coorsort.filt.pat.gz -r chr22:2195-3000
+
+ls
+Sigmoid_Colon_STL003.bam
+
+# output:
+# Sigmoid_Colon_STL003.pat.gz
+# Sigmoid_Colon_STL003.beta
+#+end_src
+
 *** Methylkit output annotation
 https:/www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/methylKit.html
 - get nearest TSS

@@ -3,8 +3,8 @@
 # Edits will be overwritten on next org-babel tangle.
 # 
 # Source:  /home/jeszyman/repos/emseq/emseq.org
-# Author:  Jeffrey Szymanski
-# Tangled: 2026-03-16 11:33:40
+# Author:  Jeff Szymanski
+# Tangled: 2026-03-16 12:05:56
 # ============================================================
 
 # test-analysis.smk — Test wrapper for emseq_analysis.smk

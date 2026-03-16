@@ -4,7 +4,7 @@
 # 
 # Source:  /home/jeszyman/repos/emseq/emseq.org
 # Author:  Jeff Szymanski
-# Tangled: 2026-03-16 11:49:48
+# Tangled: 2026-03-16 12:05:56
 # ============================================================
 
 # emseq_analysis.smk — EM-seq downstream analysis module

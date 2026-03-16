@@ -1,3 +1,12 @@
+# ============================================================
+# AUTO-GENERATED — DO NOT EDIT DIRECTLY
+# Edits will be overwritten on next org-babel tangle.
+# 
+# Source:  /home/jeszyman/repos/emseq/emseq.org
+# Author:  Jeff Szymanski
+# Tangled: 2026-03-16 12:05:56
+# ============================================================
+
 name: emseq
 channels:
   - conda-forge
@@ -15,6 +24,7 @@ dependencies:
   - methyldackel
   - mosdepth
   - multiqc
+  - pandas
   - r-argparse
   - r-data.table
   - r-ggplot2
@@ -26,4 +36,5 @@ dependencies:
   - dupsifter=1.3.0.20241113
   - libdeflate=1.22
   - bedtools
+  - scipy
   - snakemake

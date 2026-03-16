@@ -1,3 +1,12 @@
+# ============================================================
+# AUTO-GENERATED — DO NOT EDIT DIRECTLY
+# Edits will be overwritten on next org-babel tangle.
+# 
+# Source:  /home/jeszyman/repos/emseq/emseq.org
+# Author:  Jeff Szymanski
+# Tangled: 2026-03-16 12:05:56
+# ============================================================
+
 name: methylkit
 channels:
   - conda-forge
@@ -7,6 +16,7 @@ dependencies:
   - htslib
   - r-argparse
   - bioconductor-methylkit
+  - r-dplyr
   - r-data.table=1.15.4
   - r-tidyverse
   - bioconductor-genomicranges
@@ -15,3 +25,4 @@ dependencies:
   - bioconductor-org.hs.eg.db
   - bioconductor-genomation
   - r-arrow
+  - bioconductor-genomation

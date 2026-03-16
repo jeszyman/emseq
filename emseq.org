@@ -314,6 +314,7 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 #+end_export
 **** Change Log
 - Development since last tag
+  - [2026-03-16 Sun] Added emseq_analysis.smk module: DMR (migrated from emseq.smk), methylation haplotypes (mHapTools/mhaptk), tissue deconvolution (wgbs_tools/UXM), CpG annotation. New conda envs, test-analysis.smk wrapper, reference preparation docs.
   - Added a full run CI test
 - wf/emseq/v4.0.0
   - Minor testing updates

@@ -621,6 +621,35 @@ dependencies:
   - r-r.utils
 #+end_src
 
+*** Haplotype
+#+begin_src yaml :tangle ./config/haplotype-conda-env.yaml :comments no
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - openjdk>=11
+  - htslib
+  - samtools
+  - pip
+  - pip:
+    - pytabix
+#+end_src
+
+*** Deconvolution
+#+begin_src yaml :tangle ./config/deconv-conda-env.yaml :comments no
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python>=3.9
+  - numpy
+  - scipy
+  - pysam
+  - pandas
+  - samtools
+  - htslib
+#+end_src
+
 ** Methylation sequence processing
 :PROPERTIES:
 :ID:       92e64b67-c219-4146-a89b-a8710d91a634
@@ -3651,8 +3680,28 @@ emseq-mincov: 2
 envs:
   emseq: "../config/emseq-conda-env.yaml"
   methylkit: "../config/methylkit-conda-env.yaml"
+  haplotype: "../config/haplotype-conda-env.yaml"
+  deconv: "../config/deconv-conda-env.yaml"
 repos:
   emseq: "."
+  mhaptools: ~/repos/mHapTools
+  wgbs_tools: ~/repos/wgbs_tools
+  uxm_deconv: ~/repos/UXM_deconv
+
+# -----------------------------
+# Haplotype analysis
+# -----------------------------
+haplotype:
+  cpg-ref: tests/full/ref/hg38_CpG_chr22.gz
+  mhb-bed: tests/full/ref/test_mhb_chr22.bed
+  metrics: [MHL, PDR, Entropy]
+
+# -----------------------------
+# Deconvolution analysis
+# -----------------------------
+deconv:
+  genome-name: hg38_test
+  atlas: tests/full/ref/test_atlas.tsv
 
 # -----------------------------
 # Sample set and region filters

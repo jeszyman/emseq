@@ -1,0 +1,20 @@
+# ============================================================
+# AUTO-GENERATED — DO NOT EDIT DIRECTLY
+# Edits will be overwritten on next org-babel tangle.
+# 
+# Source:  /home/jeszyman/repos/emseq/emseq.org
+# Author:  Jeffrey Szymanski
+# Tangled: 2026-03-16 11:27:53
+# ============================================================
+
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python>=3.9
+  - numpy
+  - scipy
+  - pysam
+  - pandas
+  - samtools
+  - htslib

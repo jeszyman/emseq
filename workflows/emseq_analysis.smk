@@ -3,8 +3,8 @@
 # Edits will be overwritten on next org-babel tangle.
 # 
 # Source:  /home/jeszyman/repos/emseq/emseq.org
-# Author:  Jeffrey Szymanski
-# Tangled: 2026-03-16 11:44:44
+# Author:  Jeff Szymanski
+# Tangled: 2026-03-16 11:49:48
 # ============================================================
 
 # emseq_analysis.smk — EM-seq downstream analysis module
@@ -160,6 +160,29 @@ rule emseq_analysis_methylkit_meth_extract:
         Rscript "{params.script}" \
           --db_file "{input.mbase}" \
           --out_file "{output.tsv}"
+        """
+rule emseq_analysis_annotate_cpg:
+    message: "Annotate methylKit diff/base DB with CpG context, gene parts, and nearest TSS"
+    conda: ENV_METHYLKIT
+    input:
+        db = f"{D_EMSEQ}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
+    log:
+        cmd = f"{D_LOGS}/{{experiment}}_emseq_analysis_annotate_cpg.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{experiment}}_emseq_analysis_annotate_cpg.tsv"
+    params:
+        script = f"{R_EMSEQ}/scripts/emseq_annotate_methylkit.R",
+    threads: 1
+    output:
+        tsv = f"{D_EMSEQ}/dmr/annotation/{{experiment}}_annotated.tsv",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[annotate-cpg] $(date) experiment={wildcards.experiment}"
+        mkdir -p "$(dirname "{output.tsv}")"
+        Rscript "{params.script}" \
+          --db "{input.db}" \
+          --out "{output.tsv}"
         """
 rule emseq_analysis_mhap_convert:
     message: "Convert filtered BAM to mhap format using mHapTools for haplotype analysis"

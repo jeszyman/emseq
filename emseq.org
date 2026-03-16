@@ -4245,6 +4245,8 @@ meth-map:
 # -----------------------------
 import os
 
+configfile: "config/test.yaml"
+
 # -----------------------------
 # Path expansion for strings in config (~, $VARS)
 # -----------------------------

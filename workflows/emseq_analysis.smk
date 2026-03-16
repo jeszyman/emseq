@@ -4,7 +4,7 @@
 # 
 # Source:  /home/jeszyman/repos/emseq/emseq.org
 # Author:  Jeff Szymanski
-# Tangled: 2026-03-16 12:05:56
+# Tangled: 2026-03-16 13:58:24
 # ============================================================
 
 # emseq_analysis.smk — EM-seq downstream analysis module
@@ -205,6 +205,7 @@ rule emseq_analysis_mhap_convert:
         exec &>> "{log.cmd}"
         echo "[mhap-convert] $(date) lib={wildcards.library_id}"
         mkdir -p "$(dirname "{output.mhap}")"
+        export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${{LD_LIBRARY_PATH:-}}"
         "{params.mhaptools}" convert \
           -i "{input.bam}" \
           -c "{params.cpg_ref}" \
@@ -312,6 +313,7 @@ rule emseq_analysis_uxm_deconv:
         """
         exec &>> "{log.cmd}"
         echo "[uxm-deconv] $(date) n_samples=$(echo {input.pats} | wc -w)"
+        export PATH="{R_WGBSTOOLS}:$PATH"
         "{params.uxm}" deconv \
           --atlas "{params.atlas}" \
           --output "{output.csv}" \

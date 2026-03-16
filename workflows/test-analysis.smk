@@ -4,7 +4,7 @@
 # 
 # Source:  /home/jeszyman/repos/emseq/emseq.org
 # Author:  Jeff Szymanski
-# Tangled: 2026-03-16 12:05:56
+# Tangled: 2026-03-16 13:58:24
 # ============================================================
 
 # test-analysis.smk — Test wrapper for emseq_analysis.smk
@@ -91,6 +91,41 @@ rule all:
         f"{D_EMSEQ}/deconv/uxm_results.csv",
 
 shell.prefix("set -e; ")
+
+# Test alias: duplicate lib003 as lib003b for unique methylKit sample IDs
+rule alias_lib003b:
+    input:
+        r1 = f"{D_INPUTS}/lib003.raw_R1.fastq.gz",
+        r2 = f"{D_INPUTS}/lib003.raw_R2.fastq.gz",
+    output:
+        r1 = f"{D_INPUTS}/lib003b.raw_R1.fastq.gz",
+        r2 = f"{D_INPUTS}/lib003b.raw_R2.fastq.gz",
+    shell:
+        """
+        ln -sfr "{input.r1}" "{output.r1}"
+        ln -sfr "{input.r2}" "{output.r2}"
+        """
+
+rule symlink_input_fastqs:
+    message: "Create symlinks for raw input FASTQs into workflow directory"
+    input:
+        r1 = f"{D_INPUTS}/{{library_id}}.raw_R1.fastq.gz",
+        r2 = f"{D_INPUTS}/{{library_id}}.raw_R2.fastq.gz",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}_symlink_input_fastqs.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}_symlink_input_fastqs.tsv"
+    output:
+        r1 = f"{D_EMSEQ}/fastqs/{{library_id}}.raw_R1.fastq.gz",
+        r2 = f"{D_EMSEQ}/fastqs/{{library_id}}.raw_R2.fastq.gz",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[symlink-fastqs] $(date) lib={wildcards.library_id}"
+        mkdir -p "$(dirname "{output.r1}")"
+        ln -sfr "{input.r1}" "{output.r1}"
+        ln -sfr "{input.r2}" "{output.r2}"
+        """
 
 # Include both modules
 include: "emseq.smk"

@@ -4,7 +4,7 @@
 # 
 # Source:  /home/jeszyman/repos/emseq/emseq.org
 # Author:  Jeff Szymanski
-# Tangled: 2026-03-16 12:05:56
+# Tangled: 2026-03-16 13:58:24
 # ============================================================
 
 # -----------------------------
@@ -132,6 +132,22 @@ rule all:
         ),
         # QC - MultiQC (does NOT prompt inputs to run)
         f"{D_EMSEQ}/qc/multiqc.html",
+
+# -----------------------------
+# Test aliases (duplicate lib003 as lib003b for unique methylKit sample IDs)
+# -----------------------------
+rule alias_lib003b:
+    input:
+        r1 = f"{D_INPUTS}/lib003.raw_R1.fastq.gz",
+        r2 = f"{D_INPUTS}/lib003.raw_R2.fastq.gz",
+    output:
+        r1 = f"{D_INPUTS}/lib003b.raw_R1.fastq.gz",
+        r2 = f"{D_INPUTS}/lib003b.raw_R2.fastq.gz",
+    shell:
+        """
+        ln -sfr "{input.r1}" "{output.r1}"
+        ln -sfr "{input.r2}" "{output.r2}"
+        """
 
 # -----------------------------
 # Input symlinks

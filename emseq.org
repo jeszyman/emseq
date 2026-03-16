@@ -544,7 +544,7 @@ jobs:
 
 ** Conda environmental YAMLs
 *** EM-seq
-#+begin_src yaml :tangle ./config/emseq-conda-env.yaml
+#+begin_src yaml :tangle ./config/emseq-conda-env.yaml :comments no
 name: emseq
 channels:
   - conda-forge
@@ -578,7 +578,7 @@ dependencies:
   - snakemake
 #+end_src
 *** MethylKit
-#+begin_src yaml :tangle ./config/methylkit-conda-env.yaml
+#+begin_src yaml :tangle ./config/methylkit-conda-env.yaml :comments no
 name: methylkit
 channels:
   - conda-forge
@@ -600,7 +600,7 @@ dependencies:
   - bioconductor-genomation
 #+end_src
 *** Mosdepth
-#+begin_src yaml :tangle ./config/mosdepth-conda-env.yaml
+#+begin_src yaml :tangle ./config/mosdepth-conda-env.yaml :comments no
 name: mosdepth
 channels:
   - conda-forge
@@ -3789,6 +3789,7 @@ rule emseq_analysis_mhap_convert:
         exec &>> "{log.cmd}"
         echo "[mhap-convert] $(date) lib={wildcards.library_id}"
         mkdir -p "$(dirname "{output.mhap}")"
+        export LD_LIBRARY_PATH="$CONDA_PREFIX/lib:${{LD_LIBRARY_PATH:-}}"
         "{params.mhaptools}" convert \
           -i "{input.bam}" \
           -c "{params.cpg_ref}" \
@@ -3920,6 +3921,7 @@ rule emseq_analysis_uxm_deconv:
         """
         exec &>> "{log.cmd}"
         echo "[uxm-deconv] $(date) n_samples=$(echo {input.pats} | wc -w)"
+        export PATH="{R_WGBSTOOLS}:$PATH"
         "{params.uxm}" deconv \
           --atlas "{params.atlas}" \
           --output "{output.csv}" \
@@ -4195,12 +4197,12 @@ haplotype:
 # -----------------------------
 deconv:
   genome-name: hg38_test
-  atlas: tests/full/ref/test_atlas.tsv
+  atlas: tests/full/ref/Atlas.U25.l4.hg38_test.tsv
 
 # -----------------------------
 # Sample set and region filters
 # -----------------------------
-library-ids: ["lib001", "lib002", "lib003", "lib004"]
+library-ids: ["lib001", "lib002", "lib003", "lib003b", "lib004"]
 keep-bed: "tests/full/inputs/chr22.keep.bed"
 exclude-bed: "tests/full/inputs/chr22.exclude.blacklist.bed.gz"
 
@@ -4223,12 +4225,12 @@ emseq_ref_assemblies:
 
 # -----------------------------
 # Experiments (differential methylation experiments for methylKit)
-# NOTE: lib003 is intentionally duplicated to ensure overlapping CpG sites
-# across samples in this minimal test dataset for methylKit unite/diff testing.
+# NOTE: lib003b is a symlink alias of lib003 FASTQs to give methylKit unique
+# sample IDs while ensuring overlapping CpG sites for unite/diff testing.
 # -----------------------------
 meth-map:
   test:
-    libs: ["lib001", "lib003", "lib003", "lib004"]
+    libs: ["lib001", "lib003", "lib003b", "lib004"]
     emseq_ref_name: ["chr22"]
     align_method: ["bwa_meth"]
     tx: [0, 0, 1, 1]
@@ -4367,6 +4369,22 @@ rule all:
         f"{D_EMSEQ}/qc/multiqc.html",
 
 # -----------------------------
+# Test aliases (duplicate lib003 as lib003b for unique methylKit sample IDs)
+# -----------------------------
+rule alias_lib003b:
+    input:
+        r1 = f"{D_INPUTS}/lib003.raw_R1.fastq.gz",
+        r2 = f"{D_INPUTS}/lib003.raw_R2.fastq.gz",
+    output:
+        r1 = f"{D_INPUTS}/lib003b.raw_R1.fastq.gz",
+        r2 = f"{D_INPUTS}/lib003b.raw_R2.fastq.gz",
+    shell:
+        """
+        ln -sfr "{input.r1}" "{output.r1}"
+        ln -sfr "{input.r2}" "{output.r2}"
+        """
+
+# -----------------------------
 # Input symlinks
 # -----------------------------
 rule symlink_input_fastqs:
@@ -4482,6 +4500,41 @@ rule all:
         f"{D_EMSEQ}/deconv/uxm_results.csv",
 
 shell.prefix("set -e; ")
+
+# Test alias: duplicate lib003 as lib003b for unique methylKit sample IDs
+rule alias_lib003b:
+    input:
+        r1 = f"{D_INPUTS}/lib003.raw_R1.fastq.gz",
+        r2 = f"{D_INPUTS}/lib003.raw_R2.fastq.gz",
+    output:
+        r1 = f"{D_INPUTS}/lib003b.raw_R1.fastq.gz",
+        r2 = f"{D_INPUTS}/lib003b.raw_R2.fastq.gz",
+    shell:
+        """
+        ln -sfr "{input.r1}" "{output.r1}"
+        ln -sfr "{input.r2}" "{output.r2}"
+        """
+
+rule symlink_input_fastqs:
+    message: "Create symlinks for raw input FASTQs into workflow directory"
+    input:
+        r1 = f"{D_INPUTS}/{{library_id}}.raw_R1.fastq.gz",
+        r2 = f"{D_INPUTS}/{{library_id}}.raw_R2.fastq.gz",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}_symlink_input_fastqs.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}_symlink_input_fastqs.tsv"
+    output:
+        r1 = f"{D_EMSEQ}/fastqs/{{library_id}}.raw_R1.fastq.gz",
+        r2 = f"{D_EMSEQ}/fastqs/{{library_id}}.raw_R2.fastq.gz",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[symlink-fastqs] $(date) lib={wildcards.library_id}"
+        mkdir -p "$(dirname "{output.r1}")"
+        ln -sfr "{input.r1}" "{output.r1}"
+        ln -sfr "{input.r2}" "{output.r2}"
+        """
 
 # Include both modules
 include: "emseq.smk"

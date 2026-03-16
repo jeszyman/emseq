@@ -1,0 +1,10 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - openjdk>=11
+  - htslib
+  - samtools
+  - pip
+  - pip:
+    - pytabix

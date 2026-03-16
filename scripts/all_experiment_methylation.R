@@ -1,3 +1,12 @@
+# ============================================================
+# AUTO-GENERATED — DO NOT EDIT DIRECTLY
+# Edits will be overwritten on next org-babel tangle.
+# 
+# Source:  /home/jeszyman/repos/emseq/emseq.org
+# Author:  Jeff Szymanski
+# Tangled: 2026-03-16 13:58:24
+# ============================================================
+
 library(argparse)
 library(methylKit)
 library(tidyverse)

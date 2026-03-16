@@ -1,3 +1,12 @@
+# ============================================================
+# AUTO-GENERATED — DO NOT EDIT DIRECTLY
+# Edits will be overwritten on next org-babel tangle.
+# 
+# Source:  /home/jeszyman/repos/emseq/emseq.org
+# Author:  Jeff Szymanski
+# Tangled: 2026-03-16 13:58:24
+# ============================================================
+
 # -----------------------------
 # Global runtime/config knobs
 # -----------------------------
@@ -13,13 +22,33 @@ emseq-mincov: 2
 envs:
   emseq: "../config/emseq-conda-env.yaml"
   methylkit: "../config/methylkit-conda-env.yaml"
+  haplotype: "../config/haplotype-conda-env.yaml"
+  deconv: "../config/deconv-conda-env.yaml"
 repos:
   emseq: "."
+  mhaptools: ~/repos/mHapTools
+  wgbs_tools: ~/repos/wgbs_tools
+  uxm_deconv: ~/repos/UXM_deconv
+
+# -----------------------------
+# Haplotype analysis
+# -----------------------------
+haplotype:
+  cpg-ref: tests/full/ref/hg38_CpG_chr22.gz
+  mhb-bed: tests/full/ref/test_mhb_chr22.bed
+  metrics: [MHL, PDR, Entropy]
+
+# -----------------------------
+# Deconvolution analysis
+# -----------------------------
+deconv:
+  genome-name: hg38_test
+  atlas: tests/full/ref/Atlas.U25.l4.hg38_test.tsv
 
 # -----------------------------
 # Sample set and region filters
 # -----------------------------
-library-ids: ["lib001", "lib002", "lib003", "lib004"]
+library-ids: ["lib001", "lib002", "lib003", "lib003b", "lib004"]
 keep-bed: "tests/full/inputs/chr22.keep.bed"
 exclude-bed: "tests/full/inputs/chr22.exclude.blacklist.bed.gz"
 
@@ -42,12 +71,12 @@ emseq_ref_assemblies:
 
 # -----------------------------
 # Experiments (differential methylation experiments for methylKit)
-# NOTE: lib003 is intentionally duplicated to ensure overlapping CpG sites
-# across samples in this minimal test dataset for methylKit unite/diff testing.
+# NOTE: lib003b is a symlink alias of lib003 FASTQs to give methylKit unique
+# sample IDs while ensuring overlapping CpG sites for unite/diff testing.
 # -----------------------------
 meth-map:
   test:
-    libs: ["lib001", "lib003", "lib003", "lib004"]
+    libs: ["lib001", "lib003", "lib003b", "lib004"]
     emseq_ref_name: ["chr22"]
     align_method: ["bwa_meth"]
     tx: [0, 0, 1, 1]

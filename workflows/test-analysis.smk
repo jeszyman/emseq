@@ -7,16 +7,12 @@
 # Tangled: 2026-03-16 13:58:24
 # ============================================================
 
-# -----------------------------
-# Imports
-# -----------------------------
+# test-analysis.smk — Test wrapper for emseq_analysis.smk
+# Tangled from emseq.org; do not edit directly.
 import os
 
 configfile: "config/test.yaml"
 
-# -----------------------------
-# Path expansion for strings in config (~, $VARS)
-# -----------------------------
 def resolve_config_paths(config_dict):
     for k, v in config_dict.items():
         if isinstance(v, str):
@@ -28,20 +24,14 @@ def resolve_config_paths(config_dict):
 
 resolve_config_paths(config)
 
-# -----------------------------
-# Environments
-# -----------------------------
+# --- Environments ---
 ENV_EMSEQ = config['envs']['emseq']
 ENV_METHYLKIT = config['envs']['methylkit']
 
-# -----------------------------
-# Repositories
-# -----------------------------
+# --- Repositories ---
 R_EMSEQ = config['repos']['emseq']
 
-# -----------------------------
-# Data directories (derived from main-data-dir)
-# -----------------------------
+# --- Data directories ---
 D_DATA = config['main-data-dir']
 D_EMSEQ = f"{D_DATA}/emseq"
 D_REF = f"{D_DATA}/ref"
@@ -49,93 +39,60 @@ D_LOGS = f"{D_DATA}/logs"
 D_BENCHMARK = f"{D_DATA}/benchmark"
 D_INPUTS = f"{D_DATA}/inputs"
 
-# -----------------------------
-# Tool/global params (UPPERCASE for module consumption)
-# -----------------------------
+# --- Parameters ---
 MOSDEPTH_QUANT_LEVELS = config.get("mosdepth-quant-levels", "1,5,10,20")
 EMSEQ_MINCOV = config.get("emseq-mincov", 2)
 FASTP_EXTRA = config.get("fastp", {}).get("extra", "")
-
-# -----------------------------
-# Reference assembly lookup (for index rules)
-# -----------------------------
 EMSEQ_REF_INPUTS = {k: v['input'] for k, v in config['emseq_ref_assemblies'].items()}
 
-# -----------------------------
-# Sample set (required by emseq.smk)
-# -----------------------------
+# --- Samples and references ---
 emseq_library_ids = config["library-ids"]
-
-# -----------------------------
-# Reference selections (kept explicit)
-# -----------------------------
 spike_builds = ["puc19", "unmeth_lambda"]
 emseq_ref_names = ["chr22"]
-
-# -----------------------------
-# Region filtering inputs
-# -----------------------------
 KEEP_BED = config["keep-bed"]
 EXCL_BED = config["exclude-bed"]
-
-# -----------------------------
-# Experiments map from YAML
-# (differential methylation experiments for methylKit)
-# -----------------------------
 meth_map = config["meth-map"]
 
-# -----------------------------
-# Rule all
-# -----------------------------
+# --- Rule all: analysis targets ---
 rule all:
     input:
-        # FASTQs
+        # DMR - per-base
         expand(
-            f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_{{read}}.fastq.gz",
-            library_id=emseq_library_ids,
-            read=["R1", "R2"],
+            f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
+            experiment=meth_map.keys(),
         ),
-        # Alignment and methylation calling
         expand(
-            f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz",
-            library_id=emseq_library_ids,
-            emseq_ref_name=emseq_ref_names,
-            align_method=["bwa_meth", "biscuit"],
+            f"{D_EMSEQ}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
+            experiment=meth_map.keys(),
         ),
-        # Spike workflow
+        # DMR - tiled
         expand(
-            f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
-            library_id=emseq_library_ids,
-            emseq_ref_name=spike_builds,
-            align_method="bwa_meth",
+            f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.tiled.txt.bgz",
+            experiment=meth_map.keys(),
         ),
-        # QC - FastQC
+        # DMR - meth extract
         expand(
-            f"{D_EMSEQ}/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.zip",
-            library_id=emseq_library_ids,
-            processing=["raw", "trimmed"],
-            read=["R1", "R2"],
+            f"{D_EMSEQ}/dmr/diff/{{experiment}}_pos_meth.tsv",
+            experiment=meth_map.keys(),
         ),
-        # QC - mosdepth
+        # DMR - annotation
         expand(
-            f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.mosdepth.summary.txt",
+            f"{D_EMSEQ}/dmr/annotation/{{experiment}}_annotated.tsv",
+            experiment=meth_map.keys(),
+        ),
+        # Haplotype
+        expand(
+            f"{D_EMSEQ}/haplotype/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_mhl.txt",
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
-            align_method=["bwa_meth", "biscuit"],
+            align_method=["bwa_meth"],
         ),
-        # QC - M-bias
-        expand(
-            f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.txt",
-            library_id=emseq_library_ids,
-            emseq_ref_name=emseq_ref_names,
-            align_method=["bwa_meth", "biscuit"],
-        ),
-        # QC - MultiQC (does NOT prompt inputs to run)
-        f"{D_EMSEQ}/qc/multiqc.html",
+        # Deconvolution
+        f"{D_EMSEQ}/deconv/uxm_results.csv",
 
-# -----------------------------
-# Test aliases (duplicate lib003 as lib003b for unique methylKit sample IDs)
-# -----------------------------
+shell.prefix("set -e; ")
+
+# Test alias: duplicate lib003 as lib003b for unique methylKit sample IDs
 rule alias_lib003b:
     input:
         r1 = f"{D_INPUTS}/lib003.raw_R1.fastq.gz",
@@ -149,9 +106,6 @@ rule alias_lib003b:
         ln -sfr "{input.r2}" "{output.r2}"
         """
 
-# -----------------------------
-# Input symlinks
-# -----------------------------
 rule symlink_input_fastqs:
     message: "Create symlinks for raw input FASTQs into workflow directory"
     input:
@@ -173,7 +127,6 @@ rule symlink_input_fastqs:
         ln -sfr "{input.r2}" "{output.r2}"
         """
 
-# -----------------------------
-# Include module
-# -----------------------------
+# Include both modules
 include: "emseq.smk"
+include: "emseq_analysis.smk"

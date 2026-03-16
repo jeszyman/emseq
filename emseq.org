@@ -1454,49 +1454,7 @@ Methylkit DMR requires EXACT same genome - can't mix e.g. hg38 / hg38 decoy
 See for stranding https://claude.ai/chat/c39b78cc-5b2f-49ed-9f02-ed349824a07a
 **** Per base
 ***** United per sample
-#+begin_src snakemake
-rule emseq_make_methylkit_unite_db:
-    message: "Unite per-sample methylKit tabix databases into single methylBase for differential analysis"
-    conda: ENV_METHYLKIT
-    input:
-        mkit_lib_db = lambda wc: expand(
-            f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz",
-            library_id=meth_map[wc.experiment]["libs"],
-            emseq_ref_name=meth_map[wc.experiment]["emseq_ref_name"],
-            align_method=meth_map[wc.experiment]["align_method"],
-        ),
-    log:
-        cmd = f"{D_LOGS}/{{experiment}}_emseq_make_methylkit_unite_db.log",
-    benchmark:
-        f"{D_BENCHMARK}/{{experiment}}_emseq_make_methylkit_unite_db.tsv"
-    params:
-        library_id = lambda wc: " ".join(meth_map[wc.experiment]["libs"]),
-        treatment_list = lambda wc: " ".join(map(str, meth_map[wc.experiment]["tx"])),
-        script = f"{R_EMSEQ}/scripts/make_methylkit_unite_db.R",
-        mincov = lambda wc: meth_map[wc.experiment]["mincov"],
-        min_per_group = lambda wc: meth_map[wc.experiment]["mingroup"],
-        chunk_size = lambda wc: meth_map[wc.experiment]["chunksize"],
-    threads: 32
-    output:
-        mbase = f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
-    shell:
-        """
-        exec &>> "{log.cmd}"
-        echo "[methylkit-unite] $(date) experiment={wildcards.experiment} threads={threads}"
-        rm -f "{output.mbase}"*
-        Rscript "{params.script}" \
-          --lib_db_list "{input.mkit_lib_db}" \
-          --lib_id_list "{params.library_id}" \
-          --treatment_list "{params.treatment_list}" \
-          --cores {threads} \
-          --out_dir "$(dirname "{output.mbase}")" \
-          --suffix {wildcards.experiment} \
-          --assembly "hg38" \
-          --mincov {params.mincov} \
-          --min_per_group {params.min_per_group} \
-          --chunk_size {params.chunk_size}
-        """
-#+end_src
+Snakemake rule moved to =** Methylation analysis processing= / =*** Differential methylation=.
 
 #+begin_src R :tangle ./scripts/make_methylkit_unite_db.R
 #!/usr/bin/env Rscript
@@ -1582,35 +1540,7 @@ message("Done. methylBase: ", mbase_path)
 #+end_src
 
 ***** Run differential methylation calling
-#+begin_src snakemake
-rule emseq_make_methylkit_diff_db:
-    message: "Calculate differential methylation from united methylBase using methylKit"
-    conda: ENV_METHYLKIT
-    input:
-        mbase = f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
-    log:
-        cmd = f"{D_LOGS}/{{experiment}}_emseq_make_methylkit_diff_db.log",
-    benchmark:
-        f"{D_BENCHMARK}/{{experiment}}_emseq_make_methylkit_diff_db.tsv"
-    params:
-        script     = f"{R_EMSEQ}/scripts/make_methylkit_diff_db.R",
-        chunk_size = lambda wc: meth_map[wc.experiment]["chunksize"],
-    threads: 32
-    output:
-        mdiff = f"{D_EMSEQ}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
-    shell:
-        """
-        exec &>> "{log.cmd}"
-        echo "[methylkit-diff] $(date) experiment={wildcards.experiment} threads={threads}"
-        rm -f "{output.mdiff}" "{output.mdiff}.tbi"
-        Rscript "{params.script}" \
-          --mbase "{input.mbase}" \
-          --cores {threads} \
-          --out_dir "$(dirname "{output.mdiff}")" \
-          --suffix {wildcards.experiment} \
-          --chunk_size {params.chunk_size}
-        """
-#+end_src
+Snakemake rule moved to =** Methylation analysis processing= / =*** Differential methylation=.
 
 #+begin_src R :tangle ./scripts/make_methylkit_diff_db.R
 #!/usr/bin/env Rscript
@@ -1667,53 +1597,7 @@ diff_path <- file.path(args$out_dir, sprintf("methylDiff_%s.txt.bgz", args$suffi
 message("Done. methylDiff: ", diff_path)
 #+end_src
 **** Tiled
-
-#+begin_src snakemake
-rule emseq_make_methylkit_diff_db_tiled:
-    message: "Tile methylation data into windows and calculate differential methylation with methylKit"
-    conda: ENV_METHYLKIT
-    input:
-        mkit_lib_db = lambda wc: expand(
-            f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz",
-            library_id=meth_map[wc.experiment]['libs'],
-            emseq_ref_name=meth_map[wc.experiment]['emseq_ref_name'],
-            align_method=meth_map[wc.experiment]['align_method'],
-        ),
-    log:
-        cmd = f"{D_LOGS}/{{experiment}}_emseq_make_methylkit_diff_db_tiled.log",
-    benchmark:
-        f"{D_BENCHMARK}/{{experiment}}_emseq_make_methylkit_diff_db_tiled.tsv"
-    params:
-        library_id = lambda wc: " ".join(meth_map[wc.experiment]['libs']),
-        treatment_list = lambda wc: " ".join(map(str, meth_map[wc.experiment]['tx'])),
-        script = f"{R_EMSEQ}/scripts/make_methylkit_diff_tiled_db.R",
-        mincov = lambda wc: meth_map[wc.experiment]["mincov"],
-        chunk_size = lambda wc: meth_map[wc.experiment]["chunksize"],
-        min_per_group = lambda wc: meth_map[wc.experiment]["mingroup"],
-        win_size = lambda wc: meth_map[wc.experiment]["win_size"],
-    threads: 32
-    output:
-        unite = f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.tiled.txt.bgz",
-        diff = f"{D_EMSEQ}/dmr/diff/methylDiff_{{experiment}}.tiled.txt.bgz",
-    shell:
-        """
-        exec &>> "{log.cmd}"
-        echo "[methylkit-diff-tiled] $(date) experiment={wildcards.experiment} threads={threads}"
-        rm -f "{output.unite}"* "{output.diff}"*
-        Rscript "{params.script}" \
-          --lib_db_list "{input.mkit_lib_db}" \
-          --lib_id_list "{params.library_id}" \
-          --treatment_list "{params.treatment_list}" \
-          --cores {threads} \
-          --out_dir "$(dirname "{output.unite}")" \
-          --suffix {wildcards.experiment} \
-          --assembly "hg38" \
-          --mincov {params.mincov} \
-          --win_size {params.win_size} \
-          --min_per_group {params.min_per_group} \
-          --chunk_size {params.chunk_size}
-        """
-#+end_src
+Snakemake rule moved to =** Methylation analysis processing= / =*** Differential methylation=.
 
 #+begin_src R :tangle ./scripts/make_methylkit_diff_tiled_db.R
 #!/usr/bin/env Rscript
@@ -3517,6 +3401,189 @@ ggplot(meth_df, aes(x = group, y = methylation, fill = group)) +
 
 
 
+** Methylation analysis processing
+:PROPERTIES:
+:header-args:snakemake: :tangle ./workflows/emseq_analysis.smk
+:END:
+
+Downstream analysis rules for EM-seq data, including differential methylation (methylKit), haplotype-level metrics, and cell-type deconvolution.  Tangled into =workflows/emseq_analysis.smk=.
+
+*** Preamble
+#+begin_src snakemake
+# ============================================================================
+# emseq_analysis.smk — EM-seq downstream analysis module
+# Tangled from emseq.org; do not edit directly.
+# ============================================================================
+# Required wrapper-provided variables (must be in scope before include):
+#   D_EMSEQ, D_LOGS, D_BENCHMARK, D_DATA, R_EMSEQ
+#   ENV_METHYLKIT, ENV_EMSEQ
+#   meth_map, emseq_library_ids, emseq_ref_names, KEEP_BED, EXCL_BED
+
+# --- Analysis-specific config ---
+R_MHAPTOOLS   = config["repos"]["mhaptools"]
+R_WGBSTOOLS   = config["repos"]["wgbs_tools"]
+R_UXM         = config["repos"]["uxm_deconv"]
+CPG_REF       = config["haplotype"]["cpg-ref"]
+MHB_BED       = config["haplotype"]["mhb-bed"]
+HAP_METRICS   = " ".join(config["haplotype"]["metrics"])
+DECONV_GENOME = config["deconv"]["genome-name"]
+DECONV_ATLAS  = config["deconv"]["atlas"]
+
+ENV_HAPLOTYPE = config["envs"]["haplotype"]
+ENV_DECONV    = config["envs"]["deconv"]
+#+end_src
+
+*** Differential methylation
+**** Unite per sample
+#+begin_src snakemake
+rule emseq_analysis_methylkit_unite:
+    message: "Unite per-sample methylKit tabix databases into single methylBase for differential analysis"
+    conda: ENV_METHYLKIT
+    input:
+        mkit_lib_db = lambda wc: expand(
+            f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz",
+            library_id=meth_map[wc.experiment]["libs"],
+            emseq_ref_name=meth_map[wc.experiment]["emseq_ref_name"],
+            align_method=meth_map[wc.experiment]["align_method"],
+        ),
+    log:
+        cmd = f"{D_LOGS}/{{experiment}}_emseq_analysis_methylkit_unite.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{experiment}}_emseq_analysis_methylkit_unite.tsv"
+    params:
+        library_id = lambda wc: " ".join(meth_map[wc.experiment]["libs"]),
+        treatment_list = lambda wc: " ".join(map(str, meth_map[wc.experiment]["tx"])),
+        script = f"{R_EMSEQ}/scripts/make_methylkit_unite_db.R",
+        mincov = lambda wc: meth_map[wc.experiment]["mincov"],
+        min_per_group = lambda wc: meth_map[wc.experiment]["mingroup"],
+        chunk_size = lambda wc: meth_map[wc.experiment]["chunksize"],
+    threads: 32
+    output:
+        mbase = f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[methylkit-unite] $(date) experiment={wildcards.experiment} threads={threads}"
+        rm -f "{output.mbase}"*
+        Rscript "{params.script}" \
+          --lib_db_list "{input.mkit_lib_db}" \
+          --lib_id_list "{params.library_id}" \
+          --treatment_list "{params.treatment_list}" \
+          --cores {threads} \
+          --out_dir "$(dirname "{output.mbase}")" \
+          --suffix {wildcards.experiment} \
+          --assembly "hg38" \
+          --mincov {params.mincov} \
+          --min_per_group {params.min_per_group} \
+          --chunk_size {params.chunk_size}
+        """
+#+end_src
+
+**** Run differential methylation calling
+#+begin_src snakemake
+rule emseq_analysis_methylkit_diff:
+    message: "Calculate differential methylation from united methylBase using methylKit"
+    conda: ENV_METHYLKIT
+    input:
+        mbase = f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
+    log:
+        cmd = f"{D_LOGS}/{{experiment}}_emseq_analysis_methylkit_diff.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{experiment}}_emseq_analysis_methylkit_diff.tsv"
+    params:
+        script     = f"{R_EMSEQ}/scripts/make_methylkit_diff_db.R",
+        chunk_size = lambda wc: meth_map[wc.experiment]["chunksize"],
+    threads: 32
+    output:
+        mdiff = f"{D_EMSEQ}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[methylkit-diff] $(date) experiment={wildcards.experiment} threads={threads}"
+        rm -f "{output.mdiff}" "{output.mdiff}.tbi"
+        Rscript "{params.script}" \
+          --mbase "{input.mbase}" \
+          --cores {threads} \
+          --out_dir "$(dirname "{output.mdiff}")" \
+          --suffix {wildcards.experiment} \
+          --chunk_size {params.chunk_size}
+        """
+#+end_src
+
+**** Tiled differential methylation
+#+begin_src snakemake
+rule emseq_analysis_methylkit_diff_tiled:
+    message: "Tile methylation data into windows and calculate differential methylation with methylKit"
+    conda: ENV_METHYLKIT
+    input:
+        mkit_lib_db = lambda wc: expand(
+            f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz",
+            library_id=meth_map[wc.experiment]['libs'],
+            emseq_ref_name=meth_map[wc.experiment]['emseq_ref_name'],
+            align_method=meth_map[wc.experiment]['align_method'],
+        ),
+    log:
+        cmd = f"{D_LOGS}/{{experiment}}_emseq_analysis_methylkit_diff_tiled.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{experiment}}_emseq_analysis_methylkit_diff_tiled.tsv"
+    params:
+        library_id = lambda wc: " ".join(meth_map[wc.experiment]['libs']),
+        treatment_list = lambda wc: " ".join(map(str, meth_map[wc.experiment]['tx'])),
+        script = f"{R_EMSEQ}/scripts/make_methylkit_diff_tiled_db.R",
+        mincov = lambda wc: meth_map[wc.experiment]["mincov"],
+        chunk_size = lambda wc: meth_map[wc.experiment]["chunksize"],
+        min_per_group = lambda wc: meth_map[wc.experiment]["mingroup"],
+        win_size = lambda wc: meth_map[wc.experiment]["win_size"],
+    threads: 32
+    output:
+        unite = f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.tiled.txt.bgz",
+        diff = f"{D_EMSEQ}/dmr/diff/methylDiff_{{experiment}}.tiled.txt.bgz",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[methylkit-diff-tiled] $(date) experiment={wildcards.experiment} threads={threads}"
+        rm -f "{output.unite}"* "{output.diff}"*
+        Rscript "{params.script}" \
+          --lib_db_list "{input.mkit_lib_db}" \
+          --lib_id_list "{params.library_id}" \
+          --treatment_list "{params.treatment_list}" \
+          --cores {threads} \
+          --out_dir "$(dirname "{output.unite}")" \
+          --suffix {wildcards.experiment} \
+          --assembly "hg38" \
+          --mincov {params.mincov} \
+          --win_size {params.win_size} \
+          --min_per_group {params.min_per_group} \
+          --chunk_size {params.chunk_size}
+        """
+#+end_src
+
+**** Methylation extraction
+#+begin_src snakemake
+rule emseq_analysis_methylkit_meth_extract:
+    message: "Extract percent methylation matrix from united methylBase"
+    conda: ENV_METHYLKIT
+    input:
+        mbase = f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
+    log:
+        cmd = f"{D_LOGS}/{{experiment}}_emseq_analysis_methylkit_meth_extract.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{experiment}}_emseq_analysis_methylkit_meth_extract.tsv"
+    params:
+        script = f"{R_EMSEQ}/scripts/all_experiment_methylation.R",
+    threads: 1
+    output:
+        tsv = f"{D_EMSEQ}/dmr/diff/{{experiment}}_pos_meth.tsv",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[methylkit-meth-extract] $(date) experiment={wildcards.experiment}"
+        Rscript "{params.script}" \
+          --db_file "{input.mbase}" \
+          --out_file "{output.tsv}"
+        """
+#+end_src
+
 ** Testing
 - https://chatgpt.com/c/68ceb2e8-4d64-832a-9bc2-8bc08c9d37b3
 
@@ -3869,20 +3936,6 @@ rule all:
         ),
         # QC - MultiQC (does NOT prompt inputs to run)
         f"{D_EMSEQ}/qc/multiqc.html",
-        # MethylKit - per-base
-        expand(
-            f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
-            experiment=meth_map.keys(),
-        ),
-        expand(
-            f"{D_EMSEQ}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
-            experiment=meth_map.keys(),
-        ),
-        # MethylKit - tiled
-        expand(
-            f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.tiled.txt.bgz",
-            experiment=meth_map.keys(),
-        ),
 
 # -----------------------------
 # Input symlinks
@@ -3912,6 +3965,98 @@ rule symlink_input_fastqs:
 # Include module
 # -----------------------------
 include: "emseq.smk"
+#+end_src
+
+*** Test analysis wrapper
+#+begin_src snakemake :tangle ./workflows/test-analysis.smk
+# test-analysis.smk — Test wrapper for emseq_analysis.smk
+# Tangled from emseq.org; do not edit directly.
+import os
+
+configfile: "config/test.yaml"
+
+def resolve_config_paths(config_dict):
+    for k, v in config_dict.items():
+        if isinstance(v, str):
+            config_dict[k] = os.path.expandvars(os.path.expanduser(v))
+        elif isinstance(v, dict):
+            resolve_config_paths(v)
+        elif isinstance(v, list):
+            config_dict[k] = [os.path.expandvars(os.path.expanduser(i)) if isinstance(i, str) else i for i in v]
+
+resolve_config_paths(config)
+
+# --- Environments ---
+ENV_EMSEQ = config['envs']['emseq']
+ENV_METHYLKIT = config['envs']['methylkit']
+
+# --- Repositories ---
+R_EMSEQ = config['repos']['emseq']
+
+# --- Data directories ---
+D_DATA = config['main-data-dir']
+D_EMSEQ = f"{D_DATA}/emseq"
+D_REF = f"{D_DATA}/ref"
+D_LOGS = f"{D_DATA}/logs"
+D_BENCHMARK = f"{D_DATA}/benchmark"
+D_INPUTS = f"{D_DATA}/inputs"
+
+# --- Parameters ---
+MOSDEPTH_QUANT_LEVELS = config.get("mosdepth-quant-levels", "1,5,10,20")
+EMSEQ_MINCOV = config.get("emseq-mincov", 2)
+FASTP_EXTRA = config.get("fastp", {}).get("extra", "")
+EMSEQ_REF_INPUTS = {k: v['input'] for k, v in config['emseq_ref_assemblies'].items()}
+
+# --- Samples and references ---
+emseq_library_ids = config["library-ids"]
+spike_builds = ["puc19", "unmeth_lambda"]
+emseq_ref_names = ["chr22"]
+KEEP_BED = config["keep-bed"]
+EXCL_BED = config["exclude-bed"]
+meth_map = config["meth-map"]
+
+# --- Rule all: analysis targets ---
+rule all:
+    input:
+        # DMR - per-base
+        expand(
+            f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
+            experiment=meth_map.keys(),
+        ),
+        expand(
+            f"{D_EMSEQ}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
+            experiment=meth_map.keys(),
+        ),
+        # DMR - tiled
+        expand(
+            f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.tiled.txt.bgz",
+            experiment=meth_map.keys(),
+        ),
+        # DMR - meth extract
+        expand(
+            f"{D_EMSEQ}/dmr/diff/{{experiment}}_pos_meth.tsv",
+            experiment=meth_map.keys(),
+        ),
+        # DMR - annotation
+        expand(
+            f"{D_EMSEQ}/dmr/annotation/{{experiment}}_annotated.tsv",
+            experiment=meth_map.keys(),
+        ),
+        # Haplotype
+        expand(
+            f"{D_EMSEQ}/haplotype/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_mhl.txt",
+            library_id=emseq_library_ids,
+            emseq_ref_name=emseq_ref_names,
+            align_method=["bwa_meth"],
+        ),
+        # Deconvolution
+        f"{D_EMSEQ}/deconv/uxm_results.csv",
+
+shell.prefix("set -e; ")
+
+# Include both modules
+include: "emseq.smk"
+include: "emseq_analysis.smk"
 #+end_src
 
 *** Example wrapper

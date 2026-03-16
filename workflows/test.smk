@@ -1,3 +1,12 @@
+# ============================================================
+# AUTO-GENERATED — DO NOT EDIT DIRECTLY
+# Edits will be overwritten on next org-babel tangle.
+# 
+# Source:  /home/jeszyman/repos/emseq/emseq.org
+# Author:  Jeffrey Szymanski
+# Tangled: 2026-03-16 11:33:40
+# ============================================================
+
 # -----------------------------
 # Imports
 # -----------------------------
@@ -121,20 +130,6 @@ rule all:
         ),
         # QC - MultiQC (does NOT prompt inputs to run)
         f"{D_EMSEQ}/qc/multiqc.html",
-        # MethylKit - per-base
-        expand(
-            f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.txt.bgz",
-            experiment=meth_map.keys(),
-        ),
-        expand(
-            f"{D_EMSEQ}/dmr/diff/methylDiff_{{experiment}}.txt.bgz",
-            experiment=meth_map.keys(),
-        ),
-        # MethylKit - tiled
-        expand(
-            f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.tiled.txt.bgz",
-            experiment=meth_map.keys(),
-        ),
 
 # -----------------------------
 # Input symlinks

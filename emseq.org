@@ -3,7 +3,8 @@
 :ID:       cd9489fd-c6e7-4c64-8317-e3d9a283b36c
 :END:
 
-https://teams.microsoft.com/l/message/19:meeting_ZWFhYjE4YzktYWM0Zi00NzllLTk1NWItYjA5YTJkYWQwN2Jj@thread.v2/1769216157607?context=%7B%22contextType%22%3A%22chat%22%7D
+- [[https://teams.microsoft.com/l/message/19:meeting_ZWFhYjE4YzktYWM0Zi00NzllLTk1NWItYjA5YTJkYWQwN2Jj@thread.v2/1769216157607?context=%7B%22contextType%22%3A%22chat%22%7D][teams]]
+- Matteo mosdepth update [[https://github.com/jeszyman/emseq/pull/1][PR #1]]
 
 ** [[id:bda70cff-0713-4e32-8da1-ee83924b8f00][README]]
 ** [[elisp:(let ((window-config (current-window-configuration))) (async-shell-command "bash ~/repos/mpnst/tools/shell/org_update.sh") (set-window-configuration window-config))][org update]]

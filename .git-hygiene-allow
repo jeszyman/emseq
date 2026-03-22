@@ -1,0 +1,3 @@
+# Large test fixtures — intentional; needed for integration tests
+tests/full/inputs/chr22.test.fa
+tests/full/inputs/chr22.test.fa.gz

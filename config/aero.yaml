@@ -1,0 +1,125 @@
+# AERO local test config
+# Not tangled — hand-crafted for local run
+
+# -----------------------------
+# Global runtime/config knobs
+# -----------------------------
+available-concurrency: 50
+main-data-dir: "/mnt/data/projects/aero"
+mosdepth-quant-levels: "1,5,10,20,30"
+emseq-mincov: 2
+
+# -----------------------------
+# Per-rule resource limits
+# -----------------------------
+# threads: per-rule thread allocation (rule uses min(threads, workflow.cores))
+# concurrency: max simultaneous jobs of this type
+resources:
+  align:
+    threads: 48
+    concurrency: 2
+  align-spike:
+    threads: 24
+    concurrency: 4
+  dedup:
+    threads: 8
+    concurrency: 4
+  filter-bam:
+    threads: 16
+    concurrency: 4
+  fastp:
+    threads: 8
+    concurrency: 8
+  fastqc:
+    threads: 4
+    concurrency: 12
+  mosdepth:
+    threads: 8
+    concurrency: 4
+  mbias:
+    threads: 10
+    concurrency: 4
+  methyldackel:
+    threads: 20
+    concurrency: 2
+  methyldackel-spike:
+    threads: 8
+    concurrency: 8
+  samtools-stats:
+    threads: 8
+    concurrency: 8
+  methylkit:
+    threads: 1
+    concurrency: 4
+  multiqc:
+    threads: 4
+    concurrency: 1
+
+# -----------------------------
+# Environments and repositories
+# -----------------------------
+envs:
+  emseq: "../config/emseq-conda-env.yaml"
+  methylkit: "../config/methylkit-conda-env.yaml"
+  haplotype: "../config/haplotype-conda-env.yaml"
+  deconv: "../config/deconv-conda-env.yaml"
+repos:
+  emseq: "."
+  mhaptools: ~/repos/mHapTools
+  wgbs_tools: ~/repos/wgbs_tools
+  uxm_deconv: ~/repos/UXM_deconv
+
+# -----------------------------
+# Haplotype analysis
+# TODO: generate CpG ref and MHB bed for full hg38
+# -----------------------------
+haplotype:
+  cpg-ref: /mnt/data/projects/aero/ref/hg38_CpG.gz
+  mhb-bed: /mnt/data/projects/aero/ref/hg38_mhb.bed
+  metrics: [MHL, PDR, Entropy]
+
+# -----------------------------
+# Deconvolution analysis
+# TODO: init wgbs_tools genome and get atlas
+# -----------------------------
+deconv:
+  genome-name: hg38
+  atlas: /mnt/data/projects/aero/ref/Atlas.U25.l4.hg38.tsv
+
+# -----------------------------
+# Sample set and region filters
+# -----------------------------
+library-ids: ["AERO_24", "AERO_25", "AERO_101", "NH12", "NH13"]
+keep-bed: "/mnt/data/projects/aero/ref/hg38_autosomes.keep.bed"
+exclude-bed: "/mnt/data/projects/aero/ref/hg38-blacklist.v2.bed"
+
+# -----------------------------
+# Reference assemblies (primary + spike)
+# -----------------------------
+emseq_ref_assemblies:
+  ncbi_decoy_hg38:
+    url: https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
+    name: ncbi_decoy_hg38
+    input: GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fa.gz
+  unmeth_lambda:
+    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/lambdafsa.txt
+    name: unmeth_lambda
+    input: Lambda_NEB.fa.gz
+  puc19:
+    url: https://www.neb.com/en-us/-/media/nebus/page-images/tools-and-resources/interactive-tools/dna-sequences-and-maps/text-documents/puc19fsa.txt
+    name: puc19
+    input: pUC19.fa.gz
+
+# -----------------------------
+# Experiments (AERO = control/tx=0, NH = treatment/tx=1)
+# -----------------------------
+meth-map:
+  aero_vs_nh:
+    libs: ["AERO_24", "AERO_25", "AERO_101", "NH12", "NH13"]
+    emseq_ref_name: ["ncbi_decoy_hg38"]
+    align_method: ["bwa_meth"]
+    tx: [0, 0, 0, 1, 1]
+    mincov: 10
+    mingroup: 1
+    chunksize: "1e9"
+    win_size: 10000

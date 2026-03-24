@@ -6,6 +6,10 @@
 - [[https://teams.microsoft.com/l/message/19:meeting_ZWFhYjE4YzktYWM0Zi00NzllLTk1NWItYjA5YTJkYWQwN2Jj@thread.v2/1769216157607?context=%7B%22contextType%22%3A%22chat%22%7D][teams]]
 - Matteo mosdepth update [[https://github.com/jeszyman/emseq/pull/1][PR #1]]
 
+*TANGLE WARNING (2026-03-24):* The tangled .smk and .sh files have been edited directly and diverge from the org source. Before tangling, fix these in the org blocks:
+1. L1136: mosdepth quantize bug — change ~${quant_levels/,/:}~ to ~${quant_levels//,/:}~ (global replace)
+2. L773,885,952: hardcoded threads — replace with ~rule_threads("...")~ calls (see workflows/emseq.smk for the current wired version)
+
 ** [[id:bda70cff-0713-4e32-8da1-ee83924b8f00][README]]
 ** [[elisp:(let ((window-config (current-window-configuration))) (async-shell-command "bash ~/repos/mpnst/tools/shell/org_update.sh") (set-window-configuration window-config))][org update]]
 ** Repository setup and administration
@@ -315,6 +319,7 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 #+end_export
 **** Change Log
 - Development since last tag
+  - [2026-03-24 Mon] Config-driven resource limits (threads/concurrency per rule via aero.yaml). Fixed mosdepth quantize string bug (single → global comma replacement). Added aero.smk project wrapper.
   - [2026-03-16 Sun] Added emseq_analysis.smk module: DMR (migrated from emseq.smk), methylation haplotypes (mHapTools/mhaptk), tissue deconvolution (wgbs_tools/UXM), CpG annotation. New conda envs, test-analysis.smk wrapper, reference preparation docs.
   - Added a full run CI test
 - wf/emseq/v4.0.0

@@ -263,12 +263,41 @@ rule emseq_analysis_chr_reheader:
           | samtools reheader - "{input.bam}" > "{output.bam}"
         samtools index -@ {threads} "{output.bam}"
         """
+rule emseq_analysis_wgbstools_init_genome:
+    message: "Initialize wgbs_tools genome reference from indexed FASTA"
+    conda: ENV_DECONV
+    input:
+        fasta = f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa",
+        fai   = f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.fai",
+    log:
+        cmd = f"{D_LOGS}/{{emseq_ref_name}}_emseq_analysis_wgbstools_init_genome.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{emseq_ref_name}}_emseq_analysis_wgbstools_init_genome.tsv"
+    params:
+        wgbstools = f"{R_WGBSTOOLS}/wgbstools",
+        genome    = DECONV_GENOME,
+    threads: 1
+    output:
+        done = f"{D_REF}/wgbstools/{{emseq_ref_name}}.init.done",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[wgbstools-init] $(date) ref={wildcards.emseq_ref_name} genome={params.genome}"
+        mkdir -p "$(dirname "{output.done}")"
+        "{params.wgbstools}" init_genome \
+          --fasta_path "{input.fasta}" \
+          -f \
+          "{params.genome}"
+        touch "{output.done}"
+        """
+
 rule emseq_analysis_bam2pat:
     message: "Convert chr-prefixed BAM to methylation pat file using wgbs_tools"
     conda: ENV_DECONV
     input:
         bam = f"{D_EMSEQ}/deconv/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.chr.bam",
         bai = f"{D_EMSEQ}/deconv/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.chr.bam.bai",
+        genome_init = f"{D_REF}/wgbstools/{{emseq_ref_name}}.init.done",
     log:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_analysis_bam2pat.log",
     benchmark:

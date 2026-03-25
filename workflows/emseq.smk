@@ -83,24 +83,25 @@ rule emseq_bwa_meth_index:
     threads: 1
     output:
         f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t",
-        f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t.0123",
         f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t.amb",
         f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t.ann",
-        f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t.bwt.2bit.64",
+        f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t.bwt",
         f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t.pac",
+        f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t.sa",
         f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa",
         f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.fai",
     shell:
         """
         exec &>> "{log.cmd}"
         echo "[bwa-meth-index] $(date) ref={wildcards.emseq_ref_name} threads={threads}"
+        mkdir -p "$(dirname "{params.fasta_target}")"
         if file -b "{input}" | grep -qi gzip; then
             zcat "{input}" > "{params.fasta_target}"
         else
             cat "{input}" > "{params.fasta_target}"
         fi
         samtools faidx "{params.fasta_target}"
-        bwameth.py index-mem2 "{params.fasta_target}"
+        bwameth.py index "{params.fasta_target}"
         """
 rule emseq_align_bwameth:
     message: "BWA-meth bisulfite alignment to human reference with coordinate-sorted BAM output"

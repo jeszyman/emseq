@@ -1,6 +1,7 @@
 # aero.smk — AERO project wrapper (core processing)
 # Hand-crafted for local run; not tangled from org.
 import os
+import re
 
 configfile: "config/aero.yaml"
 
@@ -72,6 +73,16 @@ KEEP_BED = config["keep-bed"]
 EXCL_BED = config["exclude-bed"]
 meth_map = config["meth-map"]
 
+# --- Reference download lookup ---
+# Map input filename → URL for each reference assembly
+_REF_URL_MAP = {v['input']: v['url'] for v in config['emseq_ref_assemblies'].values()}
+
+# Blacklist URL (same source as get_test_data.sh)
+_BLACKLIST_URL = "https://raw.githubusercontent.com/Boyle-Lab/Blacklist/master/lists/hg38-blacklist.v2.bed.gz"
+
+# Autosome contig pattern for keep bed generation
+_AUTOSOME_PATTERN = r'^chr[0-9]+\t'
+
 # --- Rule all: core processing targets ---
 rule all:
     input:
@@ -121,7 +132,71 @@ rule all:
 
 shell.prefix("set -e; ")
 
-# --- Input symlinks ---
+# -----------------------------
+# Reference downloads
+# -----------------------------
+rule download_ref_fasta:
+    message: "Download reference FASTA from upstream URL"
+    wildcard_constraints:
+        ref_input = "|".join(re.escape(k) for k in _REF_URL_MAP),
+    output:
+        f"{D_INPUTS}/{{ref_input}}"
+    params:
+        url = lambda wc: _REF_URL_MAP[wc.ref_input],
+    log:
+        cmd = f"{D_LOGS}/download_{{ref_input}}.log",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[download-ref] $(date) file={wildcards.ref_input} url={params.url}"
+        mkdir -p "$(dirname "{output}")"
+        TMP="{output}.tmp"
+        curl -fsSL "{params.url}" -o "$TMP"
+        # If source is plain text FASTA, gzip it; otherwise keep as-is
+        if file -b "$TMP" | grep -qi gzip; then
+            mv "$TMP" "{output}"
+        else
+            gzip -c "$TMP" > "{output}"
+            rm "$TMP"
+        fi
+        """
+
+rule download_blacklist:
+    message: "Download ENCODE hg38 blacklist BED"
+    output:
+        EXCL_BED,
+    params:
+        url = _BLACKLIST_URL,
+    log:
+        cmd = f"{D_LOGS}/download_blacklist.log",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[download-blacklist] $(date) url={params.url}"
+        mkdir -p "$(dirname "{output}")"
+        curl -fsSL "{params.url}" -o "{output}"
+        """
+
+rule build_keep_bed:
+    message: "Generate autosomes keep BED from reference FASTA index"
+    input:
+        fai = f"{D_REF}/bwa_meth/ncbi_decoy_hg38/ncbi_decoy_hg38.fa.fai",
+    output:
+        KEEP_BED,
+    log:
+        cmd = f"{D_LOGS}/build_keep_bed.log",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[build-keep-bed] $(date)"
+        mkdir -p "$(dirname "{output}")"
+        awk 'BEGIN{{OFS="\\t"}} /^chr[0-9]+\\t/{{print $1,0,$2}}' "{input.fai}" \
+          | sort -k1,1V -k2,2n > "{output}"
+        """
+
+# -----------------------------
+# Input symlinks
+# -----------------------------
 rule symlink_input_fastqs:
     message: "Create symlinks for raw input FASTQs into workflow directory"
     input:

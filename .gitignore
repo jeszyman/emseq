@@ -349,4 +349,5 @@ TSWLatexianTemp*
 tests/full/*
 !tests/full/inputs/
 !tests/full/inputs/**
+diff/
 docs/superpowers/

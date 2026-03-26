@@ -36,6 +36,33 @@ EMSEQ_MINCOV = config.get("emseq-mincov", 2)
 FASTP_EXTRA = config.get("fastp", {}).get("extra", "")
 EMSEQ_REF_INPUTS = {k: v['input'] for k, v in config['emseq_ref_assemblies'].items()}
 
+# --- Resource helpers ---
+_RESOURCE_DEFAULTS = {
+    "align":             {"threads": 48, "concurrency": 50},
+    "align-spike":       {"threads": 48, "concurrency": 50},
+    "dedup":             {"threads": 8,  "concurrency": 25},
+    "filter-bam":        {"threads": 16, "concurrency": 25},
+    "fastp":             {"threads": 8,  "concurrency": 50},
+    "fastqc":            {"threads": 4,  "concurrency": 25},
+    "mosdepth":          {"threads": 8,  "concurrency": 20},
+    "mbias":             {"threads": 10, "concurrency": 50},
+    "methyldackel":      {"threads": 20, "concurrency": 25},
+    "methyldackel-spike":{"threads": 8,  "concurrency": 50},
+    "samtools-stats":    {"threads": 8,  "concurrency": 40},
+    "methylkit":         {"threads": 1,  "concurrency": 50},
+    "multiqc":           {"threads": 4,  "concurrency": 20},
+}
+_RES_CFG = config.get("resources", {})
+
+def rule_threads(name):
+    """Return min(configured threads, workflow.cores) for a rule class."""
+    t = _RES_CFG.get(name, {}).get("threads", _RESOURCE_DEFAULTS[name]["threads"])
+    return min(t, workflow.cores)
+
+def rule_concurrency(name):
+    """Return configured concurrency for a rule class."""
+    return _RES_CFG.get(name, {}).get("concurrency", _RESOURCE_DEFAULTS[name]["concurrency"])
+
 # --- Samples and references ---
 emseq_library_ids = config["library-ids"]
 spike_builds = ["puc19", "unmeth_lambda"]

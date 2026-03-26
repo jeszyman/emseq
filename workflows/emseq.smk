@@ -36,6 +36,7 @@ rule emseq_align_bwameth_spike:
         """
         exec &>> "{log.cmd}"
         echo "[bwameth-spike] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} threads={threads}"
+        mkdir -p "$(dirname "{params.temp_prefix}")"
         bwameth.py --threads {threads} \
           --reference "{input.ref}" \
           "{input.r1}" "{input.r2}" \

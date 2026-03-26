@@ -6,9 +6,7 @@
 - [[https://teams.microsoft.com/l/message/19:meeting_ZWFhYjE4YzktYWM0Zi00NzllLTk1NWItYjA5YTJkYWQwN2Jj@thread.v2/1769216157607?context=%7B%22contextType%22%3A%22chat%22%7D][teams]]
 - Matteo mosdepth update [[https://github.com/jeszyman/emseq/pull/1][PR #1]]
 
-*TANGLE WARNING (2026-03-24):* The tangled .smk and .sh files have been edited directly and diverge from the org source. Before tangling, fix these in the org blocks:
-1. L1136: mosdepth quantize bug — change ~${quant_levels/,/:}~ to ~${quant_levels//,/:}~ (global replace)
-2. L773,885,952: hardcoded threads — replace with ~rule_threads("...")~ calls (see workflows/emseq.smk for the current wired version)
+*TANGLE NOTE (2026-03-25):* All divergences from 2026-03-24 resolved (rule_threads, mosdepth quantize, wildcard constraints, haplotype deps). Org source and tangled files are in sync.
 
 ** [[id:bda70cff-0713-4e32-8da1-ee83924b8f00][README]]
 ** [[elisp:(let ((window-config (current-window-configuration))) (async-shell-command "bash ~/repos/mpnst/tools/shell/org_update.sh") (set-window-configuration window-config))][org update]]
@@ -319,6 +317,16 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 #+end_export
 **** Change Log
 - Development since last tag
+  - [2026-03-25 Wed] AERO pipeline validated on GCP VM. Fixes for production run:
+    - Sync org tangle blocks to use =rule_threads()= / =rule_concurrency()= helpers (was hardcoded).
+    - Added =mkdir -p= to =emseq_align_bwameth_spike= shell block for samtools sort tmp dir.
+    - Added =wildcard_constraints: experiment = "[^.]+"= to =emseq_analysis_methylkit_unite= and =emseq_analysis_methylkit_diff= to prevent greedy matching of =.tiled= suffix.
+    - Added =rule_threads= / =rule_concurrency= resource helpers to =aero-analysis.smk= wrapper.
+    - Haplotype conda env: added =mhaptk=, =pandas=, =matplotlib=, =scipy=, =seaborn=, =tqdm= as pip deps.
+    - =mHapTools= binary must be built from source on Linux (repo ships macOS Mach-O); requires =cmake= and bundled htslib built with =./configure && make=, then =sed 's/libhts.dylib/libhts.so/' CMakeLists.txt=.
+    - CpG reference (=hg38_CpG.gz=) generated from hg38 FASTA via awk + bgzip/tabix (29.4M sites); upstream URL (bioinformatics.sibcb.ac.cn) returns 403.
+    - MHB bed: use Guo 2017 liftover (=guo2017_mhb_hg38_sorted.bed=, 147K blocks), not de novo discovery (requires 30x+ coverage).
+    - =annotatr= R package fails on GCP VMs due to conda SSL cert mismatch; workaround: serve =cpgIslandExt.txt.gz= locally or set =CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt=.
   - [2026-03-24 Mon] Config-driven resource limits (threads/concurrency per rule via aero.yaml). Fixed mosdepth quantize string bug (single → global comma replacement). Added aero.smk project wrapper.
   - [2026-03-16 Sun] Added emseq_analysis.smk module: DMR (migrated from emseq.smk), methylation haplotypes (mHapTools/mhaptk), tissue deconvolution (wgbs_tools/UXM), CpG annotation. New conda envs, test-analysis.smk wrapper, reference preparation docs.
   - Added a full run CI test
@@ -640,6 +648,12 @@ dependencies:
   - pip
   - pip:
     - pytabix
+    - mhaptk
+    - pandas
+    - matplotlib
+    - scipy
+    - seaborn
+    - tqdm
 #+end_src
 
 *** Deconvolution
@@ -775,15 +789,16 @@ rule emseq_align_bwameth_spike:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}_emseq_align_bwameth_spike.tsv"
     params:
         temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}"
-    threads: 48
+    threads: rule_threads("align-spike")
     resources:
-        concurrency = 50
+        concurrency = rule_concurrency("align-spike")
     output:
         bam = f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.bwa_meth.coorsort.bam",
     shell:
         """
         exec &>> "{log.cmd}"
         echo "[bwameth-spike] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} threads={threads}"
+        mkdir -p "$(dirname "{params.temp_prefix}")"
         bwameth.py --threads {threads} \
           --reference "{input.ref}" \
           "{input.r1}" "{input.r2}" \
@@ -806,7 +821,7 @@ rule emseq_methyldackel_spike:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_methyldackel_spike.tsv"
     params:
         out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0]
-    threads: 8
+    threads: rule_threads("methyldackel-spike")
     output:
         bed = f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
     shell:
@@ -887,9 +902,9 @@ rule emseq_align_bwameth:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}_emseq_align_bwameth.tsv"
     params:
         temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}",
-    threads: min(workflow.cores, 48)
+    threads: rule_threads("align")
     resources:
-        concurrency = 50,
+        concurrency = rule_concurrency("align"),
     output:
         bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.bwa_meth.coorsort.bam",
     shell:
@@ -954,9 +969,9 @@ rule emseq_align_biscuit:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}_emseq_align_biscuit.tsv"
     params:
         tmp_dir = D_DATA,
-    threads: min(workflow.cores, 48)
+    threads: rule_threads("align")
     resources:
-        concurrency = 100
+        concurrency = rule_concurrency("align")
     output:
         bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.biscuit.coorsort.bam",
     shell:
@@ -991,7 +1006,7 @@ rule emseq_fastp:
         f"{D_BENCHMARK}/{{library_id}}_emseq_fastp.tsv"
     params:
         extra = FASTP_EXTRA,
-    threads: 8
+    threads: rule_threads("fastp")
     output:
         failed = f"{D_EMSEQ}/fastqs/{{library_id}}.failed.fastq.gz",
         html = f"{D_EMSEQ}/qc/{{library_id}}_emseq_fastp.html",
@@ -1025,9 +1040,9 @@ rule emseq_fastqc:
         cmd = f"{D_LOGS}/{{library_id}}.{{processing}}_{{read}}_emseq_fastqc.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{processing}}_{{read}}_emseq_fastqc.tsv"
-    threads: 4
+    threads: rule_threads("fastqc")
     resources:
-        concurrency = 25
+        concurrency = rule_concurrency("fastqc")
     output:
         html = f"{D_EMSEQ}/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.html",
         zip  = f"{D_EMSEQ}/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.zip",
@@ -1059,9 +1074,9 @@ rule emseq_mosdepth:
     params:
         script       = f"{R_EMSEQ}/scripts/emseq_mosdepth.sh",
         quant_levels = MOSDEPTH_QUANT_LEVELS,
-    threads: 8
+    threads: rule_threads("mosdepth")
     resources:
-        concurrency = 20
+        concurrency = rule_concurrency("mosdepth")
     output:
         summary       = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.mosdepth.summary.txt",
         global_dist   = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.mosdepth.global.dist.txt",
@@ -1138,7 +1153,7 @@ parse_args() {
     mkdir -p "$out_dir"
     declare -g out_prefix="mosdepth_${user_prefix}"
     declare -g out_path="${out_dir%/}/${out_prefix}"
-    declare -g quant_str="0:${quant_levels/,/:}"
+    declare -g quant_str="0:${quant_levels//,/:}"
 }
 run_mosdepth() {
     echo "[INFO] PID $$ running mosdepth on $bam_file" >&2
@@ -1172,7 +1187,7 @@ rule emseq_mbias:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.tsv"
-    threads: 10
+    threads: rule_threads("mbias")
     output:
         txt = f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.txt",
     shell:
@@ -1202,9 +1217,9 @@ rule emseq_dedup:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_dedup.tsv"
     params:
         temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}.{wc.align_method}.coorsort"
-    threads: 8
+    threads: rule_threads("dedup")
     resources:
-        concurrency = 25
+        concurrency = rule_concurrency("dedup")
     output:
         bam   = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam",
         index = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
@@ -1243,7 +1258,7 @@ rule emseq_filter_bam:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_filter_bam.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_filter_bam.tsv"
-    threads: 16
+    threads: rule_threads("filter-bam")
     output:
         bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.filt.bam",
         bai = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.filt.bam.bai",
@@ -1269,9 +1284,9 @@ rule emseq_samtools_stats:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_samtools_stats.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_samtools_stats.tsv"
-    threads: 8
+    threads: rule_threads("samtools-stats")
     resources:
-        concurrency = 40
+        concurrency = rule_concurrency("samtools-stats")
     output:
         stats    = f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.samtools.stats.txt",
         flagstat = f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.samtools.flagstat.txt",
@@ -1301,9 +1316,9 @@ rule emseq_methyldackel:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_methyldackel.tsv"
     params:
         out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0]
-    threads: 20
+    threads: rule_threads("methyldackel")
     resources:
-        concurrency = 25
+        concurrency = rule_concurrency("methyldackel")
     output:
         bed = f"{D_EMSEQ}/meth/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
     shell:
@@ -1333,7 +1348,7 @@ rule emseq_make_single_methylkit_amp_obj:
         mincov    = EMSEQ_MINCOV,
         build     = lambda wc: wc.emseq_ref_name,
         treatment = 1,
-    threads: 1
+    threads: rule_threads("methylkit")
     output:
         bgz = f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz",
         tbi = f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz.tbi",
@@ -1438,9 +1453,9 @@ rule emseq_multiqc:
         f"{D_BENCHMARK}/emseq_multiqc.tsv"
     params:
         extra = "--force",
-    threads: 4
+    threads: rule_threads("multiqc")
     resources:
-        concurrency = 20
+        concurrency = rule_concurrency("multiqc")
     output:
         html = f"{D_EMSEQ}/qc/multiqc.html",
         data = directory(f"{D_EMSEQ}/qc/multiqc_data"),
@@ -3445,6 +3460,8 @@ ENV_DECONV    = config["envs"]["deconv"]
 #+begin_src snakemake
 rule emseq_analysis_methylkit_unite:
     message: "Unite per-sample methylKit tabix databases into single methylBase for differential analysis"
+    wildcard_constraints:
+        experiment = "[^.]+",
     conda: ENV_METHYLKIT
     input:
         mkit_lib_db = lambda wc: expand(
@@ -3490,6 +3507,8 @@ rule emseq_analysis_methylkit_unite:
 #+begin_src snakemake
 rule emseq_analysis_methylkit_diff:
     message: "Calculate differential methylation from united methylBase using methylKit"
+    wildcard_constraints:
+        experiment = "[^.]+",
     conda: ENV_METHYLKIT
     input:
         mbase = f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.txt.bgz",

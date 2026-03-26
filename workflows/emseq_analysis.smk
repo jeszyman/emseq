@@ -29,6 +29,8 @@ ENV_HAPLOTYPE = config["envs"]["haplotype"]
 ENV_DECONV    = config["envs"]["deconv"]
 rule emseq_analysis_methylkit_unite:
     message: "Unite per-sample methylKit tabix databases into single methylBase for differential analysis"
+    wildcard_constraints:
+        experiment = "[^.]+",
     conda: ENV_METHYLKIT
     input:
         mkit_lib_db = lambda wc: expand(
@@ -70,6 +72,8 @@ rule emseq_analysis_methylkit_unite:
         """
 rule emseq_analysis_methylkit_diff:
     message: "Calculate differential methylation from united methylBase using methylKit"
+    wildcard_constraints:
+        experiment = "[^.]+",
     conda: ENV_METHYLKIT
     input:
         mbase = f"{D_EMSEQ}/dmr/diff/methylBase_{{experiment}}.txt.bgz",

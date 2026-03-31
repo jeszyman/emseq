@@ -293,9 +293,296 @@ See [[id:93585550-c78e-45e1-8adc-92b4efbebbae][Generate test data test]]
 :export_file_name: README
 :END:
 
-The EM-seq repository contains modular workflows intended to be run from within a over-wrapping snakemake workflow.
+The EM-seq repository provides two modular Snakemake workflows for enzymatic methylation sequencing data. Both are designed to be included from a project-specific wrapper Snakefile that defines samples, references, and resource limits.
+
+**** Configuration
+
+Configuration is split between a YAML config file and a wrapper Snakefile. The YAML holds all declarative settings: sample lists, reference genome definitions, tool parameters, environment paths, and resource limits. The wrapper Snakefile reads the YAML and assigns every variable that the modules consume — environments, directories, sample lists, tool parameters, and project-level decisions like which references to align against and which spike-ins were included. The wrapper also defines the =rule all= output targets and any project-specific custom rules (e.g. input symlinks, sample aliases).
+
+This separation serves two purposes. First, the YAML is portable across machines and projects while the wrapper encodes the specific run configuration. Second, when a project composes multiple pipeline modules (e.g. EM-seq + cfDNA CNA + fragmentation analysis), the wrapper is the single place where all variable names from all modules are visible. This makes namespace collisions immediately obvious rather than hidden inside separate module files.
+
+***** YAML config file
+
+Passed via =--configfile=. See =config/test.yaml= for a complete working example.
+
+Core keys:
+| =main-data-dir=         | Root data directory; all subdirectories derived from this                      |
+| =library-ids=           | List of sample IDs to process                                                  |
+| =keep-bed=              | BED of regions to retain after filtering                                       |
+| =exclude-bed=           | BED of blacklist regions to exclude                                            |
+| =emseq_ref_assemblies=  | Nested map of reference genomes (see below)                                    |
+| =meth-map=              | Experiment definitions for differential methylation (see below)                |
+| =envs=                  | Paths to conda environment YAMLs (=emseq=, =methylkit=, =haplotype=, =deconv=) |
+| =repos=                 | Paths to this repo and external tool repos                                     |
+| =mosdepth-quant-levels= | Coverage quantization thresholds (default: =1,5,10,20=)                        |
+| =emseq-mincov=          | Minimum coverage for methylKit (default: =2=)                                  |
+| =fastp.extra=           | Additional fastp arguments (default: none)                                     |
+
+Analysis-specific keys (required only for =emseq_analysis.smk=):
+| =haplotype.cpg-ref=  | Tabixed CpG reference file (hg38)                                 |
+| =haplotype.mhb-bed=  | Methylation haplotype block BED (e.g. Guo 2017 liftover)          |
+| =haplotype.metrics=  | List of haplotype metrics to compute (e.g. =[MHL, PDR, Entropy]=) |
+| =deconv.genome-name= | wgbs_tools genome identifier                                      |
+| =deconv.atlas=       | UXM deconvolution reference atlas TSV                             |
+
+***** Wrapper Snakefile
+
+The wrapper reads the YAML config and assigns every variable that the included modules expect. This is deliberate: by centralizing all variable assignments in one file, you can see at a glance every name in scope across all modules and catch collisions before they become runtime bugs. The wrapper also makes project-level decisions that do not belong in the YAML — which reference genomes to align against and which spike-in controls were included — and defines the =rule all= output targets.
+
+A minimal wrapper follows this structure:
+
+#+begin_example
+import os
+configfile: "config/my_project.yaml"
+
+def resolve_config_paths(config_dict):
+    for k, v in config_dict.items():
+        if isinstance(v, str):
+            config_dict[k] = os.path.expandvars(os.path.expanduser(v))
+        elif isinstance(v, dict):
+            resolve_config_paths(v)
+        elif isinstance(v, list):
+            config_dict[k] = [os.path.expandvars(os.path.expanduser(i))
+                              if isinstance(i, str) else i for i in v]
+resolve_config_paths(config)
+
+# --- Environments ---
+ENV_EMSEQ = config['envs']['emseq']
+ENV_METHYLKIT = config['envs']['methylkit']
+
+# --- Repositories ---
+R_EMSEQ = config['repos']['emseq']
+
+# --- Data directories ---
+D_DATA = config['main-data-dir']
+D_EMSEQ = f"{D_DATA}/emseq"
+D_REF = f"{D_DATA}/ref"
+D_LOGS = f"{D_DATA}/logs"
+D_BENCHMARK = f"{D_DATA}/benchmark"
+D_INPUTS = f"{D_DATA}/inputs"
+
+# --- Tool parameters ---
+MOSDEPTH_QUANT_LEVELS = config.get("mosdepth-quant-levels", "1,5,10,20")
+EMSEQ_MINCOV = config.get("emseq-mincov", 2)
+FASTP_EXTRA = config.get("fastp", {}).get("extra", "")
+EMSEQ_REF_INPUTS = {k: v['input'] for k, v in config['emseq_ref_assemblies'].items()}
+
+# --- Samples and references ---
+emseq_library_ids = config["library-ids"]
+emseq_ref_names = ["ncbi_decoy_hg38"]   # project decision
+spike_builds = ["puc19", "unmeth_lambda"]  # project decision
+KEEP_BED = config["keep-bed"]
+EXCL_BED = config["exclude-bed"]
+meth_map = config["meth-map"]
+
+rule all:
+    input:
+        expand(f"{D_EMSEQ}/dmr/tabix/{{lib}}.{{ref}}.bwa_meth.methyldackel.txt.bgz",
+               lib=emseq_library_ids, ref=emseq_ref_names),
+        # ... additional targets
+
+include: "emseq.smk"
+include: "emseq_analysis.smk"   # optional
+#+end_example
+
+The test wrappers (=workflows/test.smk=, =workflows/test-analysis.smk=) and =config/example-config.yaml= serve as templates for creating project-specific wrappers.
+
+***** Resource management
+
+Resource management uses two mechanisms: *threads* and *concurrency*.
+
+*Threads* is a built-in Snakemake feature. Some rules use =threads: workflow.cores= to consume all available cores (e.g. alignment), while others use a hardcoded thread count for I/O-bound operations where more cores don't help (e.g. =threads: 8= for samtools sort, dedup, BAM filtering). Rules that use =workflow.cores= are automatically capped at the =--cores= flag value, so the same workflow runs correctly on any machine.
+
+*Concurrency* is a custom resource pattern using Snakemake's =resources:= directive. Each rule declares a concurrency /cost/, and a global /budget/ is set at runtime via =--resources concurrency=N=. Snakemake schedules jobs as long as the total concurrency cost of running jobs stays within the budget. The system is calibrated so that a rule with =concurrency = 100= runs one at a time when =--resources concurrency=100=. On a larger machine, setting =--resources concurrency=300= allows three such jobs in parallel. Lighter-weight rules declare lower costs — for example, a rule with =concurrency = 10= allows 10 simultaneous instances at =--resources concurrency=100=, or 30 at =--resources concurrency=300=. This ratio-based approach means the same rule definitions work across machines of different sizes; only the global budget changes.
+
+Not every rule needs concurrency. Rules that are I/O-bound and individually lightweight (BAM filtering, samtools stats, M-bias, spike-in methylation calling) have no concurrency declaration — Snakemake schedules them freely based on available cores. Concurrency is reserved for rules that are either resource-intensive (alignment: =concurrency = 100=), memory-constrained (methylKit R jobs: =concurrency = 50=), or benefit from controlled parallelism (methylation calling, dedup: =concurrency = 25=).
+
+To run the pipeline, pass both =--cores= and =--resources concurrency=N=:
+
+#+begin_example
+# Small machine (8 cores)
+snakemake -s workflows/test.smk --cores 8 --resources concurrency=100
+
+# Large workstation (48 cores)
+snakemake -s workflows/test.smk --cores 48 --resources concurrency=100
+
+# Very large machine (96+ cores, run more jobs in parallel)
+snakemake -s workflows/test.smk --cores 96 --resources concurrency=300
+#+end_example
+
+***** Reference assemblies
+
+Reference genomes are specified as a nested map in =emseq_ref_assemblies=. Each entry includes a download URL, short name, and the expected input filename. The core module handles indexing automatically. This map should include both the primary alignment reference and the spike-in control references used for conversion rate estimation.
+
+#+begin_example
+emseq_ref_assemblies:
+  # Primary alignment reference
+  ncbi_decoy_hg38:
+    url: https://ftp.ncbi.nlm.nih.gov/...
+    name: ncbi_decoy_hg38
+    input: GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fna.gz
+  # Spike-in controls (EM-seq kit includes these for conversion rate QC)
+  unmeth_lambda:
+    url: https://www.neb.com/...
+    name: unmeth_lambda
+    input: lambda.fa.gz
+  puc19:
+    url: https://www.neb.com/...
+    name: puc19
+    input: pUC19.fa.gz
+#+end_example
+
+***** Experiments (differential methylation)
+
+The =meth-map= config key defines one or more differential methylation experiments. Each experiment specifies the samples, reference, aligner, treatment vector, and methylKit parameters.
+
+#+begin_example
+meth-map:
+  tumor_vs_normal:
+    libs: ["sample_A", "sample_B", "sample_C", "sample_D"]
+    emseq_ref_name: ["ncbi_decoy_hg38"]
+    align_method: ["bwa_meth"]
+    tx: [1, 1, 0, 0]
+    mincov: 10
+    mingroup: 1
+    chunksize: "1e9"
+    win_size: 10000
+#+end_example
+
+***** Conda environments
+
+Four conda environment YAMLs are provided in =config/=. Wrappers reference them by relative path. When running with =--use-conda=, Snakemake creates isolated prefix-based environments from these files.
+
+| =emseq-conda-env.yaml=     | Core tools: samtools, mosdepth, R packages |
+| =methylkit-conda-env.yaml= | R/methylKit, annotatr, GenomicRanges       |
+| =haplotype-conda-env.yaml= | mhaptk (Java), htslib, pytabix             |
+| =deconv-conda-env.yaml=    | wgbs_tools and UXM dependencies            |
+
+**** =emseq.smk= — Core Processing
+
+Paired-end FASTQ files in, per-sample CpG methylation calls and QC metrics out.
+
+***** Wrapper variables
+
+The wrapper assigns all variables before =include: "emseq.smk"= (see the Wrapper Snakefile section for the full pattern):
+
+| =ENV_EMSEQ=, =ENV_METHYLKIT=                                      | Conda environment YAML paths                                     |
+| =R_EMSEQ=                                                         | Repository root path                                             |
+| =D_DATA=, =D_EMSEQ=, =D_REF=, =D_LOGS=, =D_BENCHMARK=, =D_INPUTS= | Directory layout (derived from =main-data-dir=)                  |
+| =emseq_library_ids=                                               | List of sample IDs (from config)                                 |
+| =emseq_ref_names=                                                 | Reference genome names to align against (project decision)       |
+| =spike_builds=                                                    | Spike-in reference names included in this run (project decision) |
+| =EMSEQ_REF_INPUTS=                                                | Dict mapping ref name → input FASTA filename                     |
+| =KEEP_BED=, =EXCL_BED=                                            | Region filter BED file paths                                     |
+| =meth_map=                                                        | Experiment map for differential methylation                      |
+| =MOSDEPTH_QUANT_LEVELS=                                           | Coverage quantization thresholds (default: =1,5,10,20=)          |
+| =EMSEQ_MINCOV=                                                    | Minimum coverage for methylKit (default: =2=)                    |
+| =FASTP_EXTRA=                                                     | Additional fastp arguments (default: none)                       |
+
+***** Processing steps
+
+- *Trimming and QC*: Adapter removal and quality trimming (fastp), read quality assessment before and after trimming (FastQC)
+- *Alignment*: Bisulfite-aware alignment to one or more reference genomes via BWA-meth and/or Biscuit, coordinate sorting
+- *Duplicate handling*: Duplicate marking with dupsifter, then BAM filtering that removes marked duplicates along with secondary, supplementary, and failed QC reads
+- *Methylation calling*: CpG methylation extraction in methylKit format (MethylDackel), per-sample methylKit object creation, tabix indexing
+- *Coverage*: Depth profiling with threshold summaries and quantization tracks (mosdepth), aggregated coverage plots
+- *Spike-in controls*: Alignment to pUC19 (methylated) and Lambda (unmethylated) spike-in references for conversion rate estimation
+- *Bias detection*: Position-dependent methylation bias assessment (MethylDackel mbias)
+- *Reporting*: Aggregated QC report (MultiQC)
+
+*Design decision — duplicate marking vs. removal:* Deduplication is deliberately split into two rules. =emseq_dedup= uses dupsifter to *mark* duplicates (SAM flag 0x400) without removing them. =emseq_filter_bam= then *removes* marked duplicates as part of a combined filter (=-F 3840=: secondary + supplementary + failed QC + duplicates) while also requiring proper pairs (=-f 2=), MAPQ ≥ 30, and intersection with keep/exclude BED regions. Separating these steps ensures that the marked-but-unfiltered BAM is available for M-bias assessment, where the full read set is needed to accurately detect position-dependent biases before duplicate removal.
 
 [[file:resources/test_smk.png]]
+
+***** Outputs
+
+| =emseq/fastqs/{lib}.trimmed_{R1,R2}.fastq.gz=                    | Adapter-trimmed paired-end reads                                           |
+| =emseq/bams/{lib}.{ref}.{aligner}.coorsort.deduped.bam=          | Coordinate-sorted BAM with duplicates marked (not removed)                 |
+| =emseq/bams/{lib}.{ref}.{aligner}.coorsort.filt.bam=             | Final filtered BAM: duplicates removed, MAPQ ≥ 30, proper pairs, on-target |
+| =emseq/dmr/tabix/{lib}.{ref}.{aligner}.methyldackel.txt.bgz=     | Per-CpG methylation calls, tabix-indexed                                   |
+| =emseq/meth/{lib}.{ref}.{aligner}_methyldackel_CpG.methylKit=    | Per-sample methylKit object                                                |
+| =emseq/spike/{lib}.{spike}.{aligner}_methyldackel_CpG.methylKit= | Spike-in methylation calls for conversion rate estimation                  |
+| =emseq/qc/{lib}.{raw,trimmed}_{R1,R2}_fastqc.{html,zip}=         | Per-sample FastQC reports (pre- and post-trimming)                         |
+| =emseq/qc/{lib}.{ref}.{aligner}_emseq_mbias.txt=                 | M-bias profile for position-dependent bias detection                       |
+| =emseq/qc/mosdepth_{lib}.{ref}.{aligner}.mosdepth.summary.txt=   | Coverage depth summary with threshold and quantization tracks              |
+| =emseq/qc/{lib}_emseq_fastp.{html,json}=                         | Fastp trimming report                                                      |
+| =emseq/qc/multiqc.html=                                          | Aggregated QC report across all samples                                    |
+
+**** =emseq_analysis.smk= — Downstream Analysis
+
+Filtered BAMs and methylation calls in, differential methylation results, haplotype metrics, and tissue deconvolution out.
+
+***** Wrapper variables
+
+All core variables (above), plus these analysis-specific variables assigned in the wrapper:
+
+| =ENV_HAPLOTYPE=, =ENV_DECONV=         | Conda environment YAML paths for haplotype and deconvolution |
+| =R_MHAPTOOLS=, =R_WGBSTOOLS=, =R_UXM= | Paths to cloned external tool repositories                   |
+| =CPG_REF=                             | Tabixed CpG reference file (hg38)                            |
+| =MHB_BED=                             | Methylation haplotype block BED (e.g. Guo 2017 liftover)     |
+| =HAP_METRICS=                         | Space-separated haplotype metric names                       |
+| =DECONV_GENOME=                       | wgbs_tools genome identifier                                 |
+| =DECONV_ATLAS=                        | UXM deconvolution reference atlas TSV                        |
+
+External tool repositories must be cloned before running (see =tools/setup_repos.sh=).
+
+***** Processing steps
+
+- *Differential methylation*: Per-sample methylKit unite across an experiment, differential methylation calling at both per-base and tiled (windowed) resolution, extraction of positional methylation values for significant sites (methylKit)
+- *CpG annotation*: Genomic feature annotation of differentially methylated regions — CpG islands, shores, shelves, inter-CGI regions, gene promoters, exons, introns (annotatr)
+- *Methylation haplotypes*: BAM-to-mhap format conversion (mHapTools), per-MHB haplotype metrics including MHL, PDR, and entropy (mhaptk)
+- *Tissue deconvolution*: Chromosome-prefix BAM reheading, pat/beta file generation (wgbs_tools), cell-type-of-origin deconvolution against a reference atlas (UXM)
+
+[[file:resources/test_analysis_smk.png]]
+
+***** Outputs
+
+| =emseq/dmr/diff/methylBase_{experiment}.txt.bgz=       | United methylation data across samples, tabix-indexed                   |
+| =emseq/dmr/diff/methylDiff_{experiment}.txt.bgz=       | Differentially methylated CpGs (per-base), tabix-indexed                |
+| =emseq/dmr/diff/methylBase_{experiment}.tiled.txt.bgz= | Tiled (windowed) united methylation data                                |
+| =emseq/dmr/diff/{experiment}_pos_meth.tsv=             | Positional methylation values for significant sites                     |
+| =emseq/dmr/annotation/{experiment}_annotated.tsv=      | DMRs annotated with genomic features (CpG islands, promoters, etc.)     |
+| =emseq/haplotype/{lib}.{ref}.{aligner}.mhap.gz=        | Methylation haplotype calls per read (mhap format), tabix-indexed       |
+| =emseq/haplotype/{lib}.{ref}.{aligner}_mhl.txt=        | Per-MHB haplotype metrics (MHL, PDR, entropy)                           |
+| =emseq/deconv/{lib}.{ref}.{aligner}.chr.pat.gz=        | Per-read methylation patterns for deconvolution (wgbs_tools pat format) |
+| =emseq/deconv/{lib}.{ref}.{aligner}.chr.beta=          | Per-CpG average methylation (wgbs_tools beta format)                    |
+| =emseq/deconv/uxm_results.csv=                         | Cell-type-of-origin deconvolution fractions across all samples          |
+
+**** Testing
+
+The repository includes in-repo test data and wrapper Snakefiles for both modules. Test data consists of real EM-seq reads subsetted to chr22 with matching spike-in references (pUC19, Lambda), blacklist regions, and analysis references (CpG sites, MHB blocks).
+
+***** Prerequisites
+
+The analysis pipeline requires three external tool repositories. Clone and build them before running:
+
+#+begin_example
+# Clone mHapTools, wgbs_tools, UXM_deconv
+./tools/setup_repos.sh
+
+# wgbs_tools must be built inside the deconv conda env (the setup script
+# runs python setup.py, but the C extensions require the conda env's htslib)
+#+end_example
+
+***** Test wrappers
+
+- =workflows/test.smk= — tests the core module (=emseq.smk=) end-to-end: FASTQ → trimming → alignment (BWA-meth + Biscuit) → dedup → filter → methylation calling → QC
+- =workflows/test-analysis.smk= — tests the analysis module (=emseq_analysis.smk=): DMR calling → annotation, haplotype metrics
+- =config/test.yaml= — shared test configuration defining samples, references, experiments, and conda environments
+
+To run locally:
+#+begin_example
+# Core pipeline
+snakemake -s workflows/test.smk --configfile config/test.yaml --cores 4 --use-conda --resources concurrency=100
+
+# Analysis pipeline (requires core outputs + external repos)
+snakemake -s workflows/test-analysis.smk --configfile config/test.yaml --cores 4 --use-conda --resources concurrency=100
+#+end_example
+
+***** Test data limitations
+
+The in-repo test data is subsetted to chr22 to keep the repository small. This is sufficient for validating the full core pipeline and most of the analysis pipeline (DMR, haplotypes), but tissue deconvolution (UXM) requires broader genomic coverage than a single chromosome provides. The deconvolution rules are present in the module and included in the test wrapper as commented-out targets for reference, but are excluded from CI testing. Deconvolution has been validated on production-scale data.
+
 **** Utilities                                                     :noexport:
 [[file:README.md]]
 #+begin_src bash
@@ -309,27 +596,27 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 
 [![test-data](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/test-data.yaml?branch=master&label=test-data)](https://github.com/jeszyman/emseq/actions/workflows/test-data.yaml)
 
+**Core processing (emseq.smk):**
 
-[![smk-dry](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-dry.yaml?branch=master&label=smk-dry)](https://github.com/jeszyman/emseq/actions/workflows/smk-dry.yaml)
+[![core-dry](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-dry.yaml?branch=master&label=core-dry)](https://github.com/jeszyman/emseq/actions/workflows/smk-dry.yaml)
+[![core-run](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-run.yaml?branch=master&label=core-run)](https://github.com/jeszyman/emseq/actions/workflows/smk-run.yaml)
 
-[![smk-run](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-run.yaml?branch=master&label=smk-run)](https://github.com/jeszyman/emseq/actions/workflows/smk-run.yaml)
+**Downstream analysis (emseq_analysis.smk):**
+
+[![analysis-dry](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-analysis-dry.yaml?branch=master&label=analysis-dry)](https://github.com/jeszyman/emseq/actions/workflows/smk-analysis-dry.yaml)
+[![analysis-run](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-analysis-run.yaml?branch=master&label=analysis-run)](https://github.com/jeszyman/emseq/actions/workflows/smk-analysis-run.yaml)
 
 #+end_export
 **** Change Log
 - Development since last tag
-  - [2026-03-25 Wed] AERO pipeline validated on GCP VM. Fixes for production run:
-    - Sync org tangle blocks to use =rule_threads()= / =rule_concurrency()= helpers (was hardcoded).
+  - [2026-03-31 Mon] Split README into two-module documentation with separate DAGs and CI badges. Reverted to direct thread/concurrency values per rule (basecamp pattern). Added analysis CI workflows (=smk-analysis-dry=, =smk-analysis-run=). Removed project-specific wrapper files.
+  - [2026-03-25 Wed] Production validation fixes:
     - Added =mkdir -p= to =emseq_align_bwameth_spike= shell block for samtools sort tmp dir.
     - Added =wildcard_constraints: experiment = "[^.]+"= to =emseq_analysis_methylkit_unite= and =emseq_analysis_methylkit_diff= to prevent greedy matching of =.tiled= suffix.
-    - Added =rule_threads= / =rule_concurrency= resource helpers to =aero-analysis.smk= wrapper.
     - Haplotype conda env: added =mhaptk=, =pandas=, =matplotlib=, =scipy=, =seaborn=, =tqdm= as pip deps.
-    - =mHapTools= binary must be built from source on Linux (repo ships macOS Mach-O); requires =cmake= and bundled htslib built with =./configure && make=, then =sed 's/libhts.dylib/libhts.so/' CMakeLists.txt=.
-    - CpG reference (=hg38_CpG.gz=) generated from hg38 FASTA via awk + bgzip/tabix (29.4M sites); upstream URL (bioinformatics.sibcb.ac.cn) returns 403.
-    - MHB bed: use Guo 2017 liftover (=guo2017_mhb_hg38_sorted.bed=, 147K blocks), not de novo discovery (requires 30x+ coverage).
-    - =annotatr= R package fails on GCP VMs due to conda SSL cert mismatch; workaround: serve =cpgIslandExt.txt.gz= locally or set =CURL_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt=.
-  - [2026-03-24 Mon] Config-driven resource limits (threads/concurrency per rule via aero.yaml). Fixed mosdepth quantize string bug (single → global comma replacement). Added aero.smk project wrapper.
+    - Fixed mosdepth quantize string bug (single → global comma replacement).
   - [2026-03-16 Sun] Added emseq_analysis.smk module: DMR (migrated from emseq.smk), methylation haplotypes (mHapTools/mhaptk), tissue deconvolution (wgbs_tools/UXM), CpG annotation. New conda envs, test-analysis.smk wrapper, reference preparation docs.
-  - Added a full run CI test
+  - Added CI workflows: core dry-run, core full run, analysis dry-run, analysis full run.
 - wf/emseq/v4.0.0
   - Minor testing updates
   - Fixed test.yaml file locations
@@ -554,6 +841,150 @@ jobs:
             --printshellcmds \
             --rerun-incomplete \
             --use-conda \
+            --conda-frontend conda \
+            --resources concurrency=50
+#+end_src
+
+**** Analysis dry run test
+#+begin_src yaml :tangle ./.github/workflows/smk-analysis-dry.yaml
+name: smk-analysis-dry
+
+on:
+  pull_request:
+    paths:
+      - "workflows/**"
+      - "config/**"
+      - "scripts/**"
+      - ".github/workflows/smk-analysis-dry.yaml"
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-smk-analysis-dry-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up micromamba
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: config/emseq-conda-env.yaml
+          environment-name: emseq
+          cache-environment: true
+
+      - name: Verify required files
+        run: |
+          set -euo pipefail
+          test -f config/emseq-conda-env.yaml
+          test -f workflows/test-analysis.smk
+          test -f config/test.yaml
+
+      - name: Snakemake dry-run (analysis)
+        run: |
+          micromamba run -n emseq snakemake \
+          -s workflows/test-analysis.smk \
+          --configfile config/test.yaml \
+          --cores 4 \
+          --dry-run \
+          --printshellcmds \
+          --rerun-incomplete \
+          --resources concurrency=50
+
+#+end_src
+
+**** Analysis full test run
+#+begin_src yaml :tangle ./.github/workflows/smk-analysis-run.yaml
+name: smk-analysis-run
+on:
+  pull_request:
+    paths:
+      - "workflows/**"
+      - "config/**"
+      - "scripts/**"
+      - ".github/workflows/smk-analysis-run.yaml"
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+concurrency:
+  group: smk-analysis-run-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up micromamba
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: config/emseq-conda-env.yaml
+          environment-name: emseq
+          cache-environment: true
+      - name: Pre-create Snakemake conda envs
+        run: |
+          micromamba run -n emseq snakemake \
+            -s workflows/test-analysis.smk \
+            --configfile config/test.yaml \
+            --cores 1 \
+            --use-conda \
+            --conda-frontend conda \
+            --conda-create-envs-only
+      - name: Clone and build external analysis repos
+        run: |
+          set -euo pipefail
+          chmod +x tools/setup_repos.sh
+          REPOS_DIR="$HOME/repos" ./tools/setup_repos.sh
+
+          # Build mHapTools from source (repo ships macOS binary)
+          cd "$HOME/repos/mHapTools"
+          cd htslib && ./configure --quiet && make --quiet -j4 && cd ..
+          sed -i 's/libhts.dylib/libhts.so/' CMakeLists.txt
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j4
+          cp build/mhaptools .
+          cd "$GITHUB_WORKSPACE"
+
+          # Build wgbs_tools C extensions inside the deconv conda env
+          DECONV_PREFIX=$(find .snakemake/conda -maxdepth 1 -type d -name '*_' | while read d; do
+            if [ -f "$d/bin/pysam" ] || python3 -c "import pysam" 2>/dev/null; then echo "$d"; break; fi
+            "$d/bin/python" -c "import pysam" 2>/dev/null && echo "$d" && break
+          done || true)
+          if [ -n "$DECONV_PREFIX" ]; then
+            cd "$HOME/repos/wgbs_tools"
+            "$DECONV_PREFIX/bin/python" setup.py
+            cd "$GITHUB_WORKSPACE"
+          else
+            echo "WARNING: could not find deconv conda env for wgbs_tools build"
+          fi
+      - name: Verify required files
+        run: |
+          set -euo pipefail
+          test -f config/emseq-conda-env.yaml
+          test -f workflows/test-analysis.smk
+          test -f config/test.yaml
+          test -x "$HOME/repos/mHapTools/mhaptools"
+      - name: Snakemake run (analysis)
+        run: |
+          micromamba run -n emseq snakemake \
+            -s workflows/test-analysis.smk \
+            --configfile config/test.yaml \
+            --cores 4 \
+            --printshellcmds \
+            --rerun-incomplete \
+            --use-conda \
+            --conda-frontend conda \
+            --latency-wait 30 \
             --resources concurrency=50
 #+end_src
 
@@ -751,6 +1182,21 @@ This will be indexed and used for alignment.
 #########1#########2#########3#########4#########5#########6#########7#########8
 #
 # A snakefile for basic processing of EM-seq sequencing data
+#
+# Required wrapper-provided variables (must be in scope before include):
+#   ENV_EMSEQ, ENV_METHYLKIT       — conda environment YAML paths
+#   R_EMSEQ                        — repository root path
+#   D_DATA, D_EMSEQ, D_REF, D_LOGS, D_BENCHMARK, D_INPUTS — directory layout
+#   emseq_library_ids              — list of sample IDs
+#   emseq_ref_names                — list of reference genome names to align against
+#   spike_builds                   — list of spike-in reference names
+#   EMSEQ_REF_INPUTS               — dict mapping ref name to input FASTA filename
+#   KEEP_BED, EXCL_BED             — region filter BED file paths
+#   meth_map                       — experiment map for differential methylation
+#   MOSDEPTH_QUANT_LEVELS          — coverage quantization thresholds
+#   EMSEQ_MINCOV                   — minimum coverage for methylKit
+#   FASTP_EXTRA                    — additional fastp arguments
+
 #+end_src
 
 *** Spike workflow
@@ -789,9 +1235,9 @@ rule emseq_align_bwameth_spike:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}_emseq_align_bwameth_spike.tsv"
     params:
         temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}"
-    threads: rule_threads("align-spike")
+    threads: workflow.cores
     resources:
-        concurrency = rule_concurrency("align-spike")
+        concurrency = 100
     output:
         bam = f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.bwa_meth.coorsort.bam",
     shell:
@@ -821,7 +1267,7 @@ rule emseq_methyldackel_spike:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_methyldackel_spike.tsv"
     params:
         out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0]
-    threads: rule_threads("methyldackel-spike")
+    threads: 8
     output:
         bed = f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
     shell:
@@ -902,9 +1348,9 @@ rule emseq_align_bwameth:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}_emseq_align_bwameth.tsv"
     params:
         temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}",
-    threads: rule_threads("align")
+    threads: workflow.cores
     resources:
-        concurrency = rule_concurrency("align"),
+        concurrency = 100,
     output:
         bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.bwa_meth.coorsort.bam",
     shell:
@@ -969,9 +1415,9 @@ rule emseq_align_biscuit:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}_emseq_align_biscuit.tsv"
     params:
         tmp_dir = D_DATA,
-    threads: rule_threads("align")
+    threads: workflow.cores
     resources:
-        concurrency = rule_concurrency("align")
+        concurrency = 100
     output:
         bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.biscuit.coorsort.bam",
     shell:
@@ -1006,7 +1452,7 @@ rule emseq_fastp:
         f"{D_BENCHMARK}/{{library_id}}_emseq_fastp.tsv"
     params:
         extra = FASTP_EXTRA,
-    threads: rule_threads("fastp")
+    threads: 8
     output:
         failed = f"{D_EMSEQ}/fastqs/{{library_id}}.failed.fastq.gz",
         html = f"{D_EMSEQ}/qc/{{library_id}}_emseq_fastp.html",
@@ -1040,9 +1486,9 @@ rule emseq_fastqc:
         cmd = f"{D_LOGS}/{{library_id}}.{{processing}}_{{read}}_emseq_fastqc.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{processing}}_{{read}}_emseq_fastqc.tsv"
-    threads: rule_threads("fastqc")
+    threads: 4
     resources:
-        concurrency = rule_concurrency("fastqc")
+        concurrency = 10
     output:
         html = f"{D_EMSEQ}/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.html",
         zip  = f"{D_EMSEQ}/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.zip",
@@ -1074,9 +1520,9 @@ rule emseq_mosdepth:
     params:
         script       = f"{R_EMSEQ}/scripts/emseq_mosdepth.sh",
         quant_levels = MOSDEPTH_QUANT_LEVELS,
-    threads: rule_threads("mosdepth")
+    threads: 4
     resources:
-        concurrency = rule_concurrency("mosdepth")
+        concurrency = 20
     output:
         summary       = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.mosdepth.summary.txt",
         global_dist   = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.mosdepth.global.dist.txt",
@@ -1187,7 +1633,7 @@ rule emseq_mbias:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.tsv"
-    threads: rule_threads("mbias")
+    threads: 8
     output:
         txt = f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.txt",
     shell:
@@ -1217,9 +1663,9 @@ rule emseq_dedup:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_dedup.tsv"
     params:
         temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}.{wc.align_method}.coorsort"
-    threads: rule_threads("dedup")
+    threads: 8
     resources:
-        concurrency = rule_concurrency("dedup")
+        concurrency = 25
     output:
         bam   = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam",
         index = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
@@ -1258,7 +1704,7 @@ rule emseq_filter_bam:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_filter_bam.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_filter_bam.tsv"
-    threads: rule_threads("filter-bam")
+    threads: 8
     output:
         bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.filt.bam",
         bai = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.filt.bam.bai",
@@ -1284,9 +1730,7 @@ rule emseq_samtools_stats:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_samtools_stats.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_samtools_stats.tsv"
-    threads: rule_threads("samtools-stats")
-    resources:
-        concurrency = rule_concurrency("samtools-stats")
+    threads: 8
     output:
         stats    = f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.samtools.stats.txt",
         flagstat = f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.samtools.flagstat.txt",
@@ -1316,9 +1760,9 @@ rule emseq_methyldackel:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_methyldackel.tsv"
     params:
         out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0]
-    threads: rule_threads("methyldackel")
+    threads: 8
     resources:
-        concurrency = rule_concurrency("methyldackel")
+        concurrency = 25
     output:
         bed = f"{D_EMSEQ}/meth/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
     shell:
@@ -1348,7 +1792,7 @@ rule emseq_make_single_methylkit_amp_obj:
         mincov    = EMSEQ_MINCOV,
         build     = lambda wc: wc.emseq_ref_name,
         treatment = 1,
-    threads: rule_threads("methylkit")
+    threads: 1
     output:
         bgz = f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz",
         tbi = f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz.tbi",
@@ -1453,9 +1897,7 @@ rule emseq_multiqc:
         f"{D_BENCHMARK}/emseq_multiqc.tsv"
     params:
         extra = "--force",
-    threads: rule_threads("multiqc")
-    resources:
-        concurrency = rule_concurrency("multiqc")
+    threads: 1
     output:
         html = f"{D_EMSEQ}/qc/multiqc.html",
         data = directory(f"{D_EMSEQ}/qc/multiqc_data"),
@@ -3436,23 +3878,15 @@ Downstream analysis rules for EM-seq data, including differential methylation (m
 # emseq_analysis.smk — EM-seq downstream analysis module
 # Tangled from emseq.org; do not edit directly.
 # ============================================================================
-# Required wrapper-provided variables (must be in scope before include):
-#   D_EMSEQ, D_LOGS, D_BENCHMARK, D_DATA, R_EMSEQ
-#   ENV_METHYLKIT, ENV_EMSEQ
-#   meth_map, emseq_library_ids, emseq_ref_names, KEEP_BED, EXCL_BED
-
-# --- Analysis-specific config ---
-R_MHAPTOOLS   = config["repos"]["mhaptools"]
-R_WGBSTOOLS   = config["repos"]["wgbs_tools"]
-R_UXM         = config["repos"]["uxm_deconv"]
-CPG_REF       = config["haplotype"]["cpg-ref"]
-MHB_BED       = config["haplotype"]["mhb-bed"]
-HAP_METRICS   = " ".join(config["haplotype"]["metrics"])
-DECONV_GENOME = config["deconv"]["genome-name"]
-DECONV_ATLAS  = config["deconv"]["atlas"]
-
-ENV_HAPLOTYPE = config["envs"]["haplotype"]
-ENV_DECONV    = config["envs"]["deconv"]
+# Required wrapper-provided variables (in addition to emseq.smk variables):
+#   R_MHAPTOOLS, R_WGBSTOOLS, R_UXM — external tool repository paths
+#   CPG_REF          — tabixed CpG reference file
+#   MHB_BED          — methylation haplotype block BED
+#   HAP_METRICS      — space-separated haplotype metric names
+#   DECONV_GENOME    — wgbs_tools genome identifier
+#   DECONV_ATLAS     — UXM deconvolution atlas path
+#   ENV_HAPLOTYPE    — haplotype conda env YAML path
+#   ENV_DECONV       — deconvolution conda env YAML path
 #+end_src
 
 *** Differential methylation
@@ -4247,8 +4681,8 @@ repos:
 # Haplotype analysis
 # -----------------------------
 haplotype:
-  cpg-ref: tests/full/ref/hg38_CpG_chr22.gz
-  mhb-bed: tests/full/ref/test_mhb_chr22.bed
+  cpg-ref: tests/full/inputs/hg38_CpG_chr22.gz
+  mhb-bed: tests/full/inputs/test_mhb_chr22.bed
   metrics: [MHL, PDR, Entropy]
 
 # -----------------------------
@@ -4256,7 +4690,7 @@ haplotype:
 # -----------------------------
 deconv:
   genome-name: hg38_test
-  atlas: tests/full/ref/Atlas.U25.l4.hg38_test.tsv
+  atlas: tests/full/inputs/Atlas.U25.l4.hg38_test.tsv
 
 # -----------------------------
 # Sample set and region filters
@@ -4301,16 +4735,12 @@ meth-map:
 
 **** Snakefile
 #+begin_src snakemake :tangle ./workflows/test.smk
-# -----------------------------
-# Imports
-# -----------------------------
+# test.smk — Test wrapper for emseq.smk (core processing)
+# Tangled from emseq.org; do not edit directly.
 import os
 
 configfile: "config/test.yaml"
 
-# -----------------------------
-# Path expansion for strings in config (~, $VARS)
-# -----------------------------
 def resolve_config_paths(config_dict):
     for k, v in config_dict.items():
         if isinstance(v, str):
@@ -4322,20 +4752,14 @@ def resolve_config_paths(config_dict):
 
 resolve_config_paths(config)
 
-# -----------------------------
-# Environments
-# -----------------------------
+# --- Environments ---
 ENV_EMSEQ = config['envs']['emseq']
 ENV_METHYLKIT = config['envs']['methylkit']
 
-# -----------------------------
-# Repositories
-# -----------------------------
+# --- Repositories ---
 R_EMSEQ = config['repos']['emseq']
 
-# -----------------------------
-# Data directories (derived from main-data-dir)
-# -----------------------------
+# --- Data directories ---
 D_DATA = config['main-data-dir']
 D_EMSEQ = f"{D_DATA}/emseq"
 D_REF = f"{D_DATA}/ref"
@@ -4343,44 +4767,21 @@ D_LOGS = f"{D_DATA}/logs"
 D_BENCHMARK = f"{D_DATA}/benchmark"
 D_INPUTS = f"{D_DATA}/inputs"
 
-# -----------------------------
-# Tool/global params (UPPERCASE for module consumption)
-# -----------------------------
+# --- Tool parameters ---
 MOSDEPTH_QUANT_LEVELS = config.get("mosdepth-quant-levels", "1,5,10,20")
 EMSEQ_MINCOV = config.get("emseq-mincov", 2)
 FASTP_EXTRA = config.get("fastp", {}).get("extra", "")
-
-# -----------------------------
-# Reference assembly lookup (for index rules)
-# -----------------------------
 EMSEQ_REF_INPUTS = {k: v['input'] for k, v in config['emseq_ref_assemblies'].items()}
 
-# -----------------------------
-# Sample set (required by emseq.smk)
-# -----------------------------
+# --- Samples and references ---
 emseq_library_ids = config["library-ids"]
-
-# -----------------------------
-# Reference selections (kept explicit)
-# -----------------------------
-spike_builds = ["puc19", "unmeth_lambda"]
 emseq_ref_names = ["chr22"]
-
-# -----------------------------
-# Region filtering inputs
-# -----------------------------
+spike_builds = ["puc19", "unmeth_lambda"]
 KEEP_BED = config["keep-bed"]
 EXCL_BED = config["exclude-bed"]
-
-# -----------------------------
-# Experiments map from YAML
-# (differential methylation experiments for methylKit)
-# -----------------------------
 meth_map = config["meth-map"]
 
-# -----------------------------
-# Rule all
-# -----------------------------
+# --- Rule all ---
 rule all:
     input:
         # FASTQs
@@ -4495,9 +4896,14 @@ resolve_config_paths(config)
 # --- Environments ---
 ENV_EMSEQ = config['envs']['emseq']
 ENV_METHYLKIT = config['envs']['methylkit']
+ENV_HAPLOTYPE = config['envs']['haplotype']
+ENV_DECONV = config['envs']['deconv']
 
 # --- Repositories ---
 R_EMSEQ = config['repos']['emseq']
+R_MHAPTOOLS = config['repos']['mhaptools']
+R_WGBSTOOLS = config['repos']['wgbs_tools']
+R_UXM = config['repos']['uxm_deconv']
 
 # --- Data directories ---
 D_DATA = config['main-data-dir']
@@ -4507,7 +4913,7 @@ D_LOGS = f"{D_DATA}/logs"
 D_BENCHMARK = f"{D_DATA}/benchmark"
 D_INPUTS = f"{D_DATA}/inputs"
 
-# --- Parameters ---
+# --- Tool parameters ---
 MOSDEPTH_QUANT_LEVELS = config.get("mosdepth-quant-levels", "1,5,10,20")
 EMSEQ_MINCOV = config.get("emseq-mincov", 2)
 FASTP_EXTRA = config.get("fastp", {}).get("extra", "")
@@ -4515,11 +4921,18 @@ EMSEQ_REF_INPUTS = {k: v['input'] for k, v in config['emseq_ref_assemblies'].ite
 
 # --- Samples and references ---
 emseq_library_ids = config["library-ids"]
-spike_builds = ["puc19", "unmeth_lambda"]
 emseq_ref_names = ["chr22"]
+spike_builds = ["puc19", "unmeth_lambda"]
 KEEP_BED = config["keep-bed"]
 EXCL_BED = config["exclude-bed"]
 meth_map = config["meth-map"]
+
+# --- Analysis-specific variables ---
+CPG_REF = config["haplotype"]["cpg-ref"]
+MHB_BED = config["haplotype"]["mhb-bed"]
+HAP_METRICS = " ".join(config["haplotype"]["metrics"])
+DECONV_GENOME = config["deconv"]["genome-name"]
+DECONV_ATLAS = config["deconv"]["atlas"]
 
 # --- Rule all: analysis targets ---
 rule all:
@@ -4555,8 +4968,9 @@ rule all:
             emseq_ref_name=emseq_ref_names,
             align_method=["bwa_meth"],
         ),
-        # Deconvolution
-        f"{D_EMSEQ}/deconv/uxm_results.csv",
+        # Deconvolution — excluded from test: UXM requires more CpG coverage
+        # than chr22 test data provides. Validated on production data.
+        # f"{D_EMSEQ}/deconv/uxm_results.csv",
 
 shell.prefix("set -e; ")
 

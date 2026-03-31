@@ -1,22 +1,9 @@
-# ============================================================
-# AUTO-GENERATED — DO NOT EDIT DIRECTLY
-# Edits will be overwritten on next org-babel tangle.
-# 
-# Source:  /home/jeszyman/repos/emseq/emseq.org
-# Author:  Jeff Szymanski
-# Tangled: 2026-03-16 13:58:24
-# ============================================================
-
-# -----------------------------
-# Imports
-# -----------------------------
+# test.smk — Test wrapper for emseq.smk (core processing)
+# Tangled from emseq.org; do not edit directly.
 import os
 
 configfile: "config/test.yaml"
 
-# -----------------------------
-# Path expansion for strings in config (~, $VARS)
-# -----------------------------
 def resolve_config_paths(config_dict):
     for k, v in config_dict.items():
         if isinstance(v, str):
@@ -28,20 +15,14 @@ def resolve_config_paths(config_dict):
 
 resolve_config_paths(config)
 
-# -----------------------------
-# Environments
-# -----------------------------
+# --- Environments ---
 ENV_EMSEQ = config['envs']['emseq']
 ENV_METHYLKIT = config['envs']['methylkit']
 
-# -----------------------------
-# Repositories
-# -----------------------------
+# --- Repositories ---
 R_EMSEQ = config['repos']['emseq']
 
-# -----------------------------
-# Data directories (derived from main-data-dir)
-# -----------------------------
+# --- Data directories ---
 D_DATA = config['main-data-dir']
 D_EMSEQ = f"{D_DATA}/emseq"
 D_REF = f"{D_DATA}/ref"
@@ -49,44 +30,21 @@ D_LOGS = f"{D_DATA}/logs"
 D_BENCHMARK = f"{D_DATA}/benchmark"
 D_INPUTS = f"{D_DATA}/inputs"
 
-# -----------------------------
-# Tool/global params (UPPERCASE for module consumption)
-# -----------------------------
+# --- Tool parameters ---
 MOSDEPTH_QUANT_LEVELS = config.get("mosdepth-quant-levels", "1,5,10,20")
 EMSEQ_MINCOV = config.get("emseq-mincov", 2)
 FASTP_EXTRA = config.get("fastp", {}).get("extra", "")
-
-# -----------------------------
-# Reference assembly lookup (for index rules)
-# -----------------------------
 EMSEQ_REF_INPUTS = {k: v['input'] for k, v in config['emseq_ref_assemblies'].items()}
 
-# -----------------------------
-# Sample set (required by emseq.smk)
-# -----------------------------
+# --- Samples and references ---
 emseq_library_ids = config["library-ids"]
-
-# -----------------------------
-# Reference selections (kept explicit)
-# -----------------------------
-spike_builds = ["puc19", "unmeth_lambda"]
 emseq_ref_names = ["chr22"]
-
-# -----------------------------
-# Region filtering inputs
-# -----------------------------
+spike_builds = ["puc19", "unmeth_lambda"]
 KEEP_BED = config["keep-bed"]
 EXCL_BED = config["exclude-bed"]
-
-# -----------------------------
-# Experiments map from YAML
-# (differential methylation experiments for methylKit)
-# -----------------------------
 meth_map = config["meth-map"]
 
-# -----------------------------
-# Rule all
-# -----------------------------
+# --- Rule all ---
 rule all:
     input:
         # FASTQs

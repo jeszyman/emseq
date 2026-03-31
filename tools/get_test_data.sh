@@ -1,13 +1,4 @@
 #!/usr/bin/env bash
-# ============================================================
-# AUTO-GENERATED — DO NOT EDIT DIRECTLY
-# Edits will be overwritten on next org-babel tangle.
-# 
-# Source:  /home/jeszyman/repos/emseq/emseq.org
-# Author:  Jeff Szymanski
-# Tangled: 2026-03-16 12:05:56
-# ============================================================
-
 # setup_test_data.sh — chr22 subset + lambda + pUC19 FASTA, plus 4 tiny paired WGBS FASTQs
 # Paired-only; hard-fails if a run lacks _1/_2. Cleans tests/full/ before writing.
 set -euo pipefail
@@ -160,7 +151,6 @@ fetch_puc19 "${PUC19_EFETCH}" "${OUT_PUC19}"
 echo "[ref] hg38 blacklist → ${OUT_BLK}"
 fetch_all_gz "${BLK_URL}" "${OUT_BLK}"
 [[ -s "${OUT_BLK}" ]] || { echo "ERR: failed to write ${OUT_BLK}"; exit 1; }
-
 
 # --- tiny paired FASTQs ---
 i=1

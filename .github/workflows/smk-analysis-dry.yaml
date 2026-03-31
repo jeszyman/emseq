@@ -1,4 +1,4 @@
-name: smk-dry
+name: smk-analysis-dry
 
 on:
   pull_request:
@@ -6,13 +6,13 @@ on:
       - "workflows/**"
       - "config/**"
       - "scripts/**"
-      - ".github/workflows/ci-snakemake.yml"
+      - ".github/workflows/smk-analysis-dry.yaml"
   schedule:
     - cron: "0 4 * * 1"
   workflow_dispatch: {}
 
 concurrency:
-  group: ci-snakemake-${{ github.ref }}
+  group: ci-smk-analysis-dry-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -25,7 +25,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Install micromamba for fast, reliable environment management
       - name: Set up micromamba
         uses: mamba-org/setup-micromamba@v1
         with:
@@ -37,21 +36,13 @@ jobs:
         run: |
           set -euo pipefail
           test -f config/emseq-conda-env.yaml
-          test -f workflows/test.smk
+          test -f workflows/test-analysis.smk
           test -f config/test.yaml
 
-      - name: Show environment info
-        run: |
-          micromamba info
-          micromamba list -n emseq
-          micromamba run -n emseq python -V
-          micromamba run -n emseq snakemake --version
-          micromamba run -n emseq samtools --version || true
-
-      - name: Snakemake dry-run
+      - name: Snakemake dry-run (analysis)
         run: |
           micromamba run -n emseq snakemake \
-          -s workflows/test.smk \
+          -s workflows/test-analysis.smk \
           --configfile config/test.yaml \
           --cores 4 \
           --dry-run \

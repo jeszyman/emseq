@@ -1,12 +1,3 @@
-# ============================================================
-# AUTO-GENERATED — DO NOT EDIT DIRECTLY
-# Edits will be overwritten on next org-babel tangle.
-# 
-# Source:  /home/jeszyman/repos/emseq/emseq.org
-# Author:  Jeff Szymanski
-# Tangled: 2026-03-16 13:58:24
-# ============================================================
-
 ############################
 ###   EM-Seq Snakefile   ###
 ############################
@@ -14,6 +5,20 @@
 #########1#########2#########3#########4#########5#########6#########7#########8
 #
 # A snakefile for basic processing of EM-seq sequencing data
+#
+# Required wrapper-provided variables (must be in scope before include):
+#   ENV_EMSEQ, ENV_METHYLKIT       — conda environment YAML paths
+#   R_EMSEQ                        — repository root path
+#   D_DATA, D_EMSEQ, D_REF, D_LOGS, D_BENCHMARK, D_INPUTS — directory layout
+#   emseq_library_ids              — list of sample IDs
+#   emseq_ref_names                — list of reference genome names to align against
+#   spike_builds                   — list of spike-in reference names
+#   EMSEQ_REF_INPUTS               — dict mapping ref name to input FASTA filename
+#   KEEP_BED, EXCL_BED             — region filter BED file paths
+#   meth_map                       — experiment map for differential methylation
+#   MOSDEPTH_QUANT_LEVELS          — coverage quantization thresholds
+#   EMSEQ_MINCOV                   — minimum coverage for methylKit
+#   FASTP_EXTRA                    — additional fastp arguments
 rule emseq_align_bwameth_spike:
     message: "EM-seq bwameth on spike-in reference with simple samtools piping and no duplicate calls"
     conda: ENV_EMSEQ
@@ -27,9 +32,9 @@ rule emseq_align_bwameth_spike:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}_emseq_align_bwameth_spike.tsv"
     params:
         temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}"
-    threads: rule_threads("align-spike")
+    threads: workflow.cores
     resources:
-        concurrency = rule_concurrency("align-spike")
+        concurrency = 100
     output:
         bam = f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.bwa_meth.coorsort.bam",
     shell:
@@ -55,7 +60,7 @@ rule emseq_methyldackel_spike:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_methyldackel_spike.tsv"
     params:
         out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0]
-    threads: rule_threads("methyldackel-spike")
+    threads: 8
     output:
         bed = f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
     shell:
@@ -84,25 +89,24 @@ rule emseq_bwa_meth_index:
     threads: 1
     output:
         f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t",
+        f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t.0123",
         f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t.amb",
         f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t.ann",
-        f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t.bwt",
+        f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t.bwt.2bit.64",
         f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t.pac",
-        f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.bwameth.c2t.sa",
         f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa",
         f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.fai",
     shell:
         """
         exec &>> "{log.cmd}"
         echo "[bwa-meth-index] $(date) ref={wildcards.emseq_ref_name} threads={threads}"
-        mkdir -p "$(dirname "{params.fasta_target}")"
         if file -b "{input}" | grep -qi gzip; then
             zcat "{input}" > "{params.fasta_target}"
         else
             cat "{input}" > "{params.fasta_target}"
         fi
         samtools faidx "{params.fasta_target}"
-        bwameth.py index "{params.fasta_target}"
+        bwameth.py index-mem2 "{params.fasta_target}"
         """
 rule emseq_align_bwameth:
     message: "BWA-meth bisulfite alignment to human reference with coordinate-sorted BAM output"
@@ -118,9 +122,9 @@ rule emseq_align_bwameth:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}_emseq_align_bwameth.tsv"
     params:
         temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}",
-    threads: rule_threads("align")
+    threads: workflow.cores
     resources:
-        concurrency = rule_concurrency("align"),
+        concurrency = 100,
     output:
         bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.bwa_meth.coorsort.bam",
     shell:
@@ -173,9 +177,9 @@ rule emseq_align_biscuit:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}_emseq_align_biscuit.tsv"
     params:
         tmp_dir = D_DATA,
-    threads: rule_threads("align")
+    threads: workflow.cores
     resources:
-        concurrency = rule_concurrency("align")
+        concurrency = 100
     output:
         bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.biscuit.coorsort.bam",
     shell:
@@ -200,7 +204,7 @@ rule emseq_fastp:
         f"{D_BENCHMARK}/{{library_id}}_emseq_fastp.tsv"
     params:
         extra = FASTP_EXTRA,
-    threads: rule_threads("fastp")
+    threads: 8
     output:
         failed = f"{D_EMSEQ}/fastqs/{{library_id}}.failed.fastq.gz",
         html = f"{D_EMSEQ}/qc/{{library_id}}_emseq_fastp.html",
@@ -230,9 +234,9 @@ rule emseq_fastqc:
         cmd = f"{D_LOGS}/{{library_id}}.{{processing}}_{{read}}_emseq_fastqc.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{processing}}_{{read}}_emseq_fastqc.tsv"
-    threads: rule_threads("fastqc")
+    threads: 4
     resources:
-        concurrency = rule_concurrency("fastqc")
+        concurrency = 10
     output:
         html = f"{D_EMSEQ}/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.html",
         zip  = f"{D_EMSEQ}/qc/{{library_id}}.{{processing}}_{{read}}_fastqc.zip",
@@ -260,9 +264,9 @@ rule emseq_mosdepth:
     params:
         script       = f"{R_EMSEQ}/scripts/emseq_mosdepth.sh",
         quant_levels = MOSDEPTH_QUANT_LEVELS,
-    threads: rule_threads("mosdepth")
+    threads: 4
     resources:
-        concurrency = rule_concurrency("mosdepth")
+        concurrency = 20
     output:
         summary       = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.mosdepth.summary.txt",
         global_dist   = f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.mosdepth.global.dist.txt",
@@ -295,7 +299,7 @@ rule emseq_mbias:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.tsv"
-    threads: rule_threads("mbias")
+    threads: 8
     output:
         txt = f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.txt",
     shell:
@@ -319,9 +323,9 @@ rule emseq_dedup:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_dedup.tsv"
     params:
         temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}.{wc.align_method}.coorsort"
-    threads: rule_threads("dedup")
+    threads: 8
     resources:
-        concurrency = rule_concurrency("dedup")
+        concurrency = 25
     output:
         bam   = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam",
         index = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam.bai",
@@ -353,7 +357,7 @@ rule emseq_filter_bam:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_filter_bam.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_filter_bam.tsv"
-    threads: rule_threads("filter-bam")
+    threads: 8
     output:
         bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.filt.bam",
         bai = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.filt.bam.bai",
@@ -376,9 +380,7 @@ rule emseq_samtools_stats:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_samtools_stats.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_samtools_stats.tsv"
-    threads: rule_threads("samtools-stats")
-    resources:
-        concurrency = rule_concurrency("samtools-stats")
+    threads: 8
     output:
         stats    = f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.samtools.stats.txt",
         flagstat = f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.samtools.flagstat.txt",
@@ -401,9 +403,9 @@ rule emseq_methyldackel:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_methyldackel.tsv"
     params:
         out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0]
-    threads: rule_threads("methyldackel")
+    threads: 8
     resources:
-        concurrency = rule_concurrency("methyldackel")
+        concurrency = 25
     output:
         bed = f"{D_EMSEQ}/meth/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
     shell:
@@ -431,7 +433,7 @@ rule emseq_make_single_methylkit_amp_obj:
         mincov    = EMSEQ_MINCOV,
         build     = lambda wc: wc.emseq_ref_name,
         treatment = 1,
-    threads: rule_threads("methylkit")
+    threads: 1
     output:
         bgz = f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz",
         tbi = f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz.tbi",
@@ -503,9 +505,7 @@ rule emseq_multiqc:
         f"{D_BENCHMARK}/emseq_multiqc.tsv"
     params:
         extra = "--force",
-    threads: rule_threads("multiqc")
-    resources:
-        concurrency = rule_concurrency("multiqc")
+    threads: 1
     output:
         html = f"{D_EMSEQ}/qc/multiqc.html",
         data = directory(f"{D_EMSEQ}/qc/multiqc_data"),

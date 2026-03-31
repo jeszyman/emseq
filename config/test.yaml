@@ -1,12 +1,3 @@
-# ============================================================
-# AUTO-GENERATED — DO NOT EDIT DIRECTLY
-# Edits will be overwritten on next org-babel tangle.
-# 
-# Source:  /home/jeszyman/repos/emseq/emseq.org
-# Author:  Jeff Szymanski
-# Tangled: 2026-03-16 13:58:24
-# ============================================================
-
 # -----------------------------
 # Global runtime/config knobs
 # -----------------------------
@@ -34,8 +25,8 @@ repos:
 # Haplotype analysis
 # -----------------------------
 haplotype:
-  cpg-ref: tests/full/ref/hg38_CpG_chr22.gz
-  mhb-bed: tests/full/ref/test_mhb_chr22.bed
+  cpg-ref: tests/full/inputs/hg38_CpG_chr22.gz
+  mhb-bed: tests/full/inputs/test_mhb_chr22.bed
   metrics: [MHL, PDR, Entropy]
 
 # -----------------------------
@@ -43,7 +34,7 @@ haplotype:
 # -----------------------------
 deconv:
   genome-name: hg38_test
-  atlas: tests/full/ref/Atlas.U25.l4.hg38_test.tsv
+  atlas: tests/full/inputs/Atlas.U25.l4.hg38_test.tsv
 
 # -----------------------------
 # Sample set and region filters

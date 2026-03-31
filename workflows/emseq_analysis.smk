@@ -1,32 +1,16 @@
-# ============================================================
-# AUTO-GENERATED — DO NOT EDIT DIRECTLY
-# Edits will be overwritten on next org-babel tangle.
-# 
-# Source:  /home/jeszyman/repos/emseq/emseq.org
-# Author:  Jeff Szymanski
-# Tangled: 2026-03-16 13:58:24
-# ============================================================
-
+# ============================================================================
 # emseq_analysis.smk — EM-seq downstream analysis module
 # Tangled from emseq.org; do not edit directly.
 # ============================================================================
-# Required wrapper-provided variables (must be in scope before include):
-#   D_EMSEQ, D_LOGS, D_BENCHMARK, D_DATA, R_EMSEQ
-#   ENV_METHYLKIT, ENV_EMSEQ
-#   meth_map, emseq_library_ids, emseq_ref_names, KEEP_BED, EXCL_BED
-
-# --- Analysis-specific config ---
-R_MHAPTOOLS   = config["repos"]["mhaptools"]
-R_WGBSTOOLS   = config["repos"]["wgbs_tools"]
-R_UXM         = config["repos"]["uxm_deconv"]
-CPG_REF       = config["haplotype"]["cpg-ref"]
-MHB_BED       = config["haplotype"]["mhb-bed"]
-HAP_METRICS   = " ".join(config["haplotype"]["metrics"])
-DECONV_GENOME = config["deconv"]["genome-name"]
-DECONV_ATLAS  = config["deconv"]["atlas"]
-
-ENV_HAPLOTYPE = config["envs"]["haplotype"]
-ENV_DECONV    = config["envs"]["deconv"]
+# Required wrapper-provided variables (in addition to emseq.smk variables):
+#   R_MHAPTOOLS, R_WGBSTOOLS, R_UXM — external tool repository paths
+#   CPG_REF          — tabixed CpG reference file
+#   MHB_BED          — methylation haplotype block BED
+#   HAP_METRICS      — space-separated haplotype metric names
+#   DECONV_GENOME    — wgbs_tools genome identifier
+#   DECONV_ATLAS     — UXM deconvolution atlas path
+#   ENV_HAPLOTYPE    — haplotype conda env YAML path
+#   ENV_DECONV       — deconvolution conda env YAML path
 rule emseq_analysis_methylkit_unite:
     message: "Unite per-sample methylKit tabix databases into single methylBase for differential analysis"
     wildcard_constraints:
@@ -294,7 +278,6 @@ rule emseq_analysis_wgbstools_init_genome:
           "{params.genome}"
         touch "{output.done}"
         """
-
 rule emseq_analysis_bam2pat:
     message: "Convert chr-prefixed BAM to methylation pat file using wgbs_tools"
     conda: ENV_DECONV

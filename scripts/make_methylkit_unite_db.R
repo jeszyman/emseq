@@ -1,13 +1,4 @@
 #!/usr/bin/env Rscript
-# ============================================================
-# AUTO-GENERATED — DO NOT EDIT DIRECTLY
-# Edits will be overwritten on next org-babel tangle.
-# 
-# Source:  /home/jeszyman/repos/emseq/emseq.org
-# Author:  Jeff Szymanski
-# Tangled: 2026-03-16 12:05:56
-# ============================================================
-
 
 suppressPackageStartupMessages({
   library(argparse)

@@ -1,0 +1,83 @@
+name: smk-analysis-run
+on:
+  pull_request:
+    paths:
+      - "workflows/**"
+      - "config/**"
+      - "scripts/**"
+      - ".github/workflows/smk-analysis-run.yaml"
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+concurrency:
+  group: smk-analysis-run-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up micromamba
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: config/emseq-conda-env.yaml
+          environment-name: emseq
+          cache-environment: true
+      - name: Pre-create Snakemake conda envs
+        run: |
+          micromamba run -n emseq snakemake \
+            -s workflows/test-analysis.smk \
+            --configfile config/test.yaml \
+            --cores 1 \
+            --use-conda \
+            --conda-frontend conda \
+            --conda-create-envs-only
+      - name: Clone and build external analysis repos
+        run: |
+          set -euo pipefail
+          chmod +x tools/setup_repos.sh
+          REPOS_DIR="$HOME/repos" ./tools/setup_repos.sh
+
+          # Build mHapTools from source (repo ships macOS binary)
+          cd "$HOME/repos/mHapTools"
+          cd htslib && ./configure --quiet && make --quiet -j4 && cd ..
+          sed -i 's/libhts.dylib/libhts.so/' CMakeLists.txt
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j4
+          cp build/mhaptools .
+          cd "$GITHUB_WORKSPACE"
+
+          # Build wgbs_tools C extensions inside the deconv conda env
+          DECONV_PREFIX=$(find .snakemake/conda -maxdepth 1 -type d -name '*_' | while read d; do
+            if [ -f "$d/bin/pysam" ] || python3 -c "import pysam" 2>/dev/null; then echo "$d"; break; fi
+            "$d/bin/python" -c "import pysam" 2>/dev/null && echo "$d" && break
+          done || true)
+          if [ -n "$DECONV_PREFIX" ]; then
+            cd "$HOME/repos/wgbs_tools"
+            "$DECONV_PREFIX/bin/python" setup.py
+            cd "$GITHUB_WORKSPACE"
+          else
+            echo "WARNING: could not find deconv conda env for wgbs_tools build"
+          fi
+      - name: Verify required files
+        run: |
+          set -euo pipefail
+          test -f config/emseq-conda-env.yaml
+          test -f workflows/test-analysis.smk
+          test -f config/test.yaml
+          test -x "$HOME/repos/mHapTools/mhaptools"
+      - name: Snakemake run (analysis)
+        run: |
+          micromamba run -n emseq snakemake \
+            -s workflows/test-analysis.smk \
+            --configfile config/test.yaml \
+            --cores 4 \
+            --printshellcmds \
+            --rerun-incomplete \
+            --use-conda \
+            --conda-frontend conda \
+            --latency-wait 30 \
+            --resources concurrency=50

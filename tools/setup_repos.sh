@@ -34,10 +34,12 @@ for name in mHapTools wgbs_tools UXM_deconv; do
     clone_or_pull "$name" "${REPO_URLS[$name]}"
 done
 
-# --- wgbs_tools: build C extensions ---
-if [[ -f "${REPOS_DIR}/wgbs_tools/setup.py" ]]; then
+# --- wgbs_tools: build C extensions (skip with SKIP_BUILD=1) ---
+if [[ "${SKIP_BUILD:-0}" != "1" ]] && [[ -f "${REPOS_DIR}/wgbs_tools/setup.py" ]]; then
     info "wgbs_tools: running python setup.py"
     (cd "${REPOS_DIR}/wgbs_tools" && python setup.py)
+elif [[ "${SKIP_BUILD:-0}" == "1" ]]; then
+    info "wgbs_tools: skipping build (SKIP_BUILD=1, build manually in conda env)"
 else
     err "wgbs_tools: setup.py not found, skipping build"
 fi

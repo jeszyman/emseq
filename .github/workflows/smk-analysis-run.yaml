@@ -35,30 +35,29 @@ jobs:
             --use-conda \
             --conda-frontend conda \
             --conda-create-envs-only
-      - name: Clone and build external analysis repos
+      - name: Clone external analysis repos
         run: |
           set -euo pipefail
           chmod +x tools/setup_repos.sh
-          REPOS_DIR="$HOME/repos" ./tools/setup_repos.sh
-
-          # Build mHapTools from source (repo ships macOS binary)
+          SKIP_BUILD=1 REPOS_DIR="$HOME/repos" ./tools/setup_repos.sh
+      - name: Build mHapTools from source
+        run: |
+          set -euo pipefail
           cd "$HOME/repos/mHapTools"
           cd htslib && ./configure --quiet && make --quiet -j4 && cd ..
           sed -i 's/libhts.dylib/libhts.so/' CMakeLists.txt
           cmake -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build -j4
           cp build/mhaptools .
-          cd "$GITHUB_WORKSPACE"
-
-          # Build wgbs_tools C extensions inside the deconv conda env
+      - name: Build wgbs_tools in deconv conda env
+        run: |
+          set -euo pipefail
           DECONV_PREFIX=$(find .snakemake/conda -maxdepth 1 -type d -name '*_' | while read d; do
-            if [ -f "$d/bin/pysam" ] || python3 -c "import pysam" 2>/dev/null; then echo "$d"; break; fi
             "$d/bin/python" -c "import pysam" 2>/dev/null && echo "$d" && break
           done || true)
           if [ -n "$DECONV_PREFIX" ]; then
             cd "$HOME/repos/wgbs_tools"
             "$DECONV_PREFIX/bin/python" setup.py
-            cd "$GITHUB_WORKSPACE"
           else
             echo "WARNING: could not find deconv conda env for wgbs_tools build"
           fi

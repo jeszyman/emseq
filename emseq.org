@@ -614,7 +614,14 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 #+end_export
 **** Change Log
 - Development since last tag
-  - [2026-03-31 Mon] Split README into two-module documentation with separate DAGs and CI badges. Reverted to direct thread/concurrency values per rule (basecamp pattern). Added analysis CI workflows (=smk-analysis-dry=, =smk-analysis-run=). Removed project-specific wrapper files.
+  - [2026-03-31 Mon] Major README and CI overhaul:
+    - Split README into per-module documentation with consistent structure (intro, wrapper variables, processing steps, DAG, outputs).
+    - Added Configuration section: YAML/wrapper architecture, resource management with basecamp concurrency model.
+    - Reverted to direct thread/concurrency values per rule (basecamp pattern).
+    - Added analysis CI workflows (=smk-analysis-dry=, =smk-analysis-run=). All four CI workflows pass.
+    - Analysis CI tests DMR + annotation; haplotypes and deconvolution excluded (validated on production data only — mHapTools requires source compilation, UXM needs broader coverage than chr22).
+    - Added test reference fixtures: chr22 CpG ref, MHB BED, UXM atlas subset.
+    - Removed project-specific AERO wrapper files.
   - [2026-03-25 Wed] Production validation fixes:
     - Added =mkdir -p= to =emseq_align_bwameth_spike= shell block for samtools sort tmp dir.
     - Added =wildcard_constraints: experiment = "[^.]+"= to =emseq_analysis_methylkit_unite= and =emseq_analysis_methylkit_diff= to prevent greedy matching of =.tiled= suffix.

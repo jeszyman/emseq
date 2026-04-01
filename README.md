@@ -1,32 +1,34 @@
 
 # Table of Contents
 
-1.  [Configuration](#org9600b88)
-    1.  [YAML config file](#org1e32c6c)
-    2.  [Wrapper Snakefile](#org7083216)
-    3.  [Resource management](#org5710c13)
-    4.  [Reference assemblies](#orgde01666)
-    5.  [Experiments (differential methylation)](#org29f5efe)
-    6.  [Conda environments](#orge24305c)
-2.  [`emseq.smk` — Core Processing](#org698066b)
-    1.  [Wrapper variables](#orgdcfc65f)
-    2.  [Processing steps](#orgc8b77f6)
-    3.  [Outputs](#org5e02a70)
-3.  [`emseq_analysis.smk` — Downstream Analysis](#orgbc443d5)
-    1.  [Wrapper variables](#org6cb3954)
-    2.  [Processing steps](#org20376ca)
-    3.  [Outputs](#orgf64a0e7)
-4.  [Testing](#orga3df2b2)
-    1.  [Prerequisites](#org984b080)
-    2.  [Test wrappers](#org4f757a3)
-    3.  [Test data limitations](#org9fd2bb6)
-5.  [Continuous Integration](#org0e1cb46)
-6.  [Change Log](#org7d79cca)
+1.  [Configuration](#org9f9a11e)
+    1.  [YAML config file](#org6d081de)
+    2.  [Wrapper Snakefile](#org4f751bf)
+    3.  [Resource management](#orgf82c684)
+    4.  [Reference assemblies](#org027ed45)
+    5.  [Experiments (differential methylation)](#orgd484bdc)
+    6.  [Conda environments](#orgcd66c21)
+    7.  [Analysis module setup](#orgb178f59)
+        1.  [External tool repositories → `repos.*` config keys](#org8421c19)
+        2.  [Analysis reference files → `haplotype.*` and `deconv.*` config keys](#org36b490a)
+2.  [`emseq.smk` — Core Processing](#org67c7516)
+    1.  [Wrapper variables](#org63f5426)
+    2.  [Processing steps](#org1ccecf3)
+    3.  [Outputs](#orgcca137d)
+3.  [`emseq_analysis.smk` — Downstream Analysis](#org4a538f1)
+    1.  [Wrapper variables](#orge0536dc)
+    2.  [Processing steps](#org5a52399)
+    3.  [Outputs](#org02e2119)
+4.  [Testing](#org4dff95e)
+    1.  [Test wrappers](#orgb6ebf94)
+    2.  [Test data limitations](#org41ae8c8)
+5.  [Continuous Integration](#orgf2833fa)
+6.  [Change Log](#orge0f53b3)
 
 The EM-seq repository provides two modular Snakemake workflows for enzymatic methylation sequencing data. Both are designed to be included from a project-specific wrapper Snakefile that defines samples, references, and resource limits.  
 
 
-<a id="org9600b88"></a>
+<a id="org9f9a11e"></a>
 
 # Configuration
 
@@ -35,7 +37,7 @@ Configuration is split between a YAML config file and a wrapper Snakefile. The Y
 This separation serves two purposes. First, the YAML is portable across machines and projects while the wrapper encodes the specific run configuration. Second, when a project composes multiple pipeline modules (e.g. EM-seq + cfDNA CNA + fragmentation analysis), the wrapper is the single place where all variable names from all modules are visible. This makes namespace collisions immediately obvious rather than hidden inside separate module files.  
 
 
-<a id="org1e32c6c"></a>
+<a id="org6d081de"></a>
 
 ## YAML config file
 
@@ -109,7 +111,7 @@ Core keys:
 </tbody>
 </table>
 
-Analysis-specific keys (required only for `emseq_analysis.smk`):  
+Analysis-specific keys (required only for `emseq_analysis.smk`; see Analysis module setup below for how to prepare these):  
 
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -121,13 +123,28 @@ Analysis-specific keys (required only for `emseq_analysis.smk`):
 </colgroup>
 <tbody>
 <tr>
+<td class="org-left"><code>repos.mhaptools</code></td>
+<td class="org-left">Path to cloned mHapTools repo (with compiled binary)</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>repos.wgbs_tools</code></td>
+<td class="org-left">Path to cloned wgbs<sub>tools</sub> repo (with built C extensions)</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>repos.uxm_deconv</code></td>
+<td class="org-left">Path to cloned UXM<sub>deconv</sub> repo</td>
+</tr>
+
+<tr>
 <td class="org-left"><code>haplotype.cpg-ref</code></td>
-<td class="org-left">Tabixed CpG reference file (hg38)</td>
+<td class="org-left">Tabixed CpG reference (generated from reference FASTA)</td>
 </tr>
 
 <tr>
 <td class="org-left"><code>haplotype.mhb-bed</code></td>
-<td class="org-left">Methylation haplotype block BED (e.g. Guo 2017 liftover)</td>
+<td class="org-left">Methylation haplotype block BED (Guo 2017 liftover to hg38)</td>
 </tr>
 
 <tr>
@@ -142,13 +159,13 @@ Analysis-specific keys (required only for `emseq_analysis.smk`):
 
 <tr>
 <td class="org-left"><code>deconv.atlas</code></td>
-<td class="org-left">UXM deconvolution reference atlas TSV</td>
+<td class="org-left">UXM deconvolution atlas TSV (from UXM<sub>deconv</sub> repo)</td>
 </tr>
 </tbody>
 </table>
 
 
-<a id="org7083216"></a>
+<a id="org4f751bf"></a>
 
 ## Wrapper Snakefile
 
@@ -211,7 +228,7 @@ A minimal wrapper follows this structure:
 The test wrappers (`workflows/test.smk`, `workflows/test-analysis.smk`) and `config/example-config.yaml` serve as templates for creating project-specific wrappers.  
 
 
-<a id="org5710c13"></a>
+<a id="orgf82c684"></a>
 
 ## Resource management
 
@@ -235,7 +252,7 @@ To run the pipeline, pass both `--cores` and `--resources concurrency=N`:
     snakemake -s workflows/test.smk --cores 96 --resources concurrency=300
 
 
-<a id="orgde01666"></a>
+<a id="org027ed45"></a>
 
 ## Reference assemblies
 
@@ -258,7 +275,7 @@ Reference genomes are specified as a nested map in `emseq_ref_assemblies`. Each 
         input: pUC19.fa.gz
 
 
-<a id="org29f5efe"></a>
+<a id="orgd484bdc"></a>
 
 ## Experiments (differential methylation)
 
@@ -276,7 +293,7 @@ The `meth-map` config key defines one or more differential methylation experimen
         win_size: 10000
 
 
-<a id="orge24305c"></a>
+<a id="orgcd66c21"></a>
 
 ## Conda environments
 
@@ -314,14 +331,83 @@ Four conda environment YAMLs are provided in `config/`. Wrappers reference them 
 </table>
 
 
-<a id="org698066b"></a>
+<a id="orgb178f59"></a>
+
+## Analysis module setup
+
+The core pipeline (`emseq.smk`) has no external prerequisites — all tools are installed via conda and reference indexing is automated.  
+
+The analysis pipeline (`emseq_analysis.smk`) requires external tool repositories and reference files that must be prepared once before running. These are one-time setup steps that depend on the genome build. The results feed into the analysis-specific YAML config keys listed above.  
+
+
+<a id="org8421c19"></a>
+
+### External tool repositories → `repos.*` config keys
+
+Clone the three external repos:  
+
+    ./tools/setup_repos.sh
+
+Then build each tool:  
+
+    # mHapTools — ships macOS binary; must be compiled from source on Linux
+    cd ~/repos/mHapTools
+    cd htslib && ./configure && make -j4 && cd ..
+    sed -i 's/libhts.dylib/libhts.so/' CMakeLists.txt
+    cmake -B build -DCMAKE_BUILD_TYPE=Release
+    cmake --build build -j4
+    cp build/mhaptools .
+    
+    # wgbs_tools — C extensions must be built inside the deconv conda env
+    cd ~/repos/wgbs_tools
+    /path/to/deconv-conda-prefix/bin/python setup.py
+    
+    # UXM_deconv — pure Python, no build needed
+
+Set the `repos` config keys to the resulting paths:  
+
+    repos:
+      mhaptools: ~/repos/mHapTools
+      wgbs_tools: ~/repos/wgbs_tools
+      uxm_deconv: ~/repos/UXM_deconv
+
+
+<a id="org36b490a"></a>
+
+### Analysis reference files → `haplotype.*` and `deconv.*` config keys
+
+Three reference files are needed. Detailed preparation steps are documented in emseq.org under `** Reference preparation`.  
+
+**CpG reference** → `haplotype.cpg-ref` — a tabixed file of all CpG dinucleotide positions in the reference genome. Generate from the reference FASTA:  
+
+    awk 'BEGIN{OFS="\t"} /^>/{chr=substr($1,2);pos=0;next}
+      {seq=toupper($0); for(i=1;i<length(seq);i++)
+        if(substr(seq,i,2)=="CG") print chr,pos+i-1,pos+i;
+      pos+=length(seq)}' ref.fa | bgzip > hg38_CpG.gz
+    tabix -b 2 -e 3 hg38_CpG.gz
+
+**MHB reference** → `haplotype.mhb-bed` — methylation haplotype blocks from Guo et al. 2017 Nature Genetics. The published coordinates are hg19; liftOver to hg38:  
+
+    # 1. Download Supplementary Table 1 from Guo 2017 (Excel)
+    # 2. Extract chr/start/end to BED (see emseq.org Reference preparation)
+    # 3. liftOver hg19 → hg38
+    liftOver guo2017_mhb_hg19.bed hg19ToHg38.over.chain.gz guo2017_mhb_hg38.bed unmapped.bed
+    sort -k1,1 -k2,2n guo2017_mhb_hg38.bed > guo2017_mhb_hg38_sorted.bed
+
+**UXM atlas** → `deconv.atlas` — available in the cloned UXM<sub>deconv</sub> repo:  
+
+    # Use the atlas matching your genome build:
+    ~/repos/UXM_deconv/supplemental/Atlas.U25.l4.hg38.tsv
+
+
+<a id="org67c7516"></a>
 
 # `emseq.smk` — Core Processing
 
 Paired-end FASTQ files in, per-sample CpG methylation calls and QC metrics out.  
 
 
-<a id="orgdcfc65f"></a>
+<a id="org63f5426"></a>
 
 ## Wrapper variables
 
@@ -399,7 +485,7 @@ The wrapper assigns all variables before `include: "emseq.smk"` (see the Wrapper
 </table>
 
 
-<a id="orgc8b77f6"></a>
+<a id="org1ccecf3"></a>
 
 ## Processing steps
 
@@ -417,7 +503,7 @@ The wrapper assigns all variables before `include: "emseq.smk"` (see the Wrapper
 ![img](resources/test_smk.png)  
 
 
-<a id="org5e02a70"></a>
+<a id="orgcca137d"></a>
 
 ## Outputs
 
@@ -488,14 +574,14 @@ The wrapper assigns all variables before `include: "emseq.smk"` (see the Wrapper
 </table>
 
 
-<a id="orgbc443d5"></a>
+<a id="org4a538f1"></a>
 
 # `emseq_analysis.smk` — Downstream Analysis
 
 Filtered BAMs and methylation calls in, differential methylation results, haplotype metrics, and tissue deconvolution out.  
 
 
-<a id="org6cb3954"></a>
+<a id="orge0536dc"></a>
 
 ## Wrapper variables
 
@@ -550,7 +636,7 @@ All core variables (above), plus these analysis-specific variables assigned in t
 External tool repositories must be cloned before running (see `tools/setup_repos.sh`).  
 
 
-<a id="org20376ca"></a>
+<a id="org5a52399"></a>
 
 ## Processing steps
 
@@ -562,7 +648,7 @@ External tool repositories must be cloned before running (see `tools/setup_repos
 ![img](resources/test_analysis_smk.png)  
 
 
-<a id="orgf64a0e7"></a>
+<a id="org02e2119"></a>
 
 ## Outputs
 
@@ -628,27 +714,14 @@ External tool repositories must be cloned before running (see `tools/setup_repos
 </table>
 
 
-<a id="orga3df2b2"></a>
+<a id="org4dff95e"></a>
 
 # Testing
 
 The repository includes in-repo test data and wrapper Snakefiles for both modules. Test data consists of real EM-seq reads subsetted to chr22 with matching spike-in references (pUC19, Lambda), blacklist regions, and analysis references (CpG sites, MHB blocks).  
 
 
-<a id="org984b080"></a>
-
-## Prerequisites
-
-The analysis pipeline requires three external tool repositories. Clone and build them before running:  
-
-    # Clone mHapTools, wgbs_tools, UXM_deconv
-    ./tools/setup_repos.sh
-    
-    # wgbs_tools must be built inside the deconv conda env (the setup script
-    # runs python setup.py, but the C extensions require the conda env's htslib)
-
-
-<a id="org4f757a3"></a>
+<a id="orgb6ebf94"></a>
 
 ## Test wrappers
 
@@ -665,7 +738,7 @@ To run locally:
     snakemake -s workflows/test-analysis.smk --configfile config/test.yaml --cores 4 --use-conda --resources concurrency=100
 
 
-<a id="org9fd2bb6"></a>
+<a id="org41ae8c8"></a>
 
 ## Test data limitations
 
@@ -677,7 +750,7 @@ The in-repo test data is subsetted to chr22 to keep the repository small. This i
 Both have been validated on production-scale data.  
 
 
-<a id="org0e1cb46"></a>
+<a id="orgf2833fa"></a>
 
 # Continuous Integration
 
@@ -695,7 +768,7 @@ Both have been validated on production-scale data.
 [![analysis-run](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-analysis-run.yaml?branch=master&label=analysis-run)](https://github.com/jeszyman/emseq/actions/workflows/smk-analysis-run.yaml)
 
 
-<a id="org7d79cca"></a>
+<a id="orge0f53b3"></a>
 
 # Change Log
 

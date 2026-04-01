@@ -19,6 +19,9 @@
 #   MOSDEPTH_QUANT_LEVELS          — coverage quantization thresholds
 #   EMSEQ_MINCOV                   — minimum coverage for methylKit
 #   FASTP_EXTRA                    — additional fastp arguments
+# ── Spike-in Controls ────────────────────────────────────────────────────────
+# Align to pUC19 (methylated) and Lambda (unmethylated) for conversion QC.
+# Duplicates are retained — every read contributes to conversion rate estimation.
 rule emseq_align_bwameth_spike:
     message: "EM-seq bwameth on spike-in reference with simple samtools piping and no duplicate calls"
     conda: ENV_EMSEQ
@@ -47,6 +50,8 @@ rule emseq_align_bwameth_spike:
           "{input.r1}" "{input.r2}" \
         | samtools view -@ 8 -u -F 4 - \
         | samtools sort -@ 8 -T "{params.temp_prefix}" -o "{output.bam}"
+        # -u: uncompressed BAM avoids compress→decompress overhead in pipe
+        # -F 4: keep only mapped reads (discard unmapped from wrong spike-in)
         """
 rule emseq_methyldackel_spike:
     message: "MethylDackel CpG extraction on spike-in alignments, allowing duplicates"
@@ -75,6 +80,7 @@ rule emseq_methyldackel_spike:
           "{input.bam}" \
           -o "{params.out_prefix}"
         """
+# ── Reference Indexing ───────────────────────────────────────────────────────
 rule emseq_bwa_meth_index:
     message: "Build bwa-meth bisulfite index from reference FASTA"
     conda: ENV_EMSEQ
@@ -108,6 +114,7 @@ rule emseq_bwa_meth_index:
         samtools faidx "{params.fasta_target}"
         bwameth.py index-mem2 "{params.fasta_target}"
         """
+# ── Alignment ────────────────────────────────────────────────────────────────
 rule emseq_align_bwameth:
     message: "BWA-meth bisulfite alignment to human reference with coordinate-sorted BAM output"
     conda: ENV_EMSEQ
@@ -137,6 +144,7 @@ rule emseq_align_bwameth:
           "{input.r1}" "{input.r2}" \
         | samtools view -u - \
         | samtools sort -@ 8 -T "{params.temp_prefix}" -o "{output.bam}"
+        # -u: uncompressed BAM avoids compress→decompress overhead in pipe
         """
 rule emseq_biscuit_index:
     message: "Build BISCUIT bisulfite index from reference FASTA"
@@ -170,6 +178,7 @@ rule emseq_align_biscuit:
         r1 = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
         r2 = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
         fasta = f"{D_REF}/biscuit/{{emseq_ref_name}}/{{emseq_ref_name}}.fa",
+        fai   = f"{D_REF}/biscuit/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.fai",
         index = f"{D_REF}/biscuit/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.par.sa",
     log:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}_emseq_align_biscuit.log",
@@ -188,10 +197,14 @@ rule emseq_align_biscuit:
         echo "[biscuit-align] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} threads={threads}"
         mkdir -p "{params.tmp_dir}/tmp"
         biscuit align -@ {threads} "{input.fasta}" "{input.r1}" "{input.r2}" \
+        | samtools view -u -t "{input.fai}" \
         | samtools sort -@ {threads} -m 2G \
             -T "{params.tmp_dir}/tmp/{wildcards.library_id}_sorttmp" \
             -o "{output.bam}"
+        # -u: uncompressed BAM avoids compress→decompress overhead in pipe
+        # -t ref.fai: ensures SQ headers are present for downstream tools
         """
+# ── Pre-processing ───────────────────────────────────────────────────────────
 rule emseq_fastp:
     message: "Adapter trimming and QC metrics with fastp for EM-seq reads"
     conda: ENV_EMSEQ
@@ -215,6 +228,8 @@ rule emseq_fastp:
         """
         exec &>> "{log.cmd}"
         echo "[fastp] $(date) lib={wildcards.library_id} threads={threads}"
+        # Quality filtering disabled — base quality recalibration is unreliable
+        # for C-to-T converted libraries
         fastp \
           --detect_adapter_for_pe \
           --disable_quality_filtering \
@@ -250,6 +265,7 @@ rule emseq_fastqc:
           --threads {threads} \
           "{input.fq}"
         """
+# ── Quality Control ──────────────────────────────────────────────────────────
 rule emseq_mosdepth:
     message: "Coverage depth profiling with mosdepth on filtered BAM"
     conda: ENV_EMSEQ
@@ -306,11 +322,17 @@ rule emseq_mbias:
         """
         exec &>> "{log.cmd}"
         echo "[mbias] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
+        # Runs on deduped BAM (not filtered) — full read set needed for bias detection
+        # --noSVG: text output only, avoids R dependency
         MethylDackel mbias \
           -@ {threads} \
           --noSVG \
           "{input.fasta}" "{input.bam}" > "{output.txt}"
         """
+# ── Post-alignment Processing ────────────────────────────────────────────────
+# Dedup and filter are deliberately split: dedup MARKS duplicates (0x400)
+# so the marked BAM is available for M-bias assessment. Filter then REMOVES
+# marked duplicates along with secondary/supplementary/failed-QC reads.
 rule emseq_dedup:
     message: "Mark duplicates with dupsifter (marks only, does not remove) on bisulfite-aligned BAM"
     conda: ENV_EMSEQ
@@ -335,6 +357,7 @@ rule emseq_dedup:
         echo "[dedup] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
         mkdir -p "$(dirname "{params.temp_prefix}")"
         rm -f {params.temp_prefix}.tmp.*
+        # -f 0x2: proper pairs only before name-sorting for dupsifter
         samtools view -bh -f 0x2 "{input.bam}" \
         | samtools sort -n -@ {threads} -O BAM -T "{params.temp_prefix}.tmp" -o - \
         | dupsifter \
@@ -365,6 +388,9 @@ rule emseq_filter_bam:
         """
         exec &>> "{log.cmd}"
         echo "[filter-bam] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
+        # -f 2: proper pairs only
+        # -q 30: MAPQ >= 30
+        # -F 3840 (0xF00): remove secondary + supplementary + failed QC + duplicates
         samtools view -@ {threads} -u -f 2 -q 30 -F 3840 "{input.bam}" \
           | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.exclude_bed}" -v -ubam \
           | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.keep_bed}" -ubam \
@@ -391,6 +417,7 @@ rule emseq_samtools_stats:
         samtools stats -@ {threads} "{input.bam}" > "{output.stats}"
         samtools flagstat -@ {threads} "{input.bam}" > "{output.flagstat}"
         """
+# ── Methylation Calling ──────────────────────────────────────────────────────
 rule emseq_methyldackel:
     message: "MethylDackel CpG methylation extraction in methylKit format from filtered BAM"
     conda: ENV_EMSEQ

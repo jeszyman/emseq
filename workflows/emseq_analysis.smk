@@ -11,6 +11,10 @@
 #   DECONV_ATLAS     — UXM deconvolution atlas path
 #   ENV_HAPLOTYPE    — haplotype conda env YAML path
 #   ENV_DECONV       — deconvolution conda env YAML path
+# ── Differential Methylation ─────────────────────────────────────────────────
+# methylKit pipeline: unite per-sample tabix DBs → per-base diff → tiled diff
+# → extract positional methylation → annotate with genomic features.
+# Experiments are defined in the meth_map config structure.
 rule emseq_analysis_methylkit_unite:
     message: "Unite per-sample methylKit tabix databases into single methylBase for differential analysis"
     wildcard_constraints:
@@ -172,6 +176,9 @@ rule emseq_analysis_annotate_cpg:
           --db "{input.db}" \
           --out "{output.tsv}"
         """
+# ── Methylation Haplotypes ───────────────────────────────────────────────────
+# BAM → mhap format (mHapTools) → per-MHB metrics (mhaptk).
+# Requires external CpG reference and MHB BED (see Reference preparation).
 rule emseq_analysis_mhap_convert:
     message: "Convert filtered BAM to mhap format using mHapTools for haplotype analysis"
     conda: ENV_HAPLOTYPE
@@ -228,6 +235,10 @@ rule emseq_analysis_mhaptk_stat:
           --metrics {params.metrics} \
           --outputFile "{output.txt}"
         """
+# ── Tissue Deconvolution ─────────────────────────────────────────────────────
+# BAM → chr-prefixed BAM (for wgbs_tools compatibility) → pat/beta files
+# → UXM deconvolution against reference atlas.
+# chr-prefix reheader needed because NCBI hg38 uses numeric contig names.
 rule emseq_analysis_chr_reheader:
     message: "Add chr prefix to BAM contig names for wgbs_tools/UXM compatibility"
     conda: ENV_EMSEQ

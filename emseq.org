@@ -318,12 +318,15 @@ Core keys:
 | =emseq-mincov=          | Minimum coverage for methylKit (default: =2=)                                  |
 | =fastp.extra=           | Additional fastp arguments (default: none)                                     |
 
-Analysis-specific keys (required only for =emseq_analysis.smk=):
-| =haplotype.cpg-ref=  | Tabixed CpG reference file (hg38)                                 |
-| =haplotype.mhb-bed=  | Methylation haplotype block BED (e.g. Guo 2017 liftover)          |
+Analysis-specific keys (required only for =emseq_analysis.smk=; see Analysis module setup below for how to prepare these):
+| =repos.mhaptools=    | Path to cloned mHapTools repo (with compiled binary)              |
+| =repos.wgbs_tools=   | Path to cloned wgbs_tools repo (with built C extensions)          |
+| =repos.uxm_deconv=   | Path to cloned UXM_deconv repo                                    |
+| =haplotype.cpg-ref=  | Tabixed CpG reference (generated from reference FASTA)            |
+| =haplotype.mhb-bed=  | Methylation haplotype block BED (Guo 2017 liftover to hg38)       |
 | =haplotype.metrics=  | List of haplotype metrics to compute (e.g. =[MHL, PDR, Entropy]=) |
 | =deconv.genome-name= | wgbs_tools genome identifier                                      |
-| =deconv.atlas=       | UXM deconvolution reference atlas TSV                             |
+| =deconv.atlas=       | UXM deconvolution atlas TSV (from UXM_deconv repo)                |
 
 ***** Wrapper Snakefile
 
@@ -458,6 +461,77 @@ Four conda environment YAMLs are provided in =config/=. Wrappers reference them 
 | =haplotype-conda-env.yaml= | mhaptk (Java), htslib, pytabix             |
 | =deconv-conda-env.yaml=    | wgbs_tools and UXM dependencies            |
 
+***** Analysis module setup
+
+The core pipeline (=emseq.smk=) has no external prerequisites — all tools are installed via conda and reference indexing is automated.
+
+The analysis pipeline (=emseq_analysis.smk=) requires external tool repositories and reference files that must be prepared once before running. These are one-time setup steps that depend on the genome build. The results feed into the analysis-specific YAML config keys listed above.
+
+****** External tool repositories → =repos.*= config keys
+
+Clone the three external repos:
+
+#+begin_example
+./tools/setup_repos.sh
+#+end_example
+
+Then build each tool:
+
+#+begin_example
+# mHapTools — ships macOS binary; must be compiled from source on Linux
+cd ~/repos/mHapTools
+cd htslib && ./configure && make -j4 && cd ..
+sed -i 's/libhts.dylib/libhts.so/' CMakeLists.txt
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j4
+cp build/mhaptools .
+
+# wgbs_tools — C extensions must be built inside the deconv conda env
+cd ~/repos/wgbs_tools
+/path/to/deconv-conda-prefix/bin/python setup.py
+
+# UXM_deconv — pure Python, no build needed
+#+end_example
+
+Set the =repos= config keys to the resulting paths:
+#+begin_example
+repos:
+  mhaptools: ~/repos/mHapTools
+  wgbs_tools: ~/repos/wgbs_tools
+  uxm_deconv: ~/repos/UXM_deconv
+#+end_example
+
+****** Analysis reference files → =haplotype.*= and =deconv.*= config keys
+
+Three reference files are needed. Detailed preparation steps are documented in emseq.org under =** Reference preparation=.
+
+*CpG reference* → =haplotype.cpg-ref= — a tabixed file of all CpG dinucleotide positions in the reference genome. Generate from the reference FASTA:
+
+#+begin_example
+awk 'BEGIN{OFS="\t"} /^>/{chr=substr($1,2);pos=0;next}
+  {seq=toupper($0); for(i=1;i<length(seq);i++)
+    if(substr(seq,i,2)=="CG") print chr,pos+i-1,pos+i;
+  pos+=length(seq)}' ref.fa | bgzip > hg38_CpG.gz
+tabix -b 2 -e 3 hg38_CpG.gz
+#+end_example
+
+*MHB reference* → =haplotype.mhb-bed= — methylation haplotype blocks from Guo et al. 2017 Nature Genetics. The published coordinates are hg19; liftOver to hg38:
+
+#+begin_example
+# 1. Download Supplementary Table 1 from Guo 2017 (Excel)
+# 2. Extract chr/start/end to BED (see emseq.org Reference preparation)
+# 3. liftOver hg19 → hg38
+liftOver guo2017_mhb_hg19.bed hg19ToHg38.over.chain.gz guo2017_mhb_hg38.bed unmapped.bed
+sort -k1,1 -k2,2n guo2017_mhb_hg38.bed > guo2017_mhb_hg38_sorted.bed
+#+end_example
+
+*UXM atlas* → =deconv.atlas= — available in the cloned UXM_deconv repo:
+
+#+begin_example
+# Use the atlas matching your genome build:
+~/repos/UXM_deconv/supplemental/Atlas.U25.l4.hg38.tsv
+#+end_example
+
 **** =emseq.smk= — Core Processing
 
 Paired-end FASTQ files in, per-sample CpG methylation calls and QC metrics out.
@@ -551,18 +625,6 @@ External tool repositories must be cloned before running (see =tools/setup_repos
 **** Testing
 
 The repository includes in-repo test data and wrapper Snakefiles for both modules. Test data consists of real EM-seq reads subsetted to chr22 with matching spike-in references (pUC19, Lambda), blacklist regions, and analysis references (CpG sites, MHB blocks).
-
-***** Prerequisites
-
-The analysis pipeline requires three external tool repositories. Clone and build them before running:
-
-#+begin_example
-# Clone mHapTools, wgbs_tools, UXM_deconv
-./tools/setup_repos.sh
-
-# wgbs_tools must be built inside the deconv conda env (the setup script
-# runs python setup.py, but the C extensions require the conda env's htslib)
-#+end_example
 
 ***** Test wrappers
 
@@ -1132,30 +1194,40 @@ This will be indexed and used for alignment.
 
 *** Writeup
 
+**** Core processing (emseq.smk)
+
 - Sample preparation and sequencing.
   Cell-free DNA was extracted and prepared using the NEBNext® Enzymatic Methyl-seq (EM-seq) Kit following the manufacturer's protocol. Libraries were sequenced on an Illumina platform using paired-end 150 bp reads.
 
 - Sequencing read pre-processing and quality control.
-  Raw sequencing reads were processed with fastp using default parameters, with adapter detection enabled and quality filtering disabled. FastQC was used to assess read quality before and after trimming.
+  Raw sequencing reads were processed with fastp with adapter detection enabled and quality filtering disabled. Quality filtering was disabled because base quality recalibration is unreliable for C-to-T converted libraries. FastQC was used to assess read quality before and after trimming.
 
-- Alignment and de-duplication.
-  Reads were aligned to reference genome(s) using BWA-meth with default parameters. Resulting BAMs were coordinate-sorted and deduplicated using dupsifter (https://github.com/brentp/dupsifter), which performs read name-aware de-duplication optimized for bisulfite-style alignments. Only properly paired reads (SAM flag 0x2) were retained prior to deduplication.
+- Alignment and duplicate marking.
+  Reads were aligned to reference genomes using BWA-meth with default parameters. Resulting BAMs were coordinate-sorted and duplicates were marked using dupsifter (https://github.com/brentp/dupsifter), which performs read name-aware duplicate detection optimized for bisulfite-style alignments. Only properly paired reads (SAM flag 0x2) were retained prior to duplicate marking. Duplicates were marked (SAM flag 0x400) but not removed at this stage, preserving the full read set for M-bias assessment.
+
+- BAM filtering.
+  Marked BAMs were filtered to retain only properly paired reads (SAM flag 0x2) with mapping quality ≥ 30, excluding secondary alignments, supplementary alignments, failed QC reads, and marked duplicates (SAM flag -F 3840). Reads were further intersected with autosomal keep regions and filtered against a blacklist BED.
 
 - Methylation calling.
-  Methylation calls were made on deduplicated BAMs using MethylDackel (v0.6.1), with CpG-context methylation extracted in methylKit-compatible format (--methylKit). Calls were further processed using methylKit (v1.22.0) for filtering, tabix compression, and downstream differential methylation analysis. For each sample, methylation calls were filtered using a minimum coverage threshold of 10×.
+  CpG methylation was extracted from filtered BAMs using MethylDackel in methylKit-compatible format. Per-sample methylKit objects were created with tabix indexing for downstream differential analysis.
 
-- Quality Control
-  - Depth estimation.
-    Coverage profiles were generated using mosdepth (v0.3.3) on deduplicated BAMs. Runs were performed in fast mode with 1 kb windows and median depth calculation enabled. Per-sample coverage threshold summaries and quantization tracks were generated and aggregated using a custom R script, which also calculated autosomal median depth and generated multi-panel PDF plots showing coverage distribution across user-defined thresholds.
+- Quality control.
+  Coverage profiles were generated using mosdepth on filtered BAMs with threshold summaries and quantization tracks. Spike-in conversion rates were estimated from unmethylated Lambda (expected methylation < 1%) and fully methylated CpG pUC19 (expected > 90% CpG methylation) [cite:@vaisvila2021;@chauhan2024;@emseq2023manual]. Position-dependent methylation bias was assessed using MethylDackel mbias on marked (pre-filter) BAMs to ensure detection across the full read set.
 
-  - Spike-in controls and conversion rate estimation.
-    Each EM-seq library included unmethylated Lambda and fully methylated CpG pUC19 spike-ins. Reads were aligned to spike-in references using BWA-meth, and methylation levels were quantified using MethylDackel. Conversion efficiency was estimated from Lambda (expected methylation <1%), and methylation completeness from pUC19 (expected >90% CpG methylation) [@vaisvila2021; @chauhan2024; @emseq2023manual].
+**** Downstream analysis (emseq_analysis.smk)
 
-  - M-bias detection.
-    To detect potential position-dependent biases in methylation calls, MethylDackel's mbias mode was used on deduplicated BAMs. Reads were assessed for strand-specific methylation bias across read positions, and results were reviewed to ensure negligible systematic error.
+- Differential methylation.
+  Per-sample methylKit tabix databases were united across treatment groups as defined by the experiment map. Differential methylation was called at both per-CpG and tiled (windowed) resolution using methylKit. Positional methylation values were extracted for significant sites. Differentially methylated regions were annotated with genomic features including CpG islands, shores, shelves, inter-CGI regions, gene promoters, exons, and introns using annotatr.
 
-- Pipeline orchestration.
-  All steps were executed using a reproducible Snakemake (v7.x) workflow with conda-based environment isolation. Logging was performed at each rule level, and intermediate files were tracked and retained as needed.
+- Methylation haplotypes.
+  Filtered BAMs were converted to mhap format using mHapTools. Per-region haplotype metrics (MHL, PDR, entropy) were computed for each methylation haplotype block using mhaptk.
+
+- Tissue deconvolution.
+  BAM contig names were reheadered from numeric to chr-prefixed format for wgbs_tools compatibility. Per-read methylation pattern files were generated using wgbs_tools bam2pat. Cell-type-of-origin fractions were estimated via UXM deconvolution against a reference tissue atlas.
+
+**** Pipeline orchestration
+
+All steps were executed using a reproducible Snakemake workflow with conda-based environment isolation. The pipeline is split into two modules: =emseq.smk= for core processing (FASTQ to methylation calls) and =emseq_analysis.smk= for downstream analysis (DMR, haplotypes, deconvolution). Both modules are included from a project-specific wrapper Snakefile. Logging was performed at each rule level.
 
 *** Preamble
 #+begin_src snakemake
@@ -1206,6 +1278,9 @@ The spike workflow uses bwa-meth to quickly align to phage reference genomes. Co
 
 **** Align
 #+begin_src snakemake
+# ── Spike-in Controls ────────────────────────────────────────────────────────
+# Align to pUC19 (methylated) and Lambda (unmethylated) for conversion QC.
+# Duplicates are retained — every read contributes to conversion rate estimation.
 rule emseq_align_bwameth_spike:
     message: "EM-seq bwameth on spike-in reference with simple samtools piping and no duplicate calls"
     conda: ENV_EMSEQ
@@ -1234,6 +1309,8 @@ rule emseq_align_bwameth_spike:
           "{input.r1}" "{input.r2}" \
         | samtools view -@ 8 -u -F 4 - \
         | samtools sort -@ 8 -T "{params.temp_prefix}" -o "{output.bam}"
+        # -u: uncompressed BAM avoids compress→decompress overhead in pipe
+        # -F 4: keep only mapped reads (discard unmapped from wrong spike-in)
         """
 #+end_src
 
@@ -1280,6 +1357,7 @@ Reference
 **** Index
 
 #+begin_src snakemake
+# ── Reference Indexing ───────────────────────────────────────────────────────
 rule emseq_bwa_meth_index:
     message: "Build bwa-meth bisulfite index from reference FASTA"
     conda: ENV_EMSEQ
@@ -1318,6 +1396,7 @@ rule emseq_bwa_meth_index:
 **** Align
 
 #+begin_src snakemake
+# ── Alignment ────────────────────────────────────────────────────────────────
 rule emseq_align_bwameth:
     message: "BWA-meth bisulfite alignment to human reference with coordinate-sorted BAM output"
     conda: ENV_EMSEQ
@@ -1347,6 +1426,7 @@ rule emseq_align_bwameth:
           "{input.r1}" "{input.r2}" \
         | samtools view -u - \
         | samtools sort -@ 8 -T "{params.temp_prefix}" -o "{output.bam}"
+        # -u: uncompressed BAM avoids compress→decompress overhead in pipe
         """
 #+end_src
 
@@ -1392,6 +1472,7 @@ rule emseq_align_biscuit:
         r1 = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
         r2 = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
         fasta = f"{D_REF}/biscuit/{{emseq_ref_name}}/{{emseq_ref_name}}.fa",
+        fai   = f"{D_REF}/biscuit/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.fai",
         index = f"{D_REF}/biscuit/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.par.sa",
     log:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}_emseq_align_biscuit.log",
@@ -1410,9 +1491,12 @@ rule emseq_align_biscuit:
         echo "[biscuit-align] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} threads={threads}"
         mkdir -p "{params.tmp_dir}/tmp"
         biscuit align -@ {threads} "{input.fasta}" "{input.r1}" "{input.r2}" \
+        | samtools view -u -t "{input.fai}" \
         | samtools sort -@ {threads} -m 2G \
             -T "{params.tmp_dir}/tmp/{wildcards.library_id}_sorttmp" \
             -o "{output.bam}"
+        # -u: uncompressed BAM avoids compress→decompress overhead in pipe
+        # -t ref.fai: ensures SQ headers are present for downstream tools
         """
 #+end_src
 
@@ -1424,6 +1508,7 @@ rule emseq_align_biscuit:
 **** Common fastq
 ***** Fastp
 #+begin_src snakemake
+# ── Pre-processing ───────────────────────────────────────────────────────────
 rule emseq_fastp:
     message: "Adapter trimming and QC metrics with fastp for EM-seq reads"
     conda: ENV_EMSEQ
@@ -1447,6 +1532,8 @@ rule emseq_fastp:
         """
         exec &>> "{log.cmd}"
         echo "[fastp] $(date) lib={wildcards.library_id} threads={threads}"
+        # Quality filtering disabled — base quality recalibration is unreliable
+        # for C-to-T converted libraries
         fastp \
           --detect_adapter_for_pe \
           --disable_quality_filtering \
@@ -1490,6 +1577,7 @@ rule emseq_fastqc:
 **** Common alignment processing
 ***** Depth
 #+begin_src snakemake
+# ── Quality Control ──────────────────────────────────────────────────────────
 rule emseq_mosdepth:
     message: "Coverage depth profiling with mosdepth on filtered BAM"
     conda: ENV_EMSEQ
@@ -1624,6 +1712,8 @@ rule emseq_mbias:
         """
         exec &>> "{log.cmd}"
         echo "[mbias] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
+        # Runs on deduped BAM (not filtered) — full read set needed for bias detection
+        # --noSVG: text output only, avoids R dependency
         MethylDackel mbias \
           -@ {threads} \
           --noSVG \
@@ -1635,6 +1725,10 @@ rule emseq_mbias:
 :ID:       4ac48779-f505-4291-b7bf-cc950d3339e6
 :END:
 #+begin_src snakemake
+# ── Post-alignment Processing ────────────────────────────────────────────────
+# Dedup and filter are deliberately split: dedup MARKS duplicates (0x400)
+# so the marked BAM is available for M-bias assessment. Filter then REMOVES
+# marked duplicates along with secondary/supplementary/failed-QC reads.
 rule emseq_dedup:
     message: "Mark duplicates with dupsifter (marks only, does not remove) on bisulfite-aligned BAM"
     conda: ENV_EMSEQ
@@ -1659,6 +1753,7 @@ rule emseq_dedup:
         echo "[dedup] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
         mkdir -p "$(dirname "{params.temp_prefix}")"
         rm -f {params.temp_prefix}.tmp.*
+        # -f 0x2: proper pairs only before name-sorting for dupsifter
         samtools view -bh -f 0x2 "{input.bam}" \
         | samtools sort -n -@ {threads} -O BAM -T "{params.temp_prefix}.tmp" -o - \
         | dupsifter \
@@ -1696,6 +1791,9 @@ rule emseq_filter_bam:
         """
         exec &>> "{log.cmd}"
         echo "[filter-bam] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
+        # -f 2: proper pairs only
+        # -q 30: MAPQ >= 30
+        # -F 3840 (0xF00): remove secondary + supplementary + failed QC + duplicates
         samtools view -@ {threads} -u -f 2 -q 30 -F 3840 "{input.bam}" \
           | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.exclude_bed}" -v -ubam \
           | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.keep_bed}" -ubam \
@@ -1732,6 +1830,7 @@ rule emseq_samtools_stats:
 :ID:       e645e8fb-1d2b-4d3c-9d6c-edcd8bf0d02c
 :END:
 #+begin_src snakemake
+# ── Methylation Calling ──────────────────────────────────────────────────────
 rule emseq_methyldackel:
     message: "MethylDackel CpG methylation extraction in methylKit format from filtered BAM"
     conda: ENV_EMSEQ
@@ -3876,6 +3975,10 @@ Downstream analysis rules for EM-seq data, including differential methylation (m
 *** Differential methylation
 **** Unite per sample
 #+begin_src snakemake
+# ── Differential Methylation ─────────────────────────────────────────────────
+# methylKit pipeline: unite per-sample tabix DBs → per-base diff → tiled diff
+# → extract positional methylation → annotate with genomic features.
+# Experiments are defined in the meth_map config structure.
 rule emseq_analysis_methylkit_unite:
     message: "Unite per-sample methylKit tabix databases into single methylBase for differential analysis"
     wildcard_constraints:
@@ -4212,6 +4315,9 @@ rule emseq_analysis_annotate_cpg:
 **** BAM to mhap (mHapTools convert)
 
 #+begin_src snakemake
+# ── Methylation Haplotypes ───────────────────────────────────────────────────
+# BAM → mhap format (mHapTools) → per-MHB metrics (mhaptk).
+# Requires external CpG reference and MHB BED (see Reference preparation).
 rule emseq_analysis_mhap_convert:
     message: "Convert filtered BAM to mhap format using mHapTools for haplotype analysis"
     conda: ENV_HAPLOTYPE
@@ -4282,6 +4388,10 @@ NCBI decoy hg38 uses numeric chromosome names (1, 2, ...) while wgbs_tools/UXM r
 **** BAM chr-prefix reheader
 
 #+begin_src snakemake
+# ── Tissue Deconvolution ─────────────────────────────────────────────────────
+# BAM → chr-prefixed BAM (for wgbs_tools compatibility) → pat/beta files
+# → UXM deconvolution against reference atlas.
+# chr-prefix reheader needed because NCBI hg38 uses numeric contig names.
 rule emseq_analysis_chr_reheader:
     message: "Add chr prefix to BAM contig names for wgbs_tools/UXM compatibility"
     conda: ENV_EMSEQ

@@ -676,13 +676,23 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 #+end_export
 **** Change Log
 - Development since last tag
-  - [2026-03-31 Mon] Major README and CI overhaul:
-    - Split README into per-module documentation with consistent structure (intro, wrapper variables, processing steps, DAG, outputs).
-    - Added Configuration section: YAML/wrapper architecture, resource management with basecamp concurrency model.
-    - Reverted to direct thread/concurrency values per rule (basecamp pattern).
+  - None
+- wf/emseq/v5.0.0
+  - [2026-03-31 Mon] Two-module architecture with comprehensive documentation:
+    - Split README into per-module documentation (intro, wrapper variables, processing steps, DAG, outputs).
+    - Added Configuration section: YAML/wrapper architecture, analysis module setup, resource management with basecamp concurrency model.
+    - Section banners and rationale comments throughout both modules.
+    - Updated Writeup section for two-module split.
+    - Biscuit align: added =samtools view -u -t ref.fai= pipe fix.
+    - Relocated orphaned R scripts to active Methylkit section; removed duplicates.
+    - Untracked stale =diff/= files.
+  - [2026-03-31 Mon] CI overhaul:
     - Added analysis CI workflows (=smk-analysis-dry=, =smk-analysis-run=). All four CI workflows pass.
-    - Analysis CI tests DMR + annotation; haplotypes and deconvolution excluded (validated on production data only — mHapTools requires source compilation, UXM needs broader coverage than chr22).
+    - Analysis CI tests DMR + annotation; haplotypes and deconvolution excluded (validated on production data only).
+    - Added =--conda-frontend conda= to all CI workflows (mamba prefix collision workaround).
     - Added test reference fixtures: chr22 CpG ref, MHB BED, UXM atlas subset.
+  - [2026-03-31 Mon] Resource and architecture changes:
+    - Reverted to direct thread/concurrency values per rule (basecamp pattern).
     - Removed project-specific AERO wrapper files.
   - [2026-03-25 Wed] Production validation fixes:
     - Added =mkdir -p= to =emseq_align_bwameth_spike= shell block for samtools sort tmp dir.
@@ -2255,7 +2265,58 @@ diff <- calculateDiffMeth(
 
 https:/www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/methylKit.html
 
+**** Biscuit methylKit object
+#+begin_src R :tangle ./scripts/make_single_biscuit_methylkit_obj.R
+library(argparse)
+library(methylKit)
 
+parser <- ArgumentParser()
+parser$add_argument("--bismark_cov_bed", required = TRUE)
+parser$add_argument("--library_id", required = TRUE)
+parser$add_argument("--treatment", type = "integer", required = TRUE)
+parser$add_argument("--out_dir", required = TRUE)
+
+args <- parser$parse_args()
+
+myobj= methRead(args$bismark_cov_bed,
+                sample.id = args$library_id,
+                treatment = 1,
+                context="CpG",
+                pipeline="bismarkCoverage",
+                mincov = 2,
+                assembly= "hg38",
+                dbtype = "tabix",
+                dbdir = args$out_dir)
+
+#+end_src
+
+**** Experiment methylation extraction
+#+begin_src R :tangle ./scripts/all_experiment_methylation.R
+library(argparse)
+library(methylKit)
+library(tidyverse)
+
+# --- Argument Parsing ---
+parser <- ArgumentParser()
+parser$add_argument("--db_file", required = TRUE, help = "Path to tabix-indexed methylBase file")
+parser$add_argument("--out_file", required = TRUE, help = "Output TSV path for percent methylation matrix")
+parser$add_argument("--chunk_size", type = "double", default = 1e9, help = "Chunk size for methylKit operations")
+args <- parser$parse_args()
+
+# --- Check Header and Load Object ---
+methylKit:::checkTabixHeader(args$db_file)
+meth <- methylKit:::readMethylDB(args$db_file)
+
+# --- Extract Percent Methylation Matrix ---
+meth_matrix <- percMethylation(meth, rowids = TRUE, chunk.size = args$chunk_size)
+
+# --- Write Output ---
+write_tsv(
+  as.data.frame(meth_matrix) %>% rownames_to_column(var = "coord"),
+  args$out_file
+)
+
+#+end_src
 
 *** Ideas
 :PROPERTIES:
@@ -2352,31 +2413,6 @@ rule make_single_biscuit_methylkit_obj:
         """
 #+end_src
 
-#+begin_src R :tangle ./scripts/make_single_biscuit_methylkit_obj.R
-library(argparse)
-library(methylKit)
-
-parser <- ArgumentParser()
-parser$add_argument("--bismark_cov_bed", required = TRUE)
-parser$add_argument("--library_id", required = TRUE)
-parser$add_argument("--treatment", type = "integer", required = TRUE)
-parser$add_argument("--out_dir", required = TRUE)
-
-args <- parser$parse_args()
-
-myobj= methRead(args$bismark_cov_bed,
-                sample.id = args$library_id,
-                treatment = 1,
-                context="CpG",
-                pipeline="bismarkCoverage",
-                mincov = 2,
-                assembly= "hg38",
-                dbtype = "tabix",
-                dbdir = args$out_dir)
-
-#+end_src
-
-
 ***** OLD Methylation sequence processing
 :PROPERTIES:
 :ID:       c3bdbbcc-5a4c-475a-8ab1-33884ab14ef5
@@ -2432,34 +2468,6 @@ rule all_experiment_methylation:
         --db_file {input} \
         --out_file {output} > {log} 2>&1
         """
-#+end_src
-
-
-#+begin_src R :tangle ./scripts/all_experiment_methylation.R
-library(argparse)
-library(methylKit)
-library(tidyverse)
-
-# --- Argument Parsing ---
-parser <- ArgumentParser()
-parser$add_argument("--db_file", required = TRUE, help = "Path to tabix-indexed methylBase file")
-parser$add_argument("--out_file", required = TRUE, help = "Output TSV path for percent methylation matrix")
-parser$add_argument("--chunk_size", type = "double", default = 1e9, help = "Chunk size for methylKit operations")
-args <- parser$parse_args()
-
-# --- Check Header and Load Object ---
-methylKit:::checkTabixHeader(args$db_file)
-meth <- methylKit:::readMethylDB(args$db_file)
-
-# --- Extract Percent Methylation Matrix ---
-meth_matrix <- percMethylation(meth, rowids = TRUE, chunk.size = args$chunk_size)
-
-# --- Write Output ---
-write_tsv(
-  as.data.frame(meth_matrix) %>% rownames_to_column(var = "coord"),
-  args$out_file
-)
-
 #+end_src
 
 ******** Tiled
@@ -7170,32 +7178,6 @@ rule make_single_biscuit_methylkit_obj:
           &> {log}
         """
 #+end_src
-
-#+begin_src R :tangle ./scripts/make_single_biscuit_methylkit_obj.R
-library(argparse)
-library(methylKit)
-
-parser <- ArgumentParser()
-parser$add_argument("--bismark_cov_bed", required = TRUE)
-parser$add_argument("--library_id", required = TRUE)
-parser$add_argument("--treatment", type = "integer", required = TRUE)
-parser$add_argument("--out_dir", required = TRUE)
-
-args <- parser$parse_args()
-
-myobj= methRead(args$bismark_cov_bed,
-                sample.id = args$library_id,
-                treatment = 1,
-                context="CpG",
-                pipeline="bismarkCoverage",
-                mincov = 2,
-                assembly= "hg38",
-                dbtype = "tabix",
-                dbdir = args$out_dir)
-
-#+end_src
-
-
 
 *** variant calling
 - https:/pmc.ncbi.nlm.nih.gov/articles/PMC10072131/

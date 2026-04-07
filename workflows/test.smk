@@ -39,6 +39,7 @@ EMSEQ_REF_INPUTS = {k: v['input'] for k, v in config['emseq_ref_assemblies'].ite
 # --- Samples and references ---
 emseq_library_ids = config["library-ids"]
 emseq_ref_names = ["chr22"]
+emseq_align_methods = ["bwa_meth", "biscuit"]
 spike_builds = ["puc19", "unmeth_lambda"]
 KEEP_BED = config["keep-bed"]
 EXCL_BED = config["exclude-bed"]
@@ -58,7 +59,7 @@ rule all:
             f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz",
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
-            align_method=["bwa_meth", "biscuit"],
+            align_method=emseq_align_methods,
         ),
         # Spike workflow
         expand(
@@ -79,14 +80,14 @@ rule all:
             f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.mosdepth.summary.txt",
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
-            align_method=["bwa_meth", "biscuit"],
+            align_method=emseq_align_methods,
         ),
         # QC - M-bias
         expand(
             f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.txt",
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
-            align_method=["bwa_meth", "biscuit"],
+            align_method=emseq_align_methods,
         ),
         # QC - MultiQC (does NOT prompt inputs to run)
         f"{D_EMSEQ}/qc/multiqc.html",

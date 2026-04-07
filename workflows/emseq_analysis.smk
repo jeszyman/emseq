@@ -324,7 +324,7 @@ rule emseq_analysis_uxm_deconv:
             f"{D_EMSEQ}/deconv/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.chr.pat.gz",
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
-            align_method=["bwa_meth"],
+            align_method=emseq_align_methods,
         ),
     log:
         cmd = f"{D_LOGS}/emseq_analysis_uxm_deconv.log",

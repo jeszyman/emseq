@@ -44,6 +44,7 @@ EMSEQ_REF_INPUTS = {k: v['input'] for k, v in config['emseq_ref_assemblies'].ite
 # --- Samples and references ---
 emseq_library_ids = config["library-ids"]
 emseq_ref_names = ["chr22"]
+emseq_align_methods = ["bwa_meth", "biscuit"]
 spike_builds = ["puc19", "unmeth_lambda"]
 KEEP_BED = config["keep-bed"]
 EXCL_BED = config["exclude-bed"]

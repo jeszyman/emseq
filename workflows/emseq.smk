@@ -17,6 +17,7 @@
 #   KEEP_BED, EXCL_BED             — region filter BED file paths
 #   meth_map                       — experiment map for differential methylation
 #   MOSDEPTH_QUANT_LEVELS          — coverage quantization thresholds
+#   emseq_align_methods            — list of alignment methods (e.g. ["bwa_meth"] or ["bwa_meth","biscuit"])
 #   EMSEQ_MINCOV                   — minimum coverage for methylKit
 #   FASTP_EXTRA                    — additional fastp arguments
 # ── Spike-in Controls ────────────────────────────────────────────────────────
@@ -501,21 +502,21 @@ rule emseq_multiqc:
             f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.txt",
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
-            align_method=["biscuit","bwa_meth"],
+            align_method=emseq_align_methods,
             allow_missing=True,
         ),
         mosdepth_summary = expand(
             f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.mosdepth.summary.txt",
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
-            align_method=["biscuit","bwa_meth"],
+            align_method=emseq_align_methods,
             allow_missing=True,
         ),
         mosdepth_dists = expand(
             f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.mosdepth.{{dist}}.dist.txt",
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
-            align_method=["biscuit","bwa_meth"],
+            align_method=emseq_align_methods,
             dist=["global","region"],
             allow_missing=True,
         ),
@@ -523,7 +524,7 @@ rule emseq_multiqc:
             f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.samtools.{{stat}}.txt",
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
-            align_method=["biscuit","bwa_meth"],
+            align_method=emseq_align_methods,
             stat=["stats","flagstat"],
         ),
     log:

@@ -1,34 +1,34 @@
 
 # Table of Contents
 
-1.  [Configuration](#org12fe12b)
-    1.  [YAML config file](#org4e85b8a)
-    2.  [Wrapper Snakefile](#orgb50cd7f)
-    3.  [Resource management](#orgfa8d6be)
-    4.  [Reference assemblies](#orgd930276)
-    5.  [Experiments (differential methylation)](#org5ce026c)
-    6.  [Conda environments](#org994c512)
-    7.  [Analysis module setup](#org48d308a)
-        1.  [External tool repositories → `repos.*` config keys](#orgaa94c1b)
-        2.  [Analysis reference files → `haplotype.*` and `deconv.*` config keys](#orgbc5fb43)
-2.  [`emseq.smk` — Core Processing](#org156f9cd)
-    1.  [Wrapper variables](#orgc6cb07e)
-    2.  [Processing steps](#org3e84e0c)
-    3.  [Outputs](#orgc1b5d53)
-3.  [`emseq_analysis.smk` — Downstream Analysis](#orga2a3fd6)
-    1.  [Wrapper variables](#org05c10ae)
-    2.  [Processing steps](#orgc149d82)
-    3.  [Outputs](#org9aa6f67)
-4.  [Testing](#org710a57f)
-    1.  [Test wrappers](#org5691ba2)
-    2.  [Test data limitations](#org4d44b75)
-5.  [Continuous Integration](#orgbb84868)
-6.  [Change Log](#orgb519e2e)
+1.  [Configuration](#org054b8a9)
+    1.  [YAML config file](#orgfe859a4)
+    2.  [Wrapper Snakefile](#org41005a0)
+    3.  [Resource management](#org14bd22a)
+    4.  [Reference assemblies](#orgcaeac41)
+    5.  [Experiments (differential methylation)](#org85a8382)
+    6.  [Conda environments](#org2538bd0)
+    7.  [Analysis module setup](#org4998f9e)
+        1.  [External tool repositories → `repos.*` config keys](#org2a5096e)
+        2.  [Analysis reference files → `haplotype.*` and `deconv.*` config keys](#org559dea6)
+2.  [`emseq.smk` — Core Processing](#org2d226af)
+    1.  [Wrapper variables](#orged969de)
+    2.  [Processing steps](#orgaf3e42d)
+    3.  [Outputs](#orga44aeba)
+3.  [`emseq_analysis.smk` — Downstream Analysis](#orgf288816)
+    1.  [Wrapper variables](#org55c85b3)
+    2.  [Processing steps](#org26b1d71)
+    3.  [Outputs](#orgdb91b9a)
+4.  [Testing](#orgdffc9d1)
+    1.  [Test wrappers](#org5e6104d)
+    2.  [Test data limitations](#org0ff8f99)
+5.  [Continuous Integration](#org4bf1cda)
+6.  [Change Log](#orgf626ee1)
 
 The EM-seq repository provides two modular Snakemake workflows for enzymatic methylation sequencing data. Both are designed to be included from a project-specific wrapper Snakefile that defines samples, references, and resource limits.  
 
 
-<a id="org12fe12b"></a>
+<a id="org054b8a9"></a>
 
 # Configuration
 
@@ -37,7 +37,7 @@ Configuration is split between a YAML config file and a wrapper Snakefile. The Y
 This separation serves two purposes. First, the YAML is portable across machines and projects while the wrapper encodes the specific run configuration. Second, when a project composes multiple pipeline modules (e.g. EM-seq + cfDNA CNA + fragmentation analysis), the wrapper is the single place where all variable names from all modules are visible. This makes namespace collisions immediately obvious rather than hidden inside separate module files.  
 
 
-<a id="org4e85b8a"></a>
+<a id="orgfe859a4"></a>
 
 ## YAML config file
 
@@ -165,7 +165,7 @@ Analysis-specific keys (required only for `emseq_analysis.smk`; see Analysis mod
 </table>
 
 
-<a id="orgb50cd7f"></a>
+<a id="org41005a0"></a>
 
 ## Wrapper Snakefile
 
@@ -211,6 +211,7 @@ A minimal wrapper follows this structure:
     # --- Samples and references ---
     emseq_library_ids = config["library-ids"]
     emseq_ref_names = ["ncbi_decoy_hg38"]   # project decision
+    emseq_align_methods = ["bwa_meth"]       # project decision
     spike_builds = ["puc19", "unmeth_lambda"]  # project decision
     KEEP_BED = config["keep-bed"]
     EXCL_BED = config["exclude-bed"]
@@ -228,7 +229,7 @@ A minimal wrapper follows this structure:
 The test wrappers (`workflows/test.smk`, `workflows/test-analysis.smk`) and `config/example-config.yaml` serve as templates for creating project-specific wrappers.  
 
 
-<a id="orgfa8d6be"></a>
+<a id="org14bd22a"></a>
 
 ## Resource management
 
@@ -252,7 +253,7 @@ To run the pipeline, pass both `--cores` and `--resources concurrency=N`:
     snakemake -s workflows/test.smk --cores 96 --resources concurrency=300
 
 
-<a id="orgd930276"></a>
+<a id="orgcaeac41"></a>
 
 ## Reference assemblies
 
@@ -275,7 +276,7 @@ Reference genomes are specified as a nested map in `emseq_ref_assemblies`. Each 
         input: pUC19.fa.gz
 
 
-<a id="org5ce026c"></a>
+<a id="org85a8382"></a>
 
 ## Experiments (differential methylation)
 
@@ -293,7 +294,7 @@ The `meth-map` config key defines one or more differential methylation experimen
         win_size: 10000
 
 
-<a id="org994c512"></a>
+<a id="org2538bd0"></a>
 
 ## Conda environments
 
@@ -331,7 +332,7 @@ Four conda environment YAMLs are provided in `config/`. Wrappers reference them 
 </table>
 
 
-<a id="org48d308a"></a>
+<a id="org4998f9e"></a>
 
 ## Analysis module setup
 
@@ -340,7 +341,7 @@ The core pipeline (`emseq.smk`) has no external prerequisites — all tools are 
 The analysis pipeline (`emseq_analysis.smk`) requires external tool repositories and reference files that must be prepared once before running. These are one-time setup steps that depend on the genome build. The results feed into the analysis-specific YAML config keys listed above.  
 
 
-<a id="orgaa94c1b"></a>
+<a id="org2a5096e"></a>
 
 ### External tool repositories → `repos.*` config keys
 
@@ -372,7 +373,7 @@ Set the `repos` config keys to the resulting paths:
       uxm_deconv: ~/repos/UXM_deconv
 
 
-<a id="orgbc5fb43"></a>
+<a id="org559dea6"></a>
 
 ### Analysis reference files → `haplotype.*` and `deconv.*` config keys
 
@@ -400,14 +401,14 @@ Three reference files are needed. Detailed preparation steps are documented in e
     ~/repos/UXM_deconv/supplemental/Atlas.U25.l4.hg38.tsv
 
 
-<a id="org156f9cd"></a>
+<a id="org2d226af"></a>
 
 # `emseq.smk` — Core Processing
 
 Paired-end FASTQ files in, per-sample CpG methylation calls and QC metrics out.  
 
 
-<a id="orgc6cb07e"></a>
+<a id="orged969de"></a>
 
 ## Wrapper variables
 
@@ -448,6 +449,11 @@ The wrapper assigns all variables before `include: "emseq.smk"` (see the Wrapper
 </tr>
 
 <tr>
+<td class="org-left"><code>emseq_align_methods</code></td>
+<td class="org-left">Alignment methods to run (e.g. <code>["bwa_meth"]</code> or <code>["bwa_meth","biscuit"]</code>)</td>
+</tr>
+
+<tr>
 <td class="org-left"><code>spike_builds</code></td>
 <td class="org-left">Spike-in reference names included in this run (project decision)</td>
 </tr>
@@ -485,7 +491,7 @@ The wrapper assigns all variables before `include: "emseq.smk"` (see the Wrapper
 </table>
 
 
-<a id="org3e84e0c"></a>
+<a id="orgaf3e42d"></a>
 
 ## Processing steps
 
@@ -503,7 +509,7 @@ The wrapper assigns all variables before `include: "emseq.smk"` (see the Wrapper
 ![img](resources/test_smk.png)  
 
 
-<a id="orgc1b5d53"></a>
+<a id="orga44aeba"></a>
 
 ## Outputs
 
@@ -574,14 +580,14 @@ The wrapper assigns all variables before `include: "emseq.smk"` (see the Wrapper
 </table>
 
 
-<a id="orga2a3fd6"></a>
+<a id="orgf288816"></a>
 
 # `emseq_analysis.smk` — Downstream Analysis
 
 Filtered BAMs and methylation calls in, differential methylation results, haplotype metrics, and tissue deconvolution out.  
 
 
-<a id="org05c10ae"></a>
+<a id="org55c85b3"></a>
 
 ## Wrapper variables
 
@@ -636,7 +642,7 @@ All core variables (above), plus these analysis-specific variables assigned in t
 External tool repositories must be cloned before running (see `tools/setup_repos.sh`).  
 
 
-<a id="orgc149d82"></a>
+<a id="org26b1d71"></a>
 
 ## Processing steps
 
@@ -648,7 +654,7 @@ External tool repositories must be cloned before running (see `tools/setup_repos
 ![img](resources/test_analysis_smk.png)  
 
 
-<a id="org9aa6f67"></a>
+<a id="orgdb91b9a"></a>
 
 ## Outputs
 
@@ -714,14 +720,14 @@ External tool repositories must be cloned before running (see `tools/setup_repos
 </table>
 
 
-<a id="org710a57f"></a>
+<a id="orgdffc9d1"></a>
 
 # Testing
 
 The repository includes in-repo test data and wrapper Snakefiles for both modules. Test data consists of real EM-seq reads subsetted to chr22 with matching spike-in references (pUC19, Lambda), blacklist regions, and analysis references (CpG sites, MHB blocks).  
 
 
-<a id="org5691ba2"></a>
+<a id="org5e6104d"></a>
 
 ## Test wrappers
 
@@ -738,7 +744,7 @@ To run locally:
     snakemake -s workflows/test-analysis.smk --configfile config/test.yaml --cores 4 --use-conda --resources concurrency=100
 
 
-<a id="org4d44b75"></a>
+<a id="org0ff8f99"></a>
 
 ## Test data limitations
 
@@ -750,7 +756,7 @@ The in-repo test data is subsetted to chr22 to keep the repository small. This i
 Both have been validated on production-scale data.  
 
 
-<a id="orgbb84868"></a>
+<a id="org4bf1cda"></a>
 
 # Continuous Integration
 
@@ -768,12 +774,17 @@ Both have been validated on production-scale data.
 [![analysis-run](https://img.shields.io/github/actions/workflow/status/jeszyman/emseq/smk-analysis-run.yaml?branch=master&label=analysis-run)](https://github.com/jeszyman/emseq/actions/workflows/smk-analysis-run.yaml)
 
 
-<a id="orgb519e2e"></a>
+<a id="orgf626ee1"></a>
 
 # Change Log
 
 -   Development since last tag  
     -   None
+-   wf/emseq/v5.1.0  
+    -   <span class="timestamp-wrapper"><span class="timestamp">[2026-04-07 Tue] </span></span> Parameterized `align_method` in modules:  
+        -   New required wrapper variable `emseq_align_methods` — list of alignment methods to run. Replaces hardcoded `["biscuit","bwa_meth"]` in `emseq_multiqc` and `emseq_analysis_uxm_deconv` rules.
+        -   Wrappers must now define `emseq_align_methods` before including modules. Updated `test.smk`, `test-analysis.smk`, README documentation, and module header comments.
+        -   Removed obsolete `test-wrap.smk` wrapper and old untangled development workflow from `emseq.org`.
 -   wf/emseq/v5.0.0  
     -   <span class="timestamp-wrapper"><span class="timestamp">[2026-03-31 Tue] </span></span> Two-module architecture with comprehensive documentation:  
         -   Split README into per-module documentation (intro, wrapper variables, processing steps, DAG, outputs).

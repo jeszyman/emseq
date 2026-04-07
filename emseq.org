@@ -373,6 +373,7 @@ EMSEQ_REF_INPUTS = {k: v['input'] for k, v in config['emseq_ref_assemblies'].ite
 # --- Samples and references ---
 emseq_library_ids = config["library-ids"]
 emseq_ref_names = ["ncbi_decoy_hg38"]   # project decision
+emseq_align_methods = ["bwa_meth"]       # project decision
 spike_builds = ["puc19", "unmeth_lambda"]  # project decision
 KEEP_BED = config["keep-bed"]
 EXCL_BED = config["exclude-bed"]
@@ -540,18 +541,19 @@ Paired-end FASTQ files in, per-sample CpG methylation calls and QC metrics out.
 
 The wrapper assigns all variables before =include: "emseq.smk"= (see the Wrapper Snakefile section for the full pattern):
 
-| =ENV_EMSEQ=, =ENV_METHYLKIT=                                      | Conda environment YAML paths                                     |
-| =R_EMSEQ=                                                         | Repository root path                                             |
-| =D_DATA=, =D_EMSEQ=, =D_REF=, =D_LOGS=, =D_BENCHMARK=, =D_INPUTS= | Directory layout (derived from =main-data-dir=)                  |
-| =emseq_library_ids=                                               | List of sample IDs (from config)                                 |
-| =emseq_ref_names=                                                 | Reference genome names to align against (project decision)       |
-| =spike_builds=                                                    | Spike-in reference names included in this run (project decision) |
-| =EMSEQ_REF_INPUTS=                                                | Dict mapping ref name → input FASTA filename                     |
-| =KEEP_BED=, =EXCL_BED=                                            | Region filter BED file paths                                     |
-| =meth_map=                                                        | Experiment map for differential methylation                      |
-| =MOSDEPTH_QUANT_LEVELS=                                           | Coverage quantization thresholds (default: =1,5,10,20=)          |
-| =EMSEQ_MINCOV=                                                    | Minimum coverage for methylKit (default: =2=)                    |
-| =FASTP_EXTRA=                                                     | Additional fastp arguments (default: none)                       |
+| =ENV_EMSEQ=, =ENV_METHYLKIT=                                      | Conda environment YAML paths                                               |
+| =R_EMSEQ=                                                         | Repository root path                                                       |
+| =D_DATA=, =D_EMSEQ=, =D_REF=, =D_LOGS=, =D_BENCHMARK=, =D_INPUTS= | Directory layout (derived from =main-data-dir=)                            |
+| =emseq_library_ids=                                               | List of sample IDs (from config)                                           |
+| =emseq_ref_names=                                                 | Reference genome names to align against (project decision)                 |
+| =emseq_align_methods=                                             | Alignment methods to run (e.g. =["bwa_meth"]= or =["bwa_meth","biscuit"]=) |
+| =spike_builds=                                                    | Spike-in reference names included in this run (project decision)           |
+| =EMSEQ_REF_INPUTS=                                                | Dict mapping ref name → input FASTA filename                               |
+| =KEEP_BED=, =EXCL_BED=                                            | Region filter BED file paths                                               |
+| =meth_map=                                                        | Experiment map for differential methylation                                |
+| =MOSDEPTH_QUANT_LEVELS=                                           | Coverage quantization thresholds (default: =1,5,10,20=)                    |
+| =EMSEQ_MINCOV=                                                    | Minimum coverage for methylKit (default: =2=)                              |
+| =FASTP_EXTRA=                                                     | Additional fastp arguments (default: none)                                 |
 
 ***** Processing steps
 
@@ -677,6 +679,11 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 **** Change Log
 - Development since last tag
   - None
+- wf/emseq/v5.1.0
+  - [2026-04-07 Mon] Parameterized =align_method= in modules:
+    - New required wrapper variable =emseq_align_methods= — list of alignment methods to run. Replaces hardcoded =["biscuit","bwa_meth"]= in =emseq_multiqc= and =emseq_analysis_uxm_deconv= rules.
+    - Wrappers must now define =emseq_align_methods= before including modules. Updated =test.smk=, =test-analysis.smk=, README documentation, and module header comments.
+    - Removed obsolete =test-wrap.smk= wrapper and old untangled development workflow from =emseq.org=.
 - wf/emseq/v5.0.0
   - [2026-03-31 Mon] Two-module architecture with comprehensive documentation:
     - Split README into per-module documentation (intro, wrapper variables, processing steps, DAG, outputs).
@@ -1260,6 +1267,7 @@ All steps were executed using a reproducible Snakemake workflow with conda-based
 #   KEEP_BED, EXCL_BED             — region filter BED file paths
 #   meth_map                       — experiment map for differential methylation
 #   MOSDEPTH_QUANT_LEVELS          — coverage quantization thresholds
+#   emseq_align_methods            — list of alignment methods (e.g. ["bwa_meth"] or ["bwa_meth","biscuit"])
 #   EMSEQ_MINCOV                   — minimum coverage for methylKit
 #   FASTP_EXTRA                    — additional fastp arguments
 
@@ -1959,21 +1967,21 @@ rule emseq_multiqc:
             f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.txt",
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
-            align_method=["biscuit","bwa_meth"],
+            align_method=emseq_align_methods,
             allow_missing=True,
         ),
         mosdepth_summary = expand(
             f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.mosdepth.summary.txt",
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
-            align_method=["biscuit","bwa_meth"],
+            align_method=emseq_align_methods,
             allow_missing=True,
         ),
         mosdepth_dists = expand(
             f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.mosdepth.{{dist}}.dist.txt",
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
-            align_method=["biscuit","bwa_meth"],
+            align_method=emseq_align_methods,
             dist=["global","region"],
             allow_missing=True,
         ),
@@ -1981,7 +1989,7 @@ rule emseq_multiqc:
             f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.samtools.{{stat}}.txt",
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
-            align_method=["biscuit","bwa_meth"],
+            align_method=emseq_align_methods,
             stat=["stats","flagstat"],
         ),
     log:
@@ -4500,7 +4508,7 @@ rule emseq_analysis_uxm_deconv:
             f"{D_EMSEQ}/deconv/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.chr.pat.gz",
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
-            align_method=["bwa_meth"],
+            align_method=emseq_align_methods,
         ),
     log:
         cmd = f"{D_LOGS}/emseq_analysis_uxm_deconv.log",
@@ -4609,149 +4617,6 @@ ln -s /path/to/ref/wgbstools/hg38_decoy ~/repos/wgbs_tools/references/hg38_decoy
 #+end_src
 
 ** Testing
-- https://chatgpt.com/c/68ceb2e8-4d64-832a-9bc2-8bc08c9d37b3
-
-#+begin_src snakemake
-
-# Development snakemake to test
-mosdepth_quant_levels = config["mosdepth-quant-levels"]
-repo = "~/repos/emseq"
-data_dir=config["data_dir"]
-emseq_script_dir = "~/repos/emseq/scripts"
-log_dir = f"{data_dir}/logs"
-
-emseq_mincov = 2
-emseq_build = "hg38"
-
-threads = 80
-# We specify em-seq bam directory directly to allow for workflows that merge at the bam level:
-emseq_bam_dir = f"{data_dir}/analysis/emseq/bams"
-
-
-# Explicitly select which references to build
-index_targets = ["unmeth_lambda", "puc19"]
-
-library_ids = ["NH_15_L3", "PRO_6_L2"]
-
-spike_ref_names = ["unmeth_lambda"]
-
-ref_names = ["ncbi_decoy_hg38"]
-
-align_methods = ["bwa_meth"]
-
-emseq_library_ids = library_ids
-
-meth_map = {
-    "test": {
-        "build": "hg38",
-        "mincov": "5",
-        "libs": library_ids,
-        "tx": "0,1"
-}
-}
-
-
-mosdepth_map = {
-    "tests": {
-        "library_ids": ["NH_15_L3", "PRO_6_L2"],
-        "ref_name": "ncbi_decoy_hg38",
-        "align_method": "bwa_meth"
-    }
-}
-
-rule all:
-    input:
-        # FASTQs
-        expand(f"{data_dir}/analysis/emseq/fastqs/{{library_id}}_{{processing}}_{{read}}.fastq.gz",
-               library_id = library_ids,
-               processing = ["raw","trimmed"],
-               read = ["R1","R2"]),
-
-        expand(f"{data_dir}/qc/{{library_id}}_{{processing}}_{{read}}_fastqc.{{suffix}}",
-               library_id = library_ids,
-               processing = ["raw","trimmed"],
-               read = ["R1","R2"],
-               suffix = ["zip","html"]),
-
-        # Spike-ins
-        expand(f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam",
-               library_id = library_ids,
-               ref_name = spike_ref_names,
-               align_method = "bwa_meth"),
-
-        expand(f"{data_dir}/analysis/emseq/spike/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
-               library_id=library_ids,
-               ref_name=spike_ref_names,
-               align_method= "bwa_meth"),
-
-        # Biscuit 1 steps
-        ## Index
-        expand(f"{data_dir}/ref/biscuit/{{name}}/{{name}}.fa.fai",
-               name = "ncbi_decoy_hg38"),
-
-        ## Align
-        expand(f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.biscuit.coorsort.bam",
-               library_id = library_ids,
-               ref_name = ref_names),
-
-        # BWA-meth
-        # ## Index
-        # expand(f"{data_dir}/ref/bwa_meth/{{name}}/{{name}}.fa.bwameth.c2t",
-        #        name = ref_names),
-
-        # ## Align
-
-        # expand(f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.bwa_meth.coorsort.bam",
-        #        library_id = library_ids,
-        #        ref_name = ref_names,
-        #        align_method = "bwa_meth"),
-
-        ## COMMON DEDUP HERE
-
-        ## Pileup
-        # expand(f"{data_dir}/analysis/emseq/pileup/{{library_id}}.{{ref_name}}.biscuit_pileup.{{suffix}}",
-        #        library_id = library_ids,
-        #        ref_name = ref_names,
-        #        suffix = ["vcf.gz","vcf_meth_average.tsv"]),
-
-        # ## Make per-library methylkit objects
-        # expand(f"{data_dir}/analysis/emseq/post-biscuit/{{library_id}}.{{ref_name}}_biscuit.{{suffix}}",
-        #        library_id = library_ids,
-        #        ref_name = ref_names,
-        #        suffix = ["txt", "txt.bgz", "txt.bgz.tbi"]),
-
-        # Common post-alignment per-library steps
-        ## Deduplicate
-        expand(f"{emseq_bam_dir}/{{library_id}}.{{ref_name}}.{{align_method}}.coorsort.deduped.bam",
-               library_id = library_ids,
-               ref_name = ref_names,
-               align_method = ["biscuit","bwa_meth"]),
-
-        ## Depth
-        expand(f"{data_dir}/qc/mosdepth_{{library_id}}.{{ref_name}}.{{align_method}}.mosdepth.summary.txt",
-               library_id = library_ids,
-               ref_name = ref_names,
-               align_method = ["biscuit","bwa_meth"]),
-
-        ## Call methylation
-        expand(f"{data_dir}/analysis/emseq/meth/{{library_id}}.{{ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
-               library_id = library_ids,
-               ref_name = ref_names,
-               align_method = ["biscuit", "bwa_meth"]),
-
-        ## Create per-library methylkit objects
-        expand(f"{data_dir}/analysis/emseq/dmr/tabix/{{library_id}}.{{ref_name}}.{{align_method}}.txt",
-               library_id = library_ids,
-               ref_name = ref_names,
-               align_method = "bwa_meth"),
-
-        expand(f"{data_dir}/qc/{{experiment}}.emseq_mosdepth_agg_plot.pdf",
-               experiment = mosdepth_map.keys()),
-
-
-
-
-
 #+end_src
 *** Full test
 **** Configuration yaml
@@ -4878,6 +4743,7 @@ EMSEQ_REF_INPUTS = {k: v['input'] for k, v in config['emseq_ref_assemblies'].ite
 # --- Samples and references ---
 emseq_library_ids = config["library-ids"]
 emseq_ref_names = ["chr22"]
+emseq_align_methods = ["bwa_meth", "biscuit"]
 spike_builds = ["puc19", "unmeth_lambda"]
 KEEP_BED = config["keep-bed"]
 EXCL_BED = config["exclude-bed"]
@@ -4897,7 +4763,7 @@ rule all:
             f"{D_EMSEQ}/dmr/tabix/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.methyldackel.txt.bgz",
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
-            align_method=["bwa_meth", "biscuit"],
+            align_method=emseq_align_methods,
         ),
         # Spike workflow
         expand(
@@ -4918,14 +4784,14 @@ rule all:
             f"{D_EMSEQ}/qc/mosdepth_{{library_id}}.{{emseq_ref_name}}.{{align_method}}.mosdepth.summary.txt",
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
-            align_method=["bwa_meth", "biscuit"],
+            align_method=emseq_align_methods,
         ),
         # QC - M-bias
         expand(
             f"{D_EMSEQ}/qc/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_mbias.txt",
             library_id=emseq_library_ids,
             emseq_ref_name=emseq_ref_names,
-            align_method=["bwa_meth", "biscuit"],
+            align_method=emseq_align_methods,
         ),
         # QC - MultiQC (does NOT prompt inputs to run)
         f"{D_EMSEQ}/qc/multiqc.html",
@@ -5024,6 +4890,7 @@ EMSEQ_REF_INPUTS = {k: v['input'] for k, v in config['emseq_ref_assemblies'].ite
 # --- Samples and references ---
 emseq_library_ids = config["library-ids"]
 emseq_ref_names = ["chr22"]
+emseq_align_methods = ["bwa_meth", "biscuit"]
 spike_builds = ["puc19", "unmeth_lambda"]
 KEEP_BED = config["keep-bed"]
 EXCL_BED = config["exclude-bed"]
@@ -5180,22 +5047,6 @@ wget -O "$data_dir/inputs/$outfile" "$url"
 #+end_src
 
 
-#+begin_src snakemake :tangle ./workflows/test-wrap.smk
-
-repo = "~/repos/emseq"
-data_dir=config["data_dir"]
-
-# Explicitly select which references to build
-index_targets = ["unmeth_lambda", "puc19"]
-
-rule all:
-    input:
-        expand(f"{data_dir}/ref/{{name}}.fa.bwameth.c2t", name=index_targets)
-
-
-include: f"{repo}/workflows/dev.smk"
-
-#+end_src
 ** Reference
 - [[id:79dfda7e-8b6d-45c7-88d5-804979155763][cfDNA methylation]]
 - Alternative cfDNA WGMS profiling

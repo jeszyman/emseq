@@ -64,19 +64,23 @@ def slice_preamble(text: str) -> str:
 
 
 def _literal_subscript_chain(node: "ast.Subscript") -> Optional[list[str]]:
-    """Walk a chained subscript and return the key path as a list of strings,
-    or None if the chain does not bottom out at the `config` name. Raises
-    _DynamicKey on any non-literal (non-string-constant) key."""
+    """Return the literal key path for a config[...] subscript chain (possibly
+    nested), or None if the chain does not bottom out at the `config` name.
+    Raise _DynamicKey only when the base IS `config` but a key in the chain is
+    non-literal (a genuinely dynamic config access)."""
     segments: list[str] = []
+    dynamic = False
     cur: Any = node
     while isinstance(cur, ast.Subscript):
         key = cur.slice
         if isinstance(key, ast.Constant) and isinstance(key.value, str):
             segments.append(key.value)
         else:
-            raise _DynamicKey()
+            dynamic = True
         cur = cur.value
     if isinstance(cur, ast.Name) and cur.id == "config":
+        if dynamic:
+            raise _DynamicKey()
         return list(reversed(segments))
     return None
 

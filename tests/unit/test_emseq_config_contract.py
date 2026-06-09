@@ -274,3 +274,26 @@ def test_cli_validate_bad_returns_nonzero(tmp_path):
     bad.write_text(yaml.safe_dump({"main-data-dir": "x"}))
     rc = ecc.main(["validate", str(REPO / "workflows" / "test.smk"), str(bad)])
     assert rc != 0
+
+
+def test_non_config_subscript_not_flagged_dynamic():
+    # A dynamic subscript on a NON-config variable must be ignored entirely:
+    # no path, no warning, not incomplete.
+    src = (
+        "def resolve(config_dict):\n"
+        "    for k in config_dict:\n"
+        "        config_dict[k] = 1\n"
+        "x = config['real']\n"
+    )
+    contract = ecc.extract_from_preamble(src, "w.smk")
+    assert contract.incomplete is False
+    assert contract.warnings == []
+    assert ("real",) in {p.path for p in contract.paths}
+
+
+def test_real_wrappers_are_complete():
+    import pathlib
+    repo = pathlib.Path(__file__).resolve().parents[2]
+    for wf in ("test.smk", "test-analysis.smk"):
+        c = ecc.build_contract(repo / "workflows" / wf)
+        assert c.incomplete is False, f"{wf}: unexpected warnings {c.warnings}"

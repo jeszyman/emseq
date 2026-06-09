@@ -24,6 +24,7 @@ class ConfigPath:
     condition: Optional[tuple[str, ...]] = None
     source: str = ""
 
+    # Equality intentionally on (path, requiredness) so _dedupe collapses same-path entries.
     def __eq__(self, other: object) -> bool:
         return isinstance(other, ConfigPath) and self.path == other.path and \
             self.requiredness == other.requiredness
@@ -40,11 +41,14 @@ class Contract:
     baked_in: dict[str, Any] = field(default_factory=dict)
 
 
+class _DynamicKey(Exception):
+    pass
+
+
 def _literal_subscript_chain(node: "ast.Subscript") -> Optional[list[str]]:
-    """If `node` is config[...] (optionally chained, all-literal), return the
-    key path as a list of strings. Return None if it does not bottom out at the
-    `config` name, and [] sentinel handling is via the caller. A non-literal key
-    raises _DynamicKey."""
+    """Walk a chained subscript and return the key path as a list of strings,
+    or None if the chain does not bottom out at the `config` name. Raises
+    _DynamicKey on any non-literal (non-string-constant) key."""
     segments: list[str] = []
     cur: Any = node
     while isinstance(cur, ast.Subscript):
@@ -57,10 +61,6 @@ def _literal_subscript_chain(node: "ast.Subscript") -> Optional[list[str]]:
     if isinstance(cur, ast.Name) and cur.id == "config":
         return list(reversed(segments))
     return None
-
-
-class _DynamicKey(Exception):
-    pass
 
 
 def _config_get_call(node: "ast.Call"):
@@ -128,7 +128,8 @@ def _comprehension_wildcards(node, source_name: str) -> list[ConfigPath]:
 
 
 def extract_from_preamble(preamble_src: str, source_name: str,
-                          return_aliases: bool = False):
+                          return_aliases: bool = False,
+                          ) -> Contract | tuple[Contract, dict[str, tuple[str, ...]]]:
     contract = Contract()
     aliases: dict[str, tuple[str, ...]] = {}
     tree = ast.parse(preamble_src)
@@ -166,10 +167,12 @@ def extract_from_preamble(preamble_src: str, source_name: str,
                 path = _literal_subscript_chain(node)
             except _DynamicKey:
                 contract.incomplete = True
-                contract.warnings.append(
+                warn_msg = (
                     f"{source_name}: dynamic config key near line "
                     f"{getattr(node, 'lineno', '?')} — contract may be incomplete"
                 )
+                if warn_msg not in contract.warnings:
+                    contract.warnings.append(warn_msg)
                 continue
             if path:
                 contract.paths.append(ConfigPath(

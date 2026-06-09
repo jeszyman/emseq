@@ -80,3 +80,11 @@ def test_extract_comprehension_wildcard_subkey():
     paths = {p.path for p in contract.paths}
     assert ("emseq_ref_assemblies",) in paths
     assert ("emseq_ref_assemblies", "*", "input") in paths
+
+
+def test_extract_comprehension_values_branch():
+    src = "{v['k']: v['w'] for v in config['sec'].values()}\n"
+    contract = ecc.extract_from_preamble(src, "w.smk")
+    paths = {p.path for p in contract.paths}
+    assert ("sec", "*", "k") in paths
+    assert ("sec", "*", "w") in paths

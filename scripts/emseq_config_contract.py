@@ -89,6 +89,44 @@ def _config_get_call(node: "ast.Call"):
     return None
 
 
+def _comprehension_wildcards(node, source_name: str) -> list[ConfigPath]:
+    """For {... for k,v in config['P'].items()} or .values(), find v[<lit>]
+    subscripts and emit ConfigPath ('P','*',<lit>) mandatory."""
+    out: list[ConfigPath] = []
+    for gen in node.generators:
+        it = gen.iter
+        if not (isinstance(it, ast.Call) and isinstance(it.func, ast.Attribute)
+                and it.func.attr in ("items", "values")):
+            continue
+        recv = it.func.value
+        if not isinstance(recv, ast.Subscript):
+            continue
+        try:
+            parent = _literal_subscript_chain(recv)
+        except _DynamicKey:
+            parent = None
+        if not parent:
+            continue
+        # bind the value loop variable
+        if it.func.attr == "items" and isinstance(gen.target, ast.Tuple) \
+                and len(gen.target.elts) == 2 and isinstance(gen.target.elts[1], ast.Name):
+            valvar = gen.target.elts[1].id
+        elif it.func.attr == "values" and isinstance(gen.target, ast.Name):
+            valvar = gen.target.id
+        else:
+            continue
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Subscript) and isinstance(sub.value, ast.Name) \
+                    and sub.value.id == valvar and isinstance(sub.slice, ast.Constant) \
+                    and isinstance(sub.slice.value, str):
+                out.append(ConfigPath(
+                    path=tuple(parent) + ("*", sub.slice.value),
+                    requiredness="mandatory",
+                    source=f"{source_name}:{getattr(node, 'lineno', '?')}",
+                ))
+    return out
+
+
 def extract_from_preamble(preamble_src: str, source_name: str,
                           return_aliases: bool = False):
     contract = Contract()
@@ -104,6 +142,9 @@ def extract_from_preamble(preamble_src: str, source_name: str,
                     source=f"{source_name}:{getattr(node, 'lineno', '?')}",
                 ))
             continue
+        if isinstance(node, (ast.DictComp, ast.ListComp, ast.SetComp, ast.GeneratorExp)):
+            contract.paths.extend(_comprehension_wildcards(node, source_name))
+            # do not 'continue' — inner config[...] subscripts still register the parent
         if isinstance(node, ast.Assign) and len(node.targets) == 1 \
                 and isinstance(node.targets[0], ast.Name):
             name = node.targets[0].id

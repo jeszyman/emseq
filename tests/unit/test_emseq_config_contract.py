@@ -72,3 +72,11 @@ def test_dynamic_key_marks_incomplete():
     contract = ecc.extract_from_preamble(src, "w.smk")
     assert contract.incomplete is True
     assert any("dynamic config key" in w for w in contract.warnings)
+
+
+def test_extract_comprehension_wildcard_subkey():
+    src = "REF = {k: v['input'] for k, v in config['emseq_ref_assemblies'].items()}\n"
+    contract = ecc.extract_from_preamble(src, "w.smk")
+    paths = {p.path for p in contract.paths}
+    assert ("emseq_ref_assemblies",) in paths
+    assert ("emseq_ref_assemblies", "*", "input") in paths

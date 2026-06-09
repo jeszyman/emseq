@@ -194,6 +194,23 @@ def _dedupe(contract: Contract) -> None:
     contract.paths = list(seen.values())
 
 
+def extract_alias_subkeys(module_text: str, aliases: dict[str, tuple[str, ...]],
+                          source_name: str) -> list[ConfigPath]:
+    """Find <alias>[...]['literal'] in module text; emit (alias_path + ('*', literal))."""
+    out: list[ConfigPath] = []
+    for alias, base in aliases.items():
+        pat = re.compile(
+            re.escape(alias) + r"\s*\[[^\]]+\]\s*\[\s*['\"]([A-Za-z0-9_\-]+)['\"]\s*\]"
+        )
+        for m in pat.finditer(module_text):
+            out.append(ConfigPath(
+                path=base + ("*", m.group(1)),
+                requiredness="mandatory",
+                source=source_name,
+            ))
+    return out
+
+
 def slice_preamble(text: str) -> str:
     """Return the source lines before the first rule/checkpoint, dropping the
     Snakemake `configfile:` directive (not valid plain Python)."""

@@ -88,3 +88,17 @@ def test_extract_comprehension_values_branch():
     paths = {p.path for p in contract.paths}
     assert ("sec", "*", "k") in paths
     assert ("sec", "*", "w") in paths
+
+
+def test_alias_subkey_scan():
+    aliases = {"meth_map": ("meth-map",)}
+    module_text = (
+        '        library_id=meth_map[wc.experiment]["libs"],\n'
+        "        tx = lambda wc: meth_map[wc.experiment]['tx'],\n"
+        "        other = some_other[wc.x]['nope'],\n"
+    )
+    paths = ecc.extract_alias_subkeys(module_text, aliases, "mod.smk")
+    got = {p.path for p in paths}
+    assert ("meth-map", "*", "libs") in got
+    assert ("meth-map", "*", "tx") in got
+    assert ("meth-map", "*", "nope") not in got

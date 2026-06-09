@@ -90,6 +90,22 @@ def test_extract_comprehension_values_branch():
     assert ("sec", "*", "w") in paths
 
 
+import pathlib
+
+
+def test_find_includes_resolves_relative_and_warns_on_conditional(tmp_path):
+    wrapper = tmp_path / "w.smk"
+    wrapper.write_text(
+        'include: "emseq.smk"\n'
+        "if cond:\n"
+        '    include: "maybe.smk"\n'
+    )
+    (tmp_path / "emseq.smk").write_text("# module\n")
+    includes, warnings = ecc.find_includes(wrapper.read_text(), wrapper.parent)
+    assert (tmp_path / "emseq.smk") in includes
+    assert any("conditional include" in w for w in warnings)
+
+
 def test_alias_subkey_scan():
     aliases = {"meth_map": ("meth-map",)}
     module_text = (

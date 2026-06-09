@@ -194,6 +194,25 @@ def _dedupe(contract: Contract) -> None:
     contract.paths = list(seen.values())
 
 
+_INCLUDE_RE = re.compile(r"""^\s*include:\s*['"]([^'"]+)['"]""")
+
+
+def find_includes(text: str, wrapper_dir) -> tuple[list, list[str]]:
+    """Parse include: directives; resolve paths relative to wrapper_dir.
+    Indented (conditional) includes are skipped and generate a warning."""
+    import pathlib
+    includes, warnings = [], []
+    for line in text.splitlines():
+        m = _INCLUDE_RE.match(line)
+        if not m:
+            continue
+        if line[: len(line) - len(line.lstrip())]:  # indented => inside a block
+            warnings.append(f"conditional include skipped: {m.group(1)}")
+            continue
+        includes.append((pathlib.Path(wrapper_dir) / m.group(1)).resolve())
+    return includes, warnings
+
+
 def extract_alias_subkeys(module_text: str, aliases: dict[str, tuple[str, ...]],
                           source_name: str) -> list[ConfigPath]:
     """Find <alias>[...]['literal'] in module text; emit (alias_path + ('*', literal))."""

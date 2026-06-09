@@ -5,6 +5,10 @@ first rule) for config[...] / config.get(...) accesses and alias assignments,
 follow include: directives, and scan module bodies for alias subscripts to
 recover nested per-entry schema. See
 docs/superpowers/specs/2026-06-09-snakemake-config-contract-design.md.
+
+Usage:
+    python scripts/emseq_config_contract.py list workflows/test-analysis.smk [--format yaml]
+    python scripts/emseq_config_contract.py validate workflows/test-analysis.smk config/test.yaml
 """
 from __future__ import annotations
 
@@ -44,6 +48,19 @@ class Contract:
 
 class _DynamicKey(Exception):
     pass
+
+
+def slice_preamble(text: str) -> str:
+    """Return the source lines before the first rule/checkpoint, dropping the
+    Snakemake `configfile:` directive (not valid plain Python)."""
+    out = []
+    for line in text.splitlines():
+        if _RULE_RE.match(line):
+            break
+        if line.lstrip().startswith("configfile:"):
+            continue
+        out.append(line)
+    return "\n".join(out)
 
 
 def _literal_subscript_chain(node: "ast.Subscript") -> Optional[list[str]]:
@@ -251,14 +268,212 @@ def extract_alias_subkeys(module_text: str, aliases: dict[str, tuple[str, ...]],
     return out
 
 
-def slice_preamble(text: str) -> str:
-    """Return the source lines before the first rule/checkpoint, dropping the
-    Snakemake `configfile:` directive (not valid plain Python)."""
-    out = []
-    for line in text.splitlines():
-        if _RULE_RE.match(line):
-            break
-        if line.lstrip().startswith("configfile:"):
+# ---------------------------------------------------------------------------
+# Section: List rendering
+# ---------------------------------------------------------------------------
+
+def _dotted(path: tuple[str, ...]) -> str:
+    return ".".join(path)
+
+
+def render_list(contract: Contract, fmt: str = "human") -> str:
+    """Return a formatted string describing the contract.
+
+    fmt="human": grouped text with MANDATORY / OPTIONAL / CONDITIONAL sections.
+    fmt="yaml":  a YAML skeleton with <REQUIRED> / default placeholders.
+    """
+    if fmt == "yaml":
+        return _render_yaml_skeleton(contract)
+    lines = []
+    groups: dict[str, list[ConfigPath]] = {"mandatory": [], "optional": [], "conditional": []}
+    for p in sorted(contract.paths, key=lambda x: x.path):
+        groups[p.requiredness].append(p)
+    lines.append("MANDATORY:")
+    for p in groups["mandatory"]:
+        lines.append(f"  {_dotted(p.path)}")
+    lines.append("OPTIONAL (default shown):")
+    for p in groups["optional"]:
+        lines.append(f"  {_dotted(p.path)} = {p.default!r}")
+    if groups["conditional"]:
+        lines.append("CONDITIONAL (required if parent present):")
+        for p in groups["conditional"]:
+            lines.append(f"  {_dotted(p.path)} = {p.default!r} "
+                         f"(if {_dotted(p.condition)} set)")
+    if contract.baked_in:
+        lines.append("BAKED-IN (hardcoded in wrapper, not user-settable):")
+        for k, v in sorted(contract.baked_in.items()):
+            lines.append(f"  {k} = {v!r}")
+    if contract.warnings:
+        lines.append("WARNINGS:")
+        for w in contract.warnings:
+            lines.append(f"  ! {w}")
+        if contract.incomplete:
+            lines.append("  (contract may be INCOMPLETE)")
+    return "\n".join(lines) + "\n"
+
+
+def _render_yaml_skeleton(contract: Contract) -> str:
+    import yaml
+    tree: dict = {}
+    # Sort so shorter (parent) paths are processed before longer (child) paths.
+    sorted_paths = sorted(contract.paths, key=lambda x: (len(x.path), x.path))
+    for p in sorted_paths:
+        cur = tree
+        segs = p.path
+        for i, seg in enumerate(segs):
+            last = i == len(segs) - 1
+            key = "<ENTRY>" if seg == "*" else seg
+            if last:
+                if p.requiredness == "mandatory":
+                    # Only set if not already a dict (child paths may have
+                    # promoted this key to a mapping already).
+                    if not isinstance(cur.get(key), dict):
+                        cur[key] = "<REQUIRED>"
+                else:
+                    if not isinstance(cur.get(key), dict):
+                        cur.setdefault(key, p.default)
+            else:
+                # Promote scalar placeholder to dict if a deeper path needs it.
+                if not isinstance(cur.get(key), dict):
+                    cur[key] = {}
+                cur = cur[key]
+    return yaml.safe_dump(tree, default_flow_style=False, sort_keys=True)
+
+
+# ---------------------------------------------------------------------------
+# Section: Path resolution + validation
+# ---------------------------------------------------------------------------
+
+import os
+
+
+@dataclass
+class Violation:
+    level: str   # "error" | "warning" | "info"
+    path: tuple
+    message: str
+
+
+def resolve_config_paths(config_dict: dict) -> None:
+    """Expand ~ and $VAR in string values, recursively, in place.
+
+    Mirrors the resolve_config_paths helper in wrapper .smk files.
+    """
+    for k, v in config_dict.items():
+        if isinstance(v, str):
+            config_dict[k] = os.path.expandvars(os.path.expanduser(v))
+        elif isinstance(v, dict):
+            resolve_config_paths(v)
+        elif isinstance(v, list):
+            config_dict[k] = [os.path.expandvars(os.path.expanduser(i))
+                               if isinstance(i, str) else i for i in v]
+
+
+def _present(cfg, path: tuple[str, ...]) -> bool:
+    cur = cfg
+    for seg in path:
+        if not isinstance(cur, dict) or seg not in cur:
+            return False
+        cur = cur[seg]
+    return True
+
+
+def validate_config(contract: Contract, cfg: dict) -> list[Violation]:
+    """Check cfg against contract; return ALL violations without short-circuiting.
+
+    Wildcard handling: if a parent mapping is absent, report once and skip
+    per-entry checks to avoid double-counting.
+    """
+    violations: list[Violation] = []
+    for p in contract.paths:
+        if "*" not in p.path:
+            if p.requiredness == "mandatory":
+                if not _present(cfg, p.path):
+                    violations.append(Violation("error", p.path,
+                        f"missing required key: {_dotted(p.path)}"))
+            else:
+                cond_ok = p.condition is None or _present(cfg, p.condition)
+                if cond_ok and not _present(cfg, p.path):
+                    violations.append(Violation("info", p.path,
+                        f"optional {_dotted(p.path)} absent; default {p.default!r}"))
             continue
-        out.append(line)
-    return "\n".join(out)
+        # wildcard path: split at first '*'
+        idx = p.path.index("*")
+        parent, leaf = p.path[:idx], p.path[idx + 1:]
+        if not _present(cfg, parent):
+            violations.append(Violation("error", parent,
+                f"missing required mapping: {_dotted(parent)}"))
+            continue
+        container = cfg
+        for seg in parent:
+            container = container[seg]
+        if not isinstance(container, dict):
+            violations.append(Violation("error", parent,
+                f"{_dotted(parent)} must be a mapping"))
+            continue
+        for entry_name, entry_val in container.items():
+            full = parent + (entry_name,) + leaf
+            if not (isinstance(entry_val, dict) and _present(entry_val, leaf)):
+                violations.append(Violation("error", full,
+                    f"missing required key: {_dotted(full)}"))
+    # unknown top-level keys (downgraded to info when contract is incomplete)
+    known_top = {p.path[0] for p in contract.paths} | set(contract.baked_in)
+    for k in cfg:
+        if k not in known_top:
+            violations.append(Violation(
+                "info" if contract.incomplete else "warning", (k,),
+                f"config key not read by workflow (typo/dead?): {k}"))
+    return violations
+
+
+# ---------------------------------------------------------------------------
+# Section: CLI
+# ---------------------------------------------------------------------------
+
+def main(argv=None) -> int:
+    """Entry point for list/validate subcommands."""
+    import argparse
+    import yaml
+
+    parser = argparse.ArgumentParser(
+        prog="emseq_config_contract",
+        description="Derive/validate the minimal config contract of an EM-seq workflow.")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    pl = sub.add_parser("list", help="print the minimal required config")
+    pl.add_argument("wrapper")
+    pl.add_argument("--format", choices=["human", "yaml"], default="human")
+
+    pv = sub.add_parser("validate", help="validate a config YAML against the contract")
+    pv.add_argument("wrapper")
+    pv.add_argument("config")
+    pv.add_argument("--dry-run", action="store_true",
+                    help="also run `snakemake -n` as a cross-check (stub)")
+
+    args = parser.parse_args(argv)
+    contract = build_contract(args.wrapper)
+
+    if args.cmd == "list":
+        print(render_list(contract, fmt=args.format), end="")
+        return 0
+
+    cfg = yaml.safe_load(open(args.config).read()) or {}
+    resolve_config_paths(cfg)
+    violations = validate_config(contract, cfg)
+    errors = [v for v in violations if v.level == "error"]
+    for v in violations:
+        prefix = {"error": "ERROR", "warning": "WARN", "info": "info"}[v.level]
+        print(f"[{prefix}] {v.message}")
+    if contract.incomplete:
+        print("NOTE: contract may be incomplete (dynamic keys detected); "
+              "consider --dry-run cross-check")
+    if args.dry_run:
+        print("(--dry-run cross-check not yet wired; run `snakemake -n` manually)")
+    print(f"{len(errors)} error(s), "
+          f"{sum(1 for v in violations if v.level == 'warning')} warning(s)")
+    return 1 if errors else 0
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())

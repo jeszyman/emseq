@@ -176,3 +176,101 @@ def test_alias_subkey_scan():
     assert ("meth-map", "*", "libs") in got
     assert ("meth-map", "*", "tx") in got
     assert ("meth-map", "*", "nope") not in got
+
+
+# ---------------------------------------------------------------------------
+# Task 10: render_list
+# ---------------------------------------------------------------------------
+
+def test_render_list_human_groups_and_marks():
+    c = ecc.build_contract(REPO / "workflows" / "test-analysis.smk")
+    out = ecc.render_list(c, fmt="human")
+    assert "MANDATORY" in out
+    assert "OPTIONAL" in out
+    assert "meth-map.*.libs" in out or "meth-map -> * -> libs" in out
+    assert "mosdepth-quant-levels" in out and "1,5,10,20" in out
+
+
+def test_render_list_yaml_is_loadable():
+    import yaml
+    c = ecc.build_contract(REPO / "workflows" / "test.smk")
+    skeleton = ecc.render_list(c, fmt="yaml")
+    loaded = yaml.safe_load(skeleton)
+    assert "library-ids" in loaded
+    assert "envs" in loaded and "emseq" in loaded["envs"]
+
+
+# ---------------------------------------------------------------------------
+# Task 11: resolve_config_paths + validate_config
+# ---------------------------------------------------------------------------
+
+def test_validate_happy_path_test_yaml():
+    import yaml
+    c = ecc.build_contract(REPO / "workflows" / "test-analysis.smk")
+    cfg = yaml.safe_load((REPO / "config" / "test.yaml").read_text())
+    ecc.resolve_config_paths(cfg)
+    violations = ecc.validate_config(c, cfg)
+    errors = [v for v in violations if v.level == "error"]
+    assert errors == [], f"unexpected errors: {errors}"
+
+
+def test_validate_collects_all_errors_at_once():
+    c = ecc.build_contract(REPO / "workflows" / "test-analysis.smk")
+    cfg = {
+        # 'library-ids' intentionally MISSING (top-level error)
+        "main-data-dir": "x", "keep-bed": "k", "exclude-bed": "e",
+        "envs": {"emseq": "a", "methylkit": "b", "haplotype": "c", "deconv": "d"},
+        "repos": {"emseq": ".", "mhaptools": "m", "wgbs_tools": "w",
+                  "uxm_deconv": "u"},
+        "haplotype": {"cpg-ref": "c", "mhb-bed": "m", "metrics": ["MHL"]},
+        "deconv": {"genome-name": "g", "atlas": "a"},
+        "emseq_ref_assemblies": {
+            "chr22": {"input": "i", "url": "u", "name": "n"},
+            "broken": {"url": "u", "name": "n"},  # MISSING 'input'
+        },
+        "meth-map": {
+            "test": {"libs": [], "tx": [], "mincov": 10, "mingroup": 1,
+                     "chunksize": "1e9", "win_size": 10}  # MISSING emseq_ref_name/align_method
+        },
+    }
+    violations = ecc.validate_config(c, cfg)
+    missing = {tuple(v.path) for v in violations if v.level == "error"}
+    assert ("library-ids",) in missing
+    assert ("emseq_ref_assemblies", "broken", "input") in missing
+    assert ("meth-map", "test", "emseq_ref_name") in missing
+    assert ("meth-map", "test", "align_method") in missing
+    # all reported together (more than one)
+    assert len(missing) >= 4
+
+
+def test_resolve_config_paths_expands_user():
+    cfg = {"repos": {"x": "~/repos/foo"}, "list": ["~/a", 3]}
+    ecc.resolve_config_paths(cfg)
+    assert not cfg["repos"]["x"].startswith("~")
+    assert not cfg["list"][0].startswith("~")
+    assert cfg["list"][1] == 3
+
+
+# ---------------------------------------------------------------------------
+# Task 12: CLI
+# ---------------------------------------------------------------------------
+
+def test_cli_list_runs(capsys):
+    rc = ecc.main(["list", str(REPO / "workflows" / "test.smk")])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "MANDATORY" in out
+
+
+def test_cli_validate_good_returns_zero():
+    rc = ecc.main(["validate", str(REPO / "workflows" / "test-analysis.smk"),
+                   str(REPO / "config" / "test.yaml")])
+    assert rc == 0
+
+
+def test_cli_validate_bad_returns_nonzero(tmp_path):
+    import yaml
+    bad = tmp_path / "bad.yaml"
+    bad.write_text(yaml.safe_dump({"main-data-dir": "x"}))
+    rc = ecc.main(["validate", str(REPO / "workflows" / "test.smk"), str(bad)])
+    assert rc != 0

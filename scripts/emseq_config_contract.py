@@ -194,6 +194,28 @@ def _dedupe(contract: Contract) -> None:
     contract.paths = list(seen.values())
 
 
+def build_contract(wrapper_path) -> Contract:
+    """Orchestrate preamble extraction + include scanning into a single Contract."""
+    import pathlib
+    wrapper_path = pathlib.Path(wrapper_path)
+    text = wrapper_path.read_text()
+    preamble = slice_preamble(text)
+    contract, aliases = extract_from_preamble(preamble, wrapper_path.name,
+                                              return_aliases=True)
+    includes, inc_warnings = find_includes(text, wrapper_path.parent)
+    contract.warnings.extend(inc_warnings)
+    config_aliases = {k: v for k, v in aliases.items() if isinstance(v, tuple)}
+    for mod in includes:
+        if not mod.exists():
+            contract.warnings.append(f"included module not found: {mod}")
+            contract.incomplete = True
+            continue
+        contract.paths.extend(
+            extract_alias_subkeys(mod.read_text(), config_aliases, mod.name))
+    _dedupe(contract)
+    return contract
+
+
 _INCLUDE_RE = re.compile(r"""^\s*include:\s*['"]([^'"]+)['"]""")
 
 

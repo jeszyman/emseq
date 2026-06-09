@@ -106,6 +106,51 @@ def test_find_includes_resolves_relative_and_warns_on_conditional(tmp_path):
     assert any("conditional include" in w for w in warnings)
 
 
+REPO = pathlib.Path(__file__).resolve().parents[2]
+
+
+def _paths(contract):
+    return {p.path for p in contract.paths}
+
+
+def test_build_contract_test_smk_snapshot():
+    c = ecc.build_contract(REPO / "workflows" / "test.smk")
+    p = _paths(c)
+    for expect in [("main-data-dir",), ("library-ids",), ("keep-bed",),
+                   ("exclude-bed",), ("meth-map",), ("envs", "emseq"),
+                   ("envs", "methylkit"), ("repos", "emseq"),
+                   ("emseq_ref_assemblies",), ("emseq_ref_assemblies", "*", "input")]:
+        assert expect in p, f"missing {expect}"
+    byp = {x.path: x for x in c.paths}
+    assert byp[("mosdepth-quant-levels",)].requiredness == "optional"
+    assert byp[("mosdepth-quant-levels",)].default == "1,5,10,20"
+    assert byp[("emseq-mincov",)].default == 2
+    # test.smk does NOT include the analysis module: no meth-map inner schema
+    assert not any(x[:2] == ("meth-map", "*") for x in p)
+    # analysis-only keys absent
+    assert ("haplotype", "cpg-ref") not in p
+    assert ("deconv", "atlas") not in p
+
+
+def test_build_contract_analysis_superset_and_methmap_schema():
+    c = ecc.build_contract(REPO / "workflows" / "test-analysis.smk")
+    p = _paths(c)
+    for leaf in ["libs", "tx", "mincov", "mingroup", "chunksize", "win_size",
+                 "emseq_ref_name", "align_method"]:
+        assert ("meth-map", "*", leaf) in p, f"missing meth-map.*.{leaf}"
+    for expect in [("haplotype", "cpg-ref"), ("haplotype", "mhb-bed"),
+                   ("haplotype", "metrics"), ("deconv", "genome-name"),
+                   ("deconv", "atlas"), ("repos", "mhaptools"),
+                   ("envs", "haplotype"), ("envs", "deconv")]:
+        assert expect in p, f"missing {expect}"
+
+
+def test_test_smk_is_subset_of_analysis():
+    c_test = _paths(ecc.build_contract(REPO / "workflows" / "test.smk"))
+    c_an = _paths(ecc.build_contract(REPO / "workflows" / "test-analysis.smk"))
+    assert c_test <= c_an
+
+
 def test_alias_subkey_scan():
     aliases = {"meth_map": ("meth-map",)}
     module_text = (

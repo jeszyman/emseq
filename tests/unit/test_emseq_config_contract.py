@@ -21,3 +21,16 @@ def test_configpath_is_hashable_and_value_equal():
     b = ecc.ConfigPath(path=("envs", "emseq"), requiredness="mandatory")
     assert a == b
     assert len({a, b}) == 1
+
+
+def test_extract_mandatory_flat_and_nested():
+    src = (
+        "a = config['main-data-dir']\n"
+        "b = config['envs']['emseq']\n"
+        "c = config[\"library-ids\"]\n"
+    )
+    contract = ecc.extract_from_preamble(src, "w.smk")
+    paths = {p.path: p for p in contract.paths}
+    assert paths[("main-data-dir",)].requiredness == "mandatory"
+    assert paths[("envs", "emseq")].requiredness == "mandatory"
+    assert ("library-ids",) in paths

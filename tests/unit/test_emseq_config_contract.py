@@ -51,3 +51,17 @@ def test_extract_optional_and_conditional_get():
     assert fx.requiredness == "conditional"
     assert fx.condition == ("fastp",)
     assert fx.default == ""
+
+
+def test_extract_aliases_and_baked_in():
+    src = (
+        "meth_map = config['meth-map']\n"
+        "ENV = config['envs']['emseq']\n"
+        "emseq_ref_names = ['chr22']\n"
+        "emseq_align_methods = ['bwa_meth', 'biscuit']\n"
+    )
+    contract, aliases = ecc.extract_from_preamble(src, "w.smk", return_aliases=True)
+    assert aliases["meth_map"] == ("meth-map",)
+    assert aliases["ENV"] == ("envs", "emseq")
+    assert contract.baked_in["emseq_ref_names"] == ["chr22"]
+    assert contract.baked_in["emseq_align_methods"] == ["bwa_meth", "biscuit"]

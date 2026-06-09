@@ -89,8 +89,10 @@ def _config_get_call(node: "ast.Call"):
     return None
 
 
-def extract_from_preamble(preamble_src: str, source_name: str) -> Contract:
+def extract_from_preamble(preamble_src: str, source_name: str,
+                          return_aliases: bool = False):
     contract = Contract()
+    aliases: dict[str, tuple[str, ...]] = {}
     tree = ast.parse(preamble_src)
     for node in ast.walk(tree):
         if isinstance(node, ast.Call):
@@ -102,6 +104,22 @@ def extract_from_preamble(preamble_src: str, source_name: str) -> Contract:
                     source=f"{source_name}:{getattr(node, 'lineno', '?')}",
                 ))
             continue
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 \
+                and isinstance(node.targets[0], ast.Name):
+            name = node.targets[0].id
+            val = node.value
+            if isinstance(val, ast.Subscript):
+                try:
+                    p = _literal_subscript_chain(val)
+                except _DynamicKey:
+                    p = None
+                if p:
+                    aliases[name] = tuple(p)
+            elif isinstance(val, (ast.List, ast.Constant)):
+                try:
+                    contract.baked_in[name] = ast.literal_eval(val)
+                except (ValueError, SyntaxError):
+                    pass
         if isinstance(node, ast.Subscript):
             try:
                 path = _literal_subscript_chain(node)
@@ -118,7 +136,7 @@ def extract_from_preamble(preamble_src: str, source_name: str) -> Contract:
                     source=f"{source_name}:{getattr(node, 'lineno', '?')}",
                 ))
     _dedupe(contract)
-    return contract
+    return (contract, aliases) if return_aliases else contract
 
 
 def _dedupe(contract: Contract) -> None:

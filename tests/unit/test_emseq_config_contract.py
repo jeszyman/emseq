@@ -65,3 +65,10 @@ def test_extract_aliases_and_baked_in():
     assert aliases["ENV"] == ("envs", "emseq")
     assert contract.baked_in["emseq_ref_names"] == ["chr22"]
     assert contract.baked_in["emseq_align_methods"] == ["bwa_meth", "biscuit"]
+
+
+def test_dynamic_key_marks_incomplete():
+    src = "name = 'x'\nv = config[name]\n"
+    contract = ecc.extract_from_preamble(src, "w.smk")
+    assert contract.incomplete is True
+    assert any("dynamic config key" in w for w in contract.warnings)

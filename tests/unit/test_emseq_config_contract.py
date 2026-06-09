@@ -297,3 +297,33 @@ def test_real_wrappers_are_complete():
     for wf in ("test.smk", "test-analysis.smk"):
         c = ecc.build_contract(repo / "workflows" / wf)
         assert c.incomplete is False, f"{wf}: unexpected warnings {c.warnings}"
+
+
+def test_conditional_no_default_errors_when_parent_present():
+    # config.get('p',{}).get('child')  -> conditional, default None -> error if parent present & child absent
+    src = "v = config.get('p', {}).get('child')\n"
+    c = ecc.extract_from_preamble(src, "w.smk")
+    cond = [p for p in c.paths if p.requiredness == "conditional"][0]
+    assert cond.path == ("p", "child") and cond.default is None
+    errs = [v for v in ecc.validate_config(c, {"p": {}}) if v.level == "error"]
+    assert any(tuple(v.path) == ("p", "child") for v in errs)
+    # parent absent -> no error
+    errs2 = [v for v in ecc.validate_config(c, {}) if v.level == "error"]
+    assert not any(tuple(v.path) == ("p", "child") for v in errs2)
+
+
+def test_defaulted_conditional_stays_info():
+    src = "v = config.get('fastp', {}).get('extra', '')\n"
+    c = ecc.extract_from_preamble(src, "w.smk")
+    # no spurious standalone ('fastp',) optional with default None
+    assert not any(p.path == ("fastp",) and p.requiredness == "optional" for p in c.paths)
+    errs = [v for v in ecc.validate_config(c, {"fastp": {}}) if v.level == "error"]
+    assert errs == []
+
+
+def test_validate_dedupes_parent_violations():
+    c = ecc.build_contract(__import__("pathlib").Path(__file__).resolve().parents[2]
+                           / "workflows" / "test.smk")
+    viol = ecc.validate_config(c, {})  # everything missing
+    seen = [(v.level, tuple(v.path)) for v in viol]
+    assert len(seen) == len(set(seen)), "violations should be deduped by (level, path)"

@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import ast
+import os
 import pathlib
 import re
 from dataclasses import dataclass, field
@@ -201,6 +202,13 @@ def extract_from_preamble(preamble_src: str, source_name: str,
                     path=tuple(path), requiredness="mandatory",
                     source=f"{source_name}:{getattr(node, 'lineno', '?')}",
                 ))
+    # Fix 3: drop spurious optional('fastp',) that the chained .get walk emits as a
+    # standalone optional when the real entry is the conditional ('fastp','extra').
+    _conds = {p.condition for p in contract.paths
+              if p.requiredness == "conditional" and p.condition}
+    contract.paths = [p for p in contract.paths
+                      if not (p.requiredness == "optional" and p.default is None
+                              and p.path in _conds)]
     _dedupe(contract)
     return (contract, aliases) if return_aliases else contract
 
@@ -348,8 +356,6 @@ def _render_yaml_skeleton(contract: Contract) -> str:
 # Section: Path resolution + validation
 # ---------------------------------------------------------------------------
 
-import os
-
 
 @dataclass
 class Violation:
@@ -395,9 +401,20 @@ def validate_config(contract: Contract, cfg: dict) -> list[Violation]:
                 if not _present(cfg, p.path):
                     violations.append(Violation("error", p.path,
                         f"missing required key: {_dotted(p.path)}"))
+            elif p.requiredness == "conditional":
+                # Fix 1: when parent present and child absent, error if no default.
+                if p.condition is not None and _present(cfg, p.condition):
+                    if not _present(cfg, p.path):
+                        if p.default is None:
+                            violations.append(Violation("error", p.path,
+                                f"missing required key: {_dotted(p.path)} "
+                                f"(required when {_dotted(p.condition)} is set)"))
+                        else:
+                            violations.append(Violation("info", p.path,
+                                f"optional {_dotted(p.path)} absent; default {p.default!r}"))
             else:
-                cond_ok = p.condition is None or _present(cfg, p.condition)
-                if cond_ok and not _present(cfg, p.path):
+                # optional
+                if not _present(cfg, p.path):
                     violations.append(Violation("info", p.path,
                         f"optional {_dotted(p.path)} absent; default {p.default!r}"))
             continue
@@ -427,7 +444,15 @@ def validate_config(contract: Contract, cfg: dict) -> list[Violation]:
             violations.append(Violation(
                 "info" if contract.incomplete else "warning", (k,),
                 f"config key not read by workflow (typo/dead?): {k}"))
-    return violations
+    # Fix 2: dedupe by (level, path), preserving first-occurrence order.
+    seen_viol: set[tuple] = set()
+    deduped: list[Violation] = []
+    for v in violations:
+        key = (v.level, tuple(v.path))
+        if key not in seen_viol:
+            seen_viol.add(key)
+            deduped.append(v)
+    return deduped
 
 
 # ---------------------------------------------------------------------------
@@ -455,12 +480,21 @@ def main(argv=None) -> int:
                     help="also run `snakemake -n` as a cross-check (stub)")
 
     args = parser.parse_args(argv)
-    contract = build_contract(args.wrapper)
+    # Fix 4: friendly error on missing wrapper file.
+    try:
+        contract = build_contract(args.wrapper)
+    except FileNotFoundError:
+        print(f"error: wrapper not found: {args.wrapper}")
+        return 2
 
     if args.cmd == "list":
         print(render_list(contract, fmt=args.format), end="")
         return 0
 
+    # Fix 4: friendly error on missing config file.
+    if not pathlib.Path(args.config).exists():
+        print(f"error: config not found: {args.config}")
+        return 2
     cfg = yaml.safe_load(open(args.config).read()) or {}
     resolve_config_paths(cfg)
     violations = validate_config(contract, cfg)

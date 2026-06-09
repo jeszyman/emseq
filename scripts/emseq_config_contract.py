@@ -63,10 +63,45 @@ class _DynamicKey(Exception):
     pass
 
 
+def _config_get_call(node: "ast.Call"):
+    """If node is config.get('k', default) or config.get('a',{}).get('b',d),
+    return (path_tuple, requiredness, default, condition) or None."""
+    if not (isinstance(node.func, ast.Attribute) and node.func.attr == "get"):
+        return None
+    if not node.args:
+        return None
+    key = node.args[0]
+    if not (isinstance(key, ast.Constant) and isinstance(key.value, str)):
+        return None
+    default = None
+    if len(node.args) > 1 and isinstance(node.args[1], ast.Constant):
+        default = node.args[1].value
+    recv = node.func.value
+    if isinstance(recv, ast.Name) and recv.id == "config":
+        return ((key.value,), "optional", default, None)
+    # chained: config.get('a', {}).get('b', d)
+    if isinstance(recv, ast.Call) and isinstance(recv.func, ast.Attribute) \
+            and recv.func.attr == "get" and isinstance(recv.func.value, ast.Name) \
+            and recv.func.value.id == "config" and recv.args \
+            and isinstance(recv.args[0], ast.Constant):
+        parent = recv.args[0].value
+        return ((parent, key.value), "conditional", default, (parent,))
+    return None
+
+
 def extract_from_preamble(preamble_src: str, source_name: str) -> Contract:
     contract = Contract()
     tree = ast.parse(preamble_src)
     for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            got = _config_get_call(node)
+            if got:
+                path, req, default, cond = got
+                contract.paths.append(ConfigPath(
+                    path=path, requiredness=req, default=default, condition=cond,
+                    source=f"{source_name}:{getattr(node, 'lineno', '?')}",
+                ))
+            continue
         if isinstance(node, ast.Subscript):
             try:
                 path = _literal_subscript_chain(node)

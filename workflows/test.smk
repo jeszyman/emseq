@@ -15,6 +15,10 @@ def resolve_config_paths(config_dict):
 
 resolve_config_paths(config)
 
+# Concurrency budget: defaults from the available-concurrency config key (100 if unset);
+# override per run with --resources concurrency=N (the CLI value wins over config).
+workflow.global_resources.setdefault("concurrency", int(config.get("available-concurrency", 100)))
+
 # --- Environments ---
 ENV_EMSEQ = config['envs']['emseq']
 ENV_METHYLKIT = config['envs']['methylkit']

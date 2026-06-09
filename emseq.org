@@ -349,6 +349,10 @@ def resolve_config_paths(config_dict):
                               if isinstance(i, str) else i for i in v]
 resolve_config_paths(config)
 
+# Concurrency budget: defaults from the available-concurrency config key (100 if unset);
+# override per run with --resources concurrency=N (the CLI value wins over config).
+workflow.global_resources.setdefault("concurrency", int(config.get("available-concurrency", 100)))
+
 # --- Environments ---
 ENV_EMSEQ = config['envs']['emseq']
 ENV_METHYLKIT = config['envs']['methylkit']
@@ -397,20 +401,20 @@ Resource management uses two mechanisms: *threads* and *concurrency*.
 
 *Threads* is a built-in Snakemake feature. Some rules use =threads: workflow.cores= to consume all available cores (e.g. alignment), while others use a hardcoded thread count for I/O-bound operations where more cores don't help (e.g. =threads: 8= for samtools sort, dedup, BAM filtering). Rules that use =workflow.cores= are automatically capped at the =--cores= flag value, so the same workflow runs correctly on any machine.
 
-*Concurrency* is a custom resource pattern using Snakemake's =resources:= directive. Each rule declares a concurrency /cost/, and a global /budget/ is set at runtime via =--resources concurrency=N=. Snakemake schedules jobs as long as the total concurrency cost of running jobs stays within the budget. The system is calibrated so that a rule with =concurrency = 100= runs one at a time when =--resources concurrency=100=. On a larger machine, setting =--resources concurrency=300= allows three such jobs in parallel. Lighter-weight rules declare lower costs — for example, a rule with =concurrency = 10= allows 10 simultaneous instances at =--resources concurrency=100=, or 30 at =--resources concurrency=300=. This ratio-based approach means the same rule definitions work across machines of different sizes; only the global budget changes.
+*Concurrency* is a custom resource pattern using Snakemake's =resources:= directive. Each rule declares a concurrency /cost/, and a global /budget/ defaults from the =available-concurrency= config key (100 if unset) — the wrapper applies it via =workflow.global_resources.setdefault("concurrency", ...)= — and can be overridden per run with =--resources concurrency=N= (the CLI value wins). Snakemake schedules jobs as long as the total concurrency cost of running jobs stays within the budget. The system is calibrated so that a rule with =concurrency = 100= runs one at a time when =--resources concurrency=100=. On a larger machine, setting =--resources concurrency=300= allows three such jobs in parallel. Lighter-weight rules declare lower costs — for example, a rule with =concurrency = 10= allows 10 simultaneous instances at =--resources concurrency=100=, or 30 at =--resources concurrency=300=. This ratio-based approach means the same rule definitions work across machines of different sizes; only the global budget changes.
 
 Not every rule needs concurrency. Rules that are I/O-bound and individually lightweight (BAM filtering, samtools stats, M-bias, spike-in methylation calling) have no concurrency declaration — Snakemake schedules them freely based on available cores. Concurrency is reserved for rules that are either resource-intensive (alignment: =concurrency = 100=), memory-constrained (methylKit R jobs: =concurrency = 50=), or benefit from controlled parallelism (methylation calling, dedup: =concurrency = 25=).
 
-To run the pipeline, pass both =--cores= and =--resources concurrency=N=:
+The budget defaults to =available-concurrency= in the config, so a normal run only needs =--cores=. Pass =--resources concurrency=N= to override the config default (e.g. to run more jobs in parallel on a large machine):
 
 #+begin_example
-# Small machine (8 cores)
-snakemake -s workflows/test.smk --cores 8 --resources concurrency=100
+# Default: budget from config (available-concurrency: 100)
+snakemake -s workflows/test.smk --cores 8
 
-# Large workstation (48 cores)
-snakemake -s workflows/test.smk --cores 48 --resources concurrency=100
+# Large workstation: same config budget, more cores
+snakemake -s workflows/test.smk --cores 48
 
-# Very large machine (96+ cores, run more jobs in parallel)
+# Very large machine: override the budget to run more jobs in parallel
 snakemake -s workflows/test.smk --cores 96 --resources concurrency=300
 #+end_example
 
@@ -4624,8 +4628,7 @@ ln -s /path/to/ref/wgbstools/hg38_decoy ~/repos/wgbs_tools/references/hg38_decoy
 # -----------------------------
 # Global runtime/config knobs
 # -----------------------------
-available-concurrency: 50
-threads: 24
+available-concurrency: 100   # concurrency budget; override per run with --resources concurrency=N
 main-data-dir: "tests/full"
 mosdepth-quant-levels: "1,5"
 emseq-mincov: 2
@@ -4718,6 +4721,10 @@ def resolve_config_paths(config_dict):
             config_dict[k] = [os.path.expandvars(os.path.expanduser(i)) if isinstance(i, str) else i for i in v]
 
 resolve_config_paths(config)
+
+# Concurrency budget: defaults from the available-concurrency config key (100 if unset);
+# override per run with --resources concurrency=N (the CLI value wins over config).
+workflow.global_resources.setdefault("concurrency", int(config.get("available-concurrency", 100)))
 
 # --- Environments ---
 ENV_EMSEQ = config['envs']['emseq']
@@ -4860,6 +4867,10 @@ def resolve_config_paths(config_dict):
             config_dict[k] = [os.path.expandvars(os.path.expanduser(i)) if isinstance(i, str) else i for i in v]
 
 resolve_config_paths(config)
+
+# Concurrency budget: defaults from the available-concurrency config key (100 if unset);
+# override per run with --resources concurrency=N (the CLI value wins over config).
+workflow.global_resources.setdefault("concurrency", int(config.get("available-concurrency", 100)))
 
 # --- Environments ---
 ENV_EMSEQ = config['envs']['emseq']

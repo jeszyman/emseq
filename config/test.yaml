@@ -1,8 +1,7 @@
 # -----------------------------
 # Global runtime/config knobs
 # -----------------------------
-available-concurrency: 50
-threads: 24
+available-concurrency: 100   # concurrency budget; override per run with --resources concurrency=N
 main-data-dir: "tests/full"
 mosdepth-quant-levels: "1,5"
 emseq-mincov: 2

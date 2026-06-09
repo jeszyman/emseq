@@ -9,6 +9,7 @@ docs/superpowers/specs/2026-06-09-snakemake-config-contract-design.md.
 from __future__ import annotations
 
 import ast
+import pathlib
 import re
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -196,7 +197,6 @@ def _dedupe(contract: Contract) -> None:
 
 def build_contract(wrapper_path) -> Contract:
     """Orchestrate preamble extraction + include scanning into a single Contract."""
-    import pathlib
     wrapper_path = pathlib.Path(wrapper_path)
     text = wrapper_path.read_text()
     preamble = slice_preamble(text)
@@ -204,14 +204,13 @@ def build_contract(wrapper_path) -> Contract:
                                               return_aliases=True)
     includes, inc_warnings = find_includes(text, wrapper_path.parent)
     contract.warnings.extend(inc_warnings)
-    config_aliases = {k: v for k, v in aliases.items() if isinstance(v, tuple)}
     for mod in includes:
         if not mod.exists():
             contract.warnings.append(f"included module not found: {mod}")
             contract.incomplete = True
             continue
         contract.paths.extend(
-            extract_alias_subkeys(mod.read_text(), config_aliases, mod.name))
+            extract_alias_subkeys(mod.read_text(), aliases, mod.name))
     _dedupe(contract)
     return contract
 
@@ -219,10 +218,9 @@ def build_contract(wrapper_path) -> Contract:
 _INCLUDE_RE = re.compile(r"""^\s*include:\s*['"]([^'"]+)['"]""")
 
 
-def find_includes(text: str, wrapper_dir) -> tuple[list, list[str]]:
+def find_includes(text: str, wrapper_dir) -> tuple[list[pathlib.Path], list[str]]:
     """Parse include: directives; resolve paths relative to wrapper_dir.
     Indented (conditional) includes are skipped and generate a warning."""
-    import pathlib
     includes, warnings = [], []
     for line in text.splitlines():
         m = _INCLUDE_RE.match(line)
@@ -241,7 +239,8 @@ def extract_alias_subkeys(module_text: str, aliases: dict[str, tuple[str, ...]],
     out: list[ConfigPath] = []
     for alias, base in aliases.items():
         pat = re.compile(
-            re.escape(alias) + r"\s*\[[^\]]+\]\s*\[\s*['\"]([A-Za-z0-9_\-]+)['\"]\s*\]"
+            r'(?<![A-Za-z0-9_])' + re.escape(alias)
+            + r'(?![A-Za-z0-9_])(?:\s*\[[^\]]+\])+\s*\[\s*[\'"]([A-Za-z0-9_\-]+)[\'"]\s*\]'
         )
         for m in pat.finditer(module_text):
             out.append(ConfigPath(

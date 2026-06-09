@@ -102,7 +102,7 @@ def test_find_includes_resolves_relative_and_warns_on_conditional(tmp_path):
     )
     (tmp_path / "emseq.smk").write_text("# module\n")
     includes, warnings = ecc.find_includes(wrapper.read_text(), wrapper.parent)
-    assert (tmp_path / "emseq.smk") in includes
+    assert (tmp_path / "emseq.smk").resolve() in includes
     assert any("conditional include" in w for w in warnings)
 
 
@@ -149,6 +149,19 @@ def test_test_smk_is_subset_of_analysis():
     c_test = _paths(ecc.build_contract(REPO / "workflows" / "test.smk"))
     c_an = _paths(ecc.build_contract(REPO / "workflows" / "test-analysis.smk"))
     assert c_test <= c_an
+
+
+def test_alias_subkey_word_boundary_and_multibracket():
+    aliases = {"meth_map": ("meth-map",)}
+    text = (
+        'a = meth_map[wc.e]["tx"]\n'
+        'b = big_meth_map[wc.e]["libs"]\n'          # substring of alias: must NOT match
+        'c = meth_map[wc.e][wc.a]["mincov"]\n'      # two dynamic brackets: must match
+    )
+    got = {p.path for p in ecc.extract_alias_subkeys(text, aliases, "m.smk")}
+    assert ("meth-map", "*", "tx") in got
+    assert ("meth-map", "*", "mincov") in got
+    assert ("meth-map", "*", "libs") not in got
 
 
 def test_alias_subkey_scan():

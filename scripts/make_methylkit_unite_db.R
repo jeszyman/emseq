@@ -44,6 +44,10 @@ if (length(lib_db_list) != length(lib_id_list) ||
                length(lib_db_list), length(lib_id_list), length(treatment_list)))
 }
 
+if (length(unique(treatment_list)) != 2) {
+  stop(sprintf("methylKit DMR calling is restricted to two groups (got %d unique treatment values). For >2 discrete groups run pairwise comparisons; for continuous/survival outcomes binarize, or use DSS general design / per-CpG Cox.", length(unique(treatment_list))))
+}
+
 cores        <- as_int(args$cores, "cores")
 mincov       <- as_int(args$mincov, "mincov")
 min_per_grp  <- as_int(args$min_per_group, "min_per_group")
@@ -53,9 +57,26 @@ chunk_size   <- as_num_chunk(args$chunk_size, "chunk_size")
 mbase_path <- file.path(args$out_dir, sprintf("methylBase_%s.txt.bgz", args$suffix))
 suppressWarnings(file.remove(mbase_path, paste0(mbase_path, ".tbi")))
 
+# --- Stage inputs in a per-experiment scratch dir ----------------------------
+# methylKit writes destrand / normalizeCoverage intermediates next to each input
+# tabix (dirname of its dbpath), named by library only. Experiments that share a
+# library would collide on those intermediates when run concurrently. Isolate by
+# symlinking each input into a scratch dir unique to this experiment (suffix).
+scratch_dir <- file.path(args$out_dir, paste0(".scratch_", args$suffix))
+dir.create(scratch_dir, recursive = TRUE, showWarnings = FALSE)
+
+stage_input <- function(p) {
+  dst <- file.path(scratch_dir, basename(p))
+  suppressWarnings(file.remove(dst, paste0(dst, ".tbi")))
+  file.symlink(normalizePath(p), dst)
+  file.symlink(normalizePath(paste0(p, ".tbi")), paste0(dst, ".tbi"))
+  dst
+}
+staged_db_list <- vapply(lib_db_list, stage_input, character(1))
+
 # --- Read (tabix + CpG only) ---
 merged_obj <- methRead(
-  location   = as.list(lib_db_list),
+  location   = as.list(staged_db_list),
   sample.id  = as.list(lib_id_list),
   treatment  = treatment_list,
   context    = "CpG",
@@ -63,6 +84,9 @@ merged_obj <- methRead(
   dbtype     = "tabix",
   mincov     = mincov
 )
+
+# --- Normalize coverage across samples (correct depth-driven bias) -----------
+merged_obj <- normalizeCoverage(merged_obj, save.db = TRUE)
 
 # --- Unite (destrand hardcoded TRUE, save.db always TRUE) ---
 meth <- unite(
@@ -77,3 +101,4 @@ meth <- unite(
 )
 
 message("Done. methylBase: ", mbase_path)
+unlink(scratch_dir, recursive = TRUE)

@@ -46,6 +46,10 @@ if (length(lib_db_list) != length(lib_id_list) ||
                length(lib_db_list), length(lib_id_list), length(treatment_list)))
 }
 
+if (length(unique(treatment_list)) != 2) {
+  stop(sprintf("methylKit DMR calling is restricted to two groups (got %d unique treatment values). For >2 discrete groups run pairwise comparisons; for continuous/survival outcomes binarize, or use DSS general design / per-CpG Cox.", length(unique(treatment_list))))
+}
+
 cores      <- as_int(args$cores, "cores")
 mincov     <- as_int(args$mincov, "mincov")
 win_size   <- as_int(args$win_size, "win_size")      # FIX: was args$winsize → numeric(0)
@@ -60,9 +64,25 @@ tiled_patterns <- c(
 tiled_paths <- unlist(lapply(tiled_patterns, Sys.glob))
 if (length(tiled_paths) > 0) suppressWarnings(file.remove(tiled_paths))
 
+# --- Stage inputs in a per-experiment scratch dir (see make_methylkit_unite_db.R)
+# normalizeCoverage writes its normalized tabix next to each input (dirname of the
+# dbpath), named by library only — isolate per experiment to avoid concurrent
+# collisions on a shared library.
+scratch_dir <- file.path(args$out_dir, paste0(".scratch_tiled_", args$suffix))
+dir.create(scratch_dir, recursive = TRUE, showWarnings = FALSE)
+
+stage_input <- function(p) {
+  dst <- file.path(scratch_dir, basename(p))
+  suppressWarnings(file.remove(dst, paste0(dst, ".tbi")))
+  file.symlink(normalizePath(p), dst)
+  file.symlink(normalizePath(paste0(p, ".tbi")), paste0(dst, ".tbi"))
+  dst
+}
+staged_db_list <- vapply(lib_db_list, stage_input, character(1))
+
 # --- read methylation DBs ---
 merged_obj <- methRead(
-  location  = as.list(lib_db_list),
+  location  = as.list(staged_db_list),
   sample.id = as.list(lib_id_list),
   treatment = treatment_list,
   context   = "CpG",
@@ -70,6 +90,9 @@ merged_obj <- methRead(
   dbtype    = "tabix",
   mincov    = mincov
 )
+
+# --- normalize coverage across samples (correct depth-driven bias) ---
+merged_obj <- normalizeCoverage(merged_obj, save.db = TRUE)
 
 # --- tile per sample ---
 tiled_raw <- tileMethylCounts(
@@ -102,3 +125,5 @@ diff <- calculateDiffMeth(
   save.db    = TRUE,
   dbdir      = args$out_dir,
 )
+
+unlink(scratch_dir, recursive = TRUE)

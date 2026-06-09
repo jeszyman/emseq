@@ -1,7 +1,0 @@
-name: testdata
-channels:
-  - conda-forge
-  - bioconda
-
-dependencies:
-  - seqtk

@@ -101,8 +101,6 @@ rule all:
         # than chr22 test data provides. Validated on production data.
         # f"{D_EMSEQ}/deconv/uxm_results.csv",
 
-shell.prefix("set -e; ")
-
 # Test alias: duplicate lib003 as lib003b for unique methylKit sample IDs
 rule alias_lib003b:
     input:

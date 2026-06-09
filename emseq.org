@@ -678,7 +678,7 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 #+end_export
 **** Change Log
 - Development since last tag
-  - None
+  - [2026-06-08 Mon] methylKit: per-sample coverage normalization + per-experiment scratch isolation of destrand intermediates (unite + tiled) + guard restricting treatment to two groups; =emseq_filter_bam= prunes the BAM =@SQ= header to primary contigs; added =scripts/emseq_checks.R= data-integrity library; removed unused biscuit/testdata conda env yamls.
 - wf/emseq/v5.1.0
   - [2026-04-07 Mon] Parameterized =align_method= in modules:
     - New required wrapper variable =emseq_align_methods= — list of alignment methods to run. Replaces hardcoded =["biscuit","bwa_meth"]= in =emseq_multiqc= and =emseq_analysis_uxm_deconv= rules.
@@ -1108,28 +1108,6 @@ dependencies:
   - r-arrow
   - bioconductor-genomation
 #+end_src
-*** Mosdepth
-#+begin_src yaml :tangle ./config/mosdepth-conda-env.yaml :comments no
-name: mosdepth
-channels:
-  - conda-forge
-  - bioconda
-
-dependencies:
-  - samtools
-  - bioconductor-genomeinfodbdata=1.2.7
-  - mosdepth
-  - r-argparse
-  - r-data.table
-  - r-ggplot2
-  - r-cairo
-  - jpeg
-  - r-scales
-  - r-patchwork
-  - r-matrixstats
-  - r-r.utils
-#+end_src
-
 *** Haplotype
 #+begin_src yaml :tangle ./config/haplotype-conda-env.yaml :comments no
 channels:
@@ -1163,6 +1141,40 @@ dependencies:
   - pandas
   - samtools
   - htslib
+#+end_src
+
+** Library
+Per-repo data-integrity helpers sourced by analysis scripts to guard joins and filters against silent data loss.
+
+#+begin_src R :tangle ./scripts/emseq_checks.R :comments no
+#!/usr/bin/env Rscript
+## emseq_checks.R — data-integrity helpers for emseq analysis scripts.
+## Source with: source("scripts/emseq_checks.R")
+
+## Log row count to stderr; return x invisibly for piping.
+log_n <- function(x, label = "rows") {
+  message(sprintf("[check] %s: %d", label, nrow(x)))
+  invisible(x)
+}
+
+## Stop unless x has exactly n rows.
+check_n <- function(x, n, label = "rows") {
+  if (nrow(x) != n) stop(sprintf("[check] %s: expected %d, got %d", label, n, nrow(x)))
+  invisible(x)
+}
+
+## Stop if x has zero rows.
+check_nonempty <- function(x, label = "object") {
+  if (nrow(x) == 0L) stop(sprintf("[check] %s is empty", label))
+  invisible(x)
+}
+
+## Stop unless all `cols` are present in x.
+assert_cols <- function(x, cols, label = "object") {
+  miss <- setdiff(cols, colnames(x))
+  if (length(miss) > 0) stop(sprintf("[check] %s missing columns: %s", label, paste(miss, collapse = ", ")))
+  invisible(x)
+}
 #+end_src
 
 ** Methylation sequence processing
@@ -1712,6 +1724,9 @@ main "$@"
 #+end_src
 
 ***** M-bias
+
+M-bias (per-read-position methylation artifact) in EM-seq arises from three mechanisms distinct from traditional bisulfite sequencing's 3' DNA-damage artifact: (1) adapter read-through on short-insert fragments where R2 reads into synthetic adapter sequences that appear unmethylated, producing an R2 3' cliff to ~0%; (2) end-repair artifact at 5' read starts where newly synthesized Cs are deaminated by APOBEC3A, producing a spike-then-dip at R1 positions 1–5; and (3) R2 3' base-quality degradation intrinsic to paired-end Illumina sequencing [cite:@vaisvila2021]. The original EM-seq validation notes M-bias is minimal in text only without a dedicated figure; our breast and NF1 cohort data reproduce the expected pattern ([[file:docs/breast_mbias.png][representative 55-sample M-bias plot]]). Adapter trimming with fastp =--detect_adapter_for_pe= reduces but does not eliminate the R2 cliff because minimum-overlap detection misses very short overlaps on near-full-length fragments. MethylDackel =--OT=/=--OB= positional ignore parameters correct the bias at the methylation extraction step; our pipeline does not currently apply these, and pre/post correction comparison has not been benchmarked — at standard WGS depth the effect on DMR calling is small since any CpG is covered by multiple reads, but correction becomes more consequential at low per-CpG coverage (<10×) or for fragment-level cfDNA analyses such as end-motif profiling. For cfDNA applications, the fragment-level over-conversion artifact documented in [cite:@loyfer2026emseqerror] is a more consequential EM-seq error source than M-bias.
+
 #+begin_src snakemake
 rule emseq_mbias:
     message: "MethylDackel M-bias detection for position-dependent methylation artifacts"
@@ -1815,7 +1830,15 @@ rule emseq_filter_bam:
         samtools view -@ {threads} -u -f 2 -q 30 -F 3840 "{input.bam}" \
           | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.exclude_bed}" -v -ubam \
           | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.keep_bed}" -ubam \
-          > "{output.bam}"
+          > "{output.bam}.tmp"
+        # Prune @SQ dictionary to primary contigs. Non-primary (decoy/unplaced/alt)
+        # contigs carry zero reads after the keep-bed filter and trail the primary
+        # contigs in the dictionary, so dropping them shifts no read's reference tid.
+        samtools reheader \
+          <(samtools view -H "{output.bam}.tmp" \
+              | grep -E '^@HD|^@PG|^@RG|^@CO|^@SQ[[:space:]]SN:chr([1-9]|1[0-9]|2[0-2]|X|Y|M)[[:space:]]') \
+          "{output.bam}.tmp" > "{output.bam}"
+        rm -f "{output.bam}.tmp"
         samtools index -@ {threads} "{output.bam}" "{output.bai}"
         """
 #+end_src
@@ -2068,6 +2091,10 @@ if (length(lib_db_list) != length(lib_id_list) ||
                length(lib_db_list), length(lib_id_list), length(treatment_list)))
 }
 
+if (length(unique(treatment_list)) != 2) {
+  stop(sprintf("methylKit DMR calling is restricted to two groups (got %d unique treatment values). For >2 discrete groups run pairwise comparisons; for continuous/survival outcomes binarize, or use DSS general design / per-CpG Cox.", length(unique(treatment_list))))
+}
+
 cores        <- as_int(args$cores, "cores")
 mincov       <- as_int(args$mincov, "mincov")
 min_per_grp  <- as_int(args$min_per_group, "min_per_group")
@@ -2077,9 +2104,26 @@ chunk_size   <- as_num_chunk(args$chunk_size, "chunk_size")
 mbase_path <- file.path(args$out_dir, sprintf("methylBase_%s.txt.bgz", args$suffix))
 suppressWarnings(file.remove(mbase_path, paste0(mbase_path, ".tbi")))
 
+# --- Stage inputs in a per-experiment scratch dir ----------------------------
+# methylKit writes destrand / normalizeCoverage intermediates next to each input
+# tabix (dirname of its dbpath), named by library only. Experiments that share a
+# library would collide on those intermediates when run concurrently. Isolate by
+# symlinking each input into a scratch dir unique to this experiment (suffix).
+scratch_dir <- file.path(args$out_dir, paste0(".scratch_", args$suffix))
+dir.create(scratch_dir, recursive = TRUE, showWarnings = FALSE)
+
+stage_input <- function(p) {
+  dst <- file.path(scratch_dir, basename(p))
+  suppressWarnings(file.remove(dst, paste0(dst, ".tbi")))
+  file.symlink(normalizePath(p), dst)
+  file.symlink(normalizePath(paste0(p, ".tbi")), paste0(dst, ".tbi"))
+  dst
+}
+staged_db_list <- vapply(lib_db_list, stage_input, character(1))
+
 # --- Read (tabix + CpG only) ---
 merged_obj <- methRead(
-  location   = as.list(lib_db_list),
+  location   = as.list(staged_db_list),
   sample.id  = as.list(lib_id_list),
   treatment  = treatment_list,
   context    = "CpG",
@@ -2087,6 +2131,9 @@ merged_obj <- methRead(
   dbtype     = "tabix",
   mincov     = mincov
 )
+
+# --- Normalize coverage across samples (correct depth-driven bias) -----------
+merged_obj <- normalizeCoverage(merged_obj, save.db = TRUE)
 
 # --- Unite (destrand hardcoded TRUE, save.db always TRUE) ---
 meth <- unite(
@@ -2101,6 +2148,7 @@ meth <- unite(
 )
 
 message("Done. methylBase: ", mbase_path)
+unlink(scratch_dir, recursive = TRUE)
 
 #+end_src
 
@@ -2213,6 +2261,10 @@ if (length(lib_db_list) != length(lib_id_list) ||
                length(lib_db_list), length(lib_id_list), length(treatment_list)))
 }
 
+if (length(unique(treatment_list)) != 2) {
+  stop(sprintf("methylKit DMR calling is restricted to two groups (got %d unique treatment values). For >2 discrete groups run pairwise comparisons; for continuous/survival outcomes binarize, or use DSS general design / per-CpG Cox.", length(unique(treatment_list))))
+}
+
 cores      <- as_int(args$cores, "cores")
 mincov     <- as_int(args$mincov, "mincov")
 win_size   <- as_int(args$win_size, "win_size")      # FIX: was args$winsize → numeric(0)
@@ -2227,9 +2279,25 @@ tiled_patterns <- c(
 tiled_paths <- unlist(lapply(tiled_patterns, Sys.glob))
 if (length(tiled_paths) > 0) suppressWarnings(file.remove(tiled_paths))
 
+# --- Stage inputs in a per-experiment scratch dir (see make_methylkit_unite_db.R)
+# normalizeCoverage writes its normalized tabix next to each input (dirname of the
+# dbpath), named by library only — isolate per experiment to avoid concurrent
+# collisions on a shared library.
+scratch_dir <- file.path(args$out_dir, paste0(".scratch_tiled_", args$suffix))
+dir.create(scratch_dir, recursive = TRUE, showWarnings = FALSE)
+
+stage_input <- function(p) {
+  dst <- file.path(scratch_dir, basename(p))
+  suppressWarnings(file.remove(dst, paste0(dst, ".tbi")))
+  file.symlink(normalizePath(p), dst)
+  file.symlink(normalizePath(paste0(p, ".tbi")), paste0(dst, ".tbi"))
+  dst
+}
+staged_db_list <- vapply(lib_db_list, stage_input, character(1))
+
 # --- read methylation DBs ---
 merged_obj <- methRead(
-  location  = as.list(lib_db_list),
+  location  = as.list(staged_db_list),
   sample.id = as.list(lib_id_list),
   treatment = treatment_list,
   context   = "CpG",
@@ -2237,6 +2305,9 @@ merged_obj <- methRead(
   dbtype    = "tabix",
   mincov    = mincov
 )
+
+# --- normalize coverage across samples (correct depth-driven bias) ---
+merged_obj <- normalizeCoverage(merged_obj, save.db = TRUE)
 
 # --- tile per sample ---
 tiled_raw <- tileMethylCounts(
@@ -2269,6 +2340,8 @@ diff <- calculateDiffMeth(
   save.db    = TRUE,
   dbdir      = args$out_dir,
 )
+
+unlink(scratch_dir, recursive = TRUE)
 #+end_src
 
 https:/www.bioconductor.org/packages/release/bioc/vignettes/methylKit/inst/doc/methylKit.html
@@ -2334,6 +2407,7 @@ write_tsv(
 - [[id:28f0b200-7052-424f-a9ff-35e3c6234efb][Cross-modal methylation-fragmentomics enrichment (career.org)]]
 - note that multicq inputs cannot promp new runs
 - push methmap to config
+- Add =Mk= read-level summary statistic: per-sample count (or fraction) of reads containing ≥k methylated CpGs. Captures read-level methylation density without collapsing to region mean — behaves like methylation haplotype load when k matches a region's CpG count. Related prior art: Pasha et al. 2026 BCMA targeted panel, Guardant =MR= metric, Guo et al. 2017 methylation haplotype load (MHL). Candidate pipeline use: per-DMR per-sample feature for classifier input or QC; complements the tiled-mean methylation currently produced by =make_methylkit_diff_db_tiled=.
 #+begin_src snakemake
 rule all_experiment_tiled_methylation:
     input:
@@ -4687,6 +4761,10 @@ emseq_ref_assemblies:
 # Experiments (differential methylation experiments for methylKit)
 # NOTE: lib003b is a symlink alias of lib003 FASTQs to give methylKit unique
 # sample IDs while ensuring overlapping CpG sites for unite/diff testing.
+# NOTE: tx must encode exactly TWO groups (e.g. 0/1). methylKit DMR calling here is
+# restricted to two-group comparisons (the unite/tiled scripts stop() otherwise).
+# For >2 groups define separate pairwise experiments; for continuous/survival
+# outcomes binarize, or use DSS general design / per-CpG Cox.
 # -----------------------------
 meth-map:
   test:
@@ -4943,8 +5021,6 @@ rule all:
         # than chr22 test data provides. Validated on production data.
         # f"{D_EMSEQ}/deconv/uxm_results.csv",
 
-shell.prefix("set -e; ")
-
 # Test alias: duplicate lib003 as lib003b for unique methylKit sample IDs
 rule alias_lib003b:
     input:
@@ -5105,11 +5181,14 @@ EM-seq and WGBS are not compatible- have different unique methylated CpGs at 8x 
 ** TODO After v4
 Issues and fixes surfaced while building a project wrapper around the emseq modular
 pipeline (breast PROMISE project, 2026-02-25).
-- *Shell strict mode*: =samtools view -@ N= emits SIGPIPE (exit 141) under =set -euo pipefail=; wrapper must add =shell.prefix("set -e; ")= — consider documenting or adding to canonical =test.smk=
+- *Shell strict mode*: snakemake runs rules under =set -euo pipefail= by default; rely on it and do NOT add a wrapper =shell.prefix= (it replaces the default and drops pipefail/nounset). If a specific =samtools= command emits SIGPIPE (exit 141), scope =set +o pipefail= to that command only.
 - *Blacklist BED sort order*: ENCODE blacklist v2 is lexicographically sorted; =bedtools intersect -sorted= requires FAI (version) order — pre-sort with =bedtools sort -g <fai>= or handle inside =emseq_filter_bam=
 - *bwa-mem2 index incomplete on reuse*: interrupted index leaves partial files (=.0123= present, =.bwt.2bit.64= absent), Snakemake won't rerun — declare =.bwt.2bit.64= in wrapper =rule all=
 - *hg38_autosomes.bed not generated*: filter step needs chromosome whitelist not produced by any rule — document one-time =awk= from FAI step, or add a rule
 - *mosdepth quantize string bug in emseq_mosdepth.sh*: bash =${var/,/:}= only replaces the first comma; must use =${var//,/:}= for global replacement — mosdepth exits 0 silently on bad quantize strings so outputs are simply absent (fixed in script)
+
+** TODO Reconcile git tags to repo-level vX.Y.Z
+This repo carries two competing tag schemes — plain =v1.0.0/v1.0.1/v1.0.2= and =wf/emseq/v1.0.0 … v5.1.0= (numbers discontinuous between them). Standardize on repo-level plain =vX.Y.Z= per the biopipe versioning convention (no =wf/<workflow>/= prefix — a tag is a whole-repo snapshot; see [[id:271b4d5f-727e-496e-b835-8fe9f8655655][Bioinformatics pipeline]] Versioning). Before retiring the =wf/emseq/*= tags, confirm nothing pins them (consumers pin by whole-repo tag): check the breast and mpnst wrappers for =git checkout wf/emseq= or =wf/emseq= references.
 
 ** Ideas
 - Standardized bench protocol

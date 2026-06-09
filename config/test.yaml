@@ -64,6 +64,10 @@ emseq_ref_assemblies:
 # Experiments (differential methylation experiments for methylKit)
 # NOTE: lib003b is a symlink alias of lib003 FASTQs to give methylKit unique
 # sample IDs while ensuring overlapping CpG sites for unite/diff testing.
+# NOTE: tx must encode exactly TWO groups (e.g. 0/1). methylKit DMR calling here is
+# restricted to two-group comparisons (the unite/tiled scripts stop() otherwise).
+# For >2 groups define separate pairwise experiments; for continuous/survival
+# outcomes binarize, or use DSS general design / per-CpG Cox.
 # -----------------------------
 meth-map:
   test:

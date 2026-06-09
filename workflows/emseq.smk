@@ -395,7 +395,15 @@ rule emseq_filter_bam:
         samtools view -@ {threads} -u -f 2 -q 30 -F 3840 "{input.bam}" \
           | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.exclude_bed}" -v -ubam \
           | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.keep_bed}" -ubam \
-          > "{output.bam}"
+          > "{output.bam}.tmp"
+        # Prune @SQ dictionary to primary contigs. Non-primary (decoy/unplaced/alt)
+        # contigs carry zero reads after the keep-bed filter and trail the primary
+        # contigs in the dictionary, so dropping them shifts no read's reference tid.
+        samtools reheader \
+          <(samtools view -H "{output.bam}.tmp" \
+              | grep -E '^@HD|^@PG|^@RG|^@CO|^@SQ[[:space:]]SN:chr([1-9]|1[0-9]|2[0-2]|X|Y|M)[[:space:]]') \
+          "{output.bam}.tmp" > "{output.bam}"
+        rm -f "{output.bam}.tmp"
         samtools index -@ {threads} "{output.bam}" "{output.bai}"
         """
 rule emseq_samtools_stats:

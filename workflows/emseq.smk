@@ -392,10 +392,15 @@ rule emseq_filter_bam:
         # -f 2: proper pairs only
         # -q 30: MAPQ >= 30
         # -F 3840 (0xF00): remove secondary + supplementary + failed QC + duplicates
+        # bedtools -sorted stops reading at the last keep_bed contig; samtools then
+        # writes trailing non-primary contigs into a closed pipe (SIGPIPE, exit 141).
+        # Scope pipefail off to this one pipe so the benign 141 is not fatal.
+        set +o pipefail
         samtools view -@ {threads} -u -f 2 -q 30 -F 3840 "{input.bam}" \
           | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.exclude_bed}" -v -ubam \
           | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.keep_bed}" -ubam \
           > "{output.bam}.tmp"
+        set -o pipefail
         # Prune @SQ dictionary to primary contigs. Non-primary (decoy/unplaced/alt)
         # contigs carry zero reads after the keep-bed filter and trail the primary
         # contigs in the dictionary, so dropping them shifts no read's reference tid.

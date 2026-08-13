@@ -683,6 +683,7 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 **** Change Log
 - Development since last tag
   - [2026-06-08 Mon] methylKit: per-sample coverage normalization + per-experiment scratch isolation of destrand intermediates (unite + tiled) + guard restricting treatment to two groups; =emseq_filter_bam= prunes the BAM =@SQ= header to primary contigs; added =scripts/emseq_checks.R= data-integrity library; removed unused biscuit/testdata conda env yamls.
+  - [2026-08-13 Wed] Removed mosdepth =--fast-mode= (=-x=) to fix PE overlap double-counting on short-insert libraries.
 - wf/emseq/v5.1.0
   - [2026-04-07 Mon] Parameterized =align_method= in modules:
     - New required wrapper variable =emseq_align_methods= — list of alignment methods to run. Replaces hardcoded =["biscuit","bwa_meth"]= in =emseq_multiqc= and =emseq_analysis_uxm_deconv= rules.
@@ -4697,7 +4698,6 @@ ln -s /path/to/ref/wgbstools/hg38_decoy ~/repos/wgbs_tools/references/hg38_decoy
 #+end_src
 
 ** Testing
-#+end_src
 *** Full test
 **** Configuration yaml
 #+begin_src yaml :tangle ./config/test.yaml
@@ -5149,6 +5149,7 @@ wget -O "$data_dir/inputs/$outfile" "$url"
 - [[id:5e9e8bfa-ac9e-4103-9cc5-7123337b4e24][biscuit]]
 - https:/github.com/semenko/serpent-methylation-pipeline
 - EM-seq protects 5mC and 5hmC from damination with TET2 enzymatic oxidation. Unprotected cytosines are deaminated to uracils.
+- EM-seq produces a ~2.5% fragment-level over-conversion rate at constitutively methylated regions: entire molecules appear fully unmethylated regardless of CpG count. Unlike per-CpG errors in WGBS (which decay exponentially with fragment CpG density), this is an irreducible false-positive floor for methylation deconvolution. PE overlap consensus cannot correct it because both reads from an over-converted fragment carry the same erroneous calls (Loyfer and Dor, bioRxiv 2026, doi:10.64898/2026.03.24.713040; preprint, n=2 EM-seq cfDNA libraries).
 - cfDNA WGBS hypomethylation and CNAs as a general cancer marker [cite:@chan2013meth]
 - [cite:@chan2013meth]
   - [cite:@liu2020]

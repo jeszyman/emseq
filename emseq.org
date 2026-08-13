@@ -306,27 +306,27 @@ This separation serves two purposes. First, the YAML is portable across machines
 Passed via =--configfile=. See =config/test.yaml= for a complete working example.
 
 Core keys:
-| =main-data-dir=         | Root data directory; all subdirectories derived from this                      |
-| =library-ids=           | List of sample IDs to process                                                  |
-| =keep-bed=              | BED of regions to retain after filtering                                       |
-| =exclude-bed=           | BED of blacklist regions to exclude                                            |
-| =emseq_ref_assemblies=  | Nested map of reference genomes (see below)                                    |
-| =meth-map=              | Experiment definitions for differential methylation (see below)                |
+| =main-data-dir=         | Root data directory; all subdirectories derived from this              |
+| =library-ids=           | List of sample IDs to process                                          |
+| =keep-bed=              | BED of regions to retain after filtering                               |
+| =exclude-bed=           | BED of blacklist regions to exclude                                    |
+| =emseq_ref_assemblies=  | Nested map of reference genomes (see below)                            |
+| =meth-map=              | Experiment definitions for differential methylation (see below)        |
 | =envs=                  | Paths to conda environment YAMLs (=emseq=, =methylkit=, =haplotype=, =deconv=) |
-| =repos=                 | Paths to this repo and external tool repos                                     |
-| =mosdepth-quant-levels= | Coverage quantization thresholds (default: =1,5,10,20=)                        |
-| =emseq-mincov=          | Minimum coverage for methylKit (default: =2=)                                  |
-| =fastp.extra=           | Additional fastp arguments (default: none)                                     |
+| =repos=                 | Paths to this repo and external tool repos                             |
+| =mosdepth-quant-levels= | Coverage quantization thresholds (default: =1,5,10,20=)                  |
+| =emseq-mincov=          | Minimum coverage for methylKit (default: =2=)                            |
+| =fastp.extra=           | Additional fastp arguments (default: none)                             |
 
 Analysis-specific keys (required only for =emseq_analysis.smk=; see Analysis module setup below for how to prepare these):
-| =repos.mhaptools=    | Path to cloned mHapTools repo (with compiled binary)              |
-| =repos.wgbs_tools=   | Path to cloned wgbs_tools repo (with built C extensions)          |
-| =repos.uxm_deconv=   | Path to cloned UXM_deconv repo                                    |
-| =haplotype.cpg-ref=  | Tabixed CpG reference (generated from reference FASTA)            |
-| =haplotype.mhb-bed=  | Methylation haplotype block BED (Guo 2017 liftover to hg38)       |
+| =repos.mhaptools=    | Path to cloned mHapTools repo (with compiled binary)            |
+| =repos.wgbs_tools=   | Path to cloned wgbs_tools repo (with built C extensions)        |
+| =repos.uxm_deconv=   | Path to cloned UXM_deconv repo                                  |
+| =haplotype.cpg-ref=  | Tabixed CpG reference (generated from reference FASTA)          |
+| =haplotype.mhb-bed=  | Methylation haplotype block BED (Guo 2017 liftover to hg38)     |
 | =haplotype.metrics=  | List of haplotype metrics to compute (e.g. =[MHL, PDR, Entropy]=) |
-| =deconv.genome-name= | wgbs_tools genome identifier                                      |
-| =deconv.atlas=       | UXM deconvolution atlas TSV (from UXM_deconv repo)                |
+| =deconv.genome-name= | wgbs_tools genome identifier                                    |
+| =deconv.atlas=       | UXM deconvolution atlas TSV (from UXM_deconv repo)              |
 
 ***** Wrapper Snakefile
 
@@ -545,19 +545,19 @@ Paired-end FASTQ files in, per-sample CpG methylation calls and QC metrics out.
 
 The wrapper assigns all variables before =include: "emseq.smk"= (see the Wrapper Snakefile section for the full pattern):
 
-| =ENV_EMSEQ=, =ENV_METHYLKIT=                                      | Conda environment YAML paths                                               |
-| =R_EMSEQ=                                                         | Repository root path                                                       |
-| =D_DATA=, =D_EMSEQ=, =D_REF=, =D_LOGS=, =D_BENCHMARK=, =D_INPUTS= | Directory layout (derived from =main-data-dir=)                            |
-| =emseq_library_ids=                                               | List of sample IDs (from config)                                           |
-| =emseq_ref_names=                                                 | Reference genome names to align against (project decision)                 |
-| =emseq_align_methods=                                             | Alignment methods to run (e.g. =["bwa_meth"]= or =["bwa_meth","biscuit"]=) |
-| =spike_builds=                                                    | Spike-in reference names included in this run (project decision)           |
-| =EMSEQ_REF_INPUTS=                                                | Dict mapping ref name → input FASTA filename                               |
-| =KEEP_BED=, =EXCL_BED=                                            | Region filter BED file paths                                               |
-| =meth_map=                                                        | Experiment map for differential methylation                                |
-| =MOSDEPTH_QUANT_LEVELS=                                           | Coverage quantization thresholds (default: =1,5,10,20=)                    |
-| =EMSEQ_MINCOV=                                                    | Minimum coverage for methylKit (default: =2=)                              |
-| =FASTP_EXTRA=                                                     | Additional fastp arguments (default: none)                                 |
+| =ENV_EMSEQ=, =ENV_METHYLKIT=                              | Conda environment YAML paths                                           |
+| =R_EMSEQ=                                               | Repository root path                                                   |
+| =D_DATA=, =D_EMSEQ=, =D_REF=, =D_LOGS=, =D_BENCHMARK=, =D_INPUTS= | Directory layout (derived from =main-data-dir=)                          |
+| =emseq_library_ids=                                     | List of sample IDs (from config)                                       |
+| =emseq_ref_names=                                       | Reference genome names to align against (project decision)             |
+| =emseq_align_methods=                                   | Alignment methods to run (e.g. =["bwa_meth"]= or =["bwa_meth","biscuit"]=) |
+| =spike_builds=                                          | Spike-in reference names included in this run (project decision)       |
+| =EMSEQ_REF_INPUTS=                                      | Dict mapping ref name → input FASTA filename                           |
+| =KEEP_BED=, =EXCL_BED=                                    | Region filter BED file paths                                           |
+| =meth_map=                                              | Experiment map for differential methylation                            |
+| =MOSDEPTH_QUANT_LEVELS=                                 | Coverage quantization thresholds (default: =1,5,10,20=)                  |
+| =EMSEQ_MINCOV=                                          | Minimum coverage for methylKit (default: =2=)                            |
+| =FASTP_EXTRA=                                           | Additional fastp arguments (default: none)                             |
 
 ***** Processing steps
 
@@ -596,13 +596,13 @@ Filtered BAMs and methylation calls in, differential methylation results, haplot
 
 All core variables (above), plus these analysis-specific variables assigned in the wrapper:
 
-| =ENV_HAPLOTYPE=, =ENV_DECONV=         | Conda environment YAML paths for haplotype and deconvolution |
+| =ENV_HAPLOTYPE=, =ENV_DECONV=       | Conda environment YAML paths for haplotype and deconvolution |
 | =R_MHAPTOOLS=, =R_WGBSTOOLS=, =R_UXM= | Paths to cloned external tool repositories                   |
-| =CPG_REF=                             | Tabixed CpG reference file (hg38)                            |
-| =MHB_BED=                             | Methylation haplotype block BED (e.g. Guo 2017 liftover)     |
-| =HAP_METRICS=                         | Space-separated haplotype metric names                       |
-| =DECONV_GENOME=                       | wgbs_tools genome identifier                                 |
-| =DECONV_ATLAS=                        | UXM deconvolution reference atlas TSV                        |
+| =CPG_REF=                         | Tabixed CpG reference file (hg38)                            |
+| =MHB_BED=                         | Methylation haplotype block BED (e.g. Guo 2017 liftover)     |
+| =HAP_METRICS=                     | Space-separated haplotype metric names                       |
+| =DECONV_GENOME=                   | wgbs_tools genome identifier                                 |
+| =DECONV_ATLAS=                    | UXM deconvolution reference atlas TSV                        |
 
 External tool repositories must be cloned before running (see =tools/setup_repos.sh=).
 
@@ -1661,7 +1661,6 @@ rule emseq_mosdepth:
 # This script wraps the `mosdepth` tool to compute read depth over a BAM file,
 # optimized for EM-seq cfDNA data. It configures the run to:
 #   - use median depth (`--use-median`)
-#   - run in fast mode (no per-base depth)
 #   - report thresholds and quantized bins
 #   - restrict to user-provided target regions
 #
@@ -1716,7 +1715,6 @@ run_mosdepth() {
     mosdepth \
         --threads "$threads" \
         --no-per-base \
-        --fast-mode \
         --use-median \
         --quantize "$quant_str" \
         --by "$regions_bed" \
@@ -1831,10 +1829,15 @@ rule emseq_filter_bam:
         # -f 2: proper pairs only
         # -q 30: MAPQ >= 30
         # -F 3840 (0xF00): remove secondary + supplementary + failed QC + duplicates
+        # bedtools -sorted stops reading at the last keep_bed contig; samtools then
+        # writes trailing non-primary contigs into a closed pipe (SIGPIPE, exit 141).
+        # Scope pipefail off to this one pipe so the benign 141 is not fatal.
+        set +o pipefail
         samtools view -@ {threads} -u -f 2 -q 30 -F 3840 "{input.bam}" \
           | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.exclude_bed}" -v -ubam \
           | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.keep_bed}" -ubam \
           > "{output.bam}.tmp"
+        set -o pipefail
         # Prune @SQ dictionary to primary contigs. Non-primary (decoy/unplaced/alt)
         # contigs carry zero reads after the keep-bed filter and trail the primary
         # contigs in the dictionary, so dropping them shifts no read's reference tid.
@@ -2410,8 +2413,8 @@ write_tsv(
 :END:
 - [[id:28f0b200-7052-424f-a9ff-35e3c6234efb][Cross-modal methylation-fragmentomics enrichment (career.org)]]
 - note that multicq inputs cannot promp new runs
-- push methmap to config
-- Add =Mk= read-level summary statistic: per-sample count (or fraction) of reads containing ≥k methylated CpGs. Captures read-level methylation density without collapsing to region mean — behaves like methylation haplotype load when k matches a region's CpG count. Related prior art: Pasha et al. 2026 BCMA targeted panel, Guardant =MR= metric, Guo et al. 2017 methylation haplotype load (MHL). Candidate pipeline use: per-DMR per-sample feature for classifier input or QC; complements the tiled-mean methylation currently produced by =make_methylkit_diff_db_tiled=.
+- *Do NOT implement* — high-coverage percentile filtering (=filterByCoverage(hi.perc=…)=) on the genome-wide DMR path. The earlier rationale (top-0.1% PCR-jackpot CpGs inflate =calculateDiffMeth= leverage and manufacture false DMRs) does not survive the EM-seq methods literature: percentile-based ("vertical") high-coverage filtering "has shown a high risk for increasing WGBS coverage biases and should only be used where coverage depth is expected to be extremely high … targeted methods such as RRBS, and not with whole genome protocols." For WGBS/EM-seq the correct PCR-artifact control is deduplication (already done in =emseq_dedup=) plus *horizontal* (per-region CpG-count) filtering, not vertical coverage trimming. If ever needed for a targeted/amplicon experiment, gate it strictly opt-in (default off); methylKit's conventional threshold is =hi.perc=99.9= (drop top 0.1%). Source: "Whole Genome Methylation Sequencing via Enzymatic Conversion (EM-seq): Protocol, Data Processing and Analysis", bioRxiv 2023, doi:10.1101/2023.10.07.561361 — https://www.biorxiv.org/content/10.1101/2023.10.07.561361v1.full
+- *Already covered — do not build as a new feature* — the proposed =Mk= read-level statistic (fraction/count of reads with ≥k methylated CpGs) is essentially *CHALM* (Xu 2021), one of the eight read-level metrics =mhaptk stat= already computes (rule =emseq_analysis_mhaptk_stat=; also MM, PDR, MHL, MCR, MBS, Entropy, R2). It is simply not enabled: =config/test.yaml= sets =haplotype.metrics: [MHL, PDR, Entropy]=; adding =CHALM= (k set via =--K/--minK/--maxK=) yields it with no new code. Caveat: the haplotype path (mHapTools→mhaptk) is currently *excluded from CI as fragile* (C++/htslib build), so a robust *genome-wide* read-level metric would instead need a non-mHapTools route (e.g. =biscuit epiread=). Ref: mHapTk, Bioinformatics 2022 — https://academic.oup.com/bioinformatics/article/38/22/5141/6731920
 #+begin_src snakemake
 rule all_experiment_tiled_methylation:
     input:
@@ -2854,7 +2857,6 @@ ls /tmp/breast/analysis/emseq/bams-merged/PRO_13_deduped.bam
 mosdepth \
     --threads 8 \
     --no-per-base \
-    --fast-mode \
     --use-median \
     --quantize 0:5:10:20 \
     /tmp/breast/qc/PRO_13_emseq_mosdepth \

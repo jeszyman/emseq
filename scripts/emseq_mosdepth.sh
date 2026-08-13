@@ -5,7 +5,6 @@
 # This script wraps the `mosdepth` tool to compute read depth over a BAM file,
 # optimized for EM-seq cfDNA data. It configures the run to:
 #   - use median depth (`--use-median`)
-#   - run in fast mode (no per-base depth)
 #   - report thresholds and quantized bins
 #   - restrict to user-provided target regions
 #
@@ -60,7 +59,6 @@ run_mosdepth() {
     mosdepth \
         --threads "$threads" \
         --no-per-base \
-        --fast-mode \
         --use-median \
         --quantize "$quant_str" \
         --by "$regions_bed" \

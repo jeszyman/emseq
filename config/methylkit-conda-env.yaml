@@ -16,4 +16,4 @@ dependencies:
   - bioconductor-org.hs.eg.db
   - bioconductor-genomation
   - r-arrow
-  - bioconductor-genomation
+  - bioconductor-rsamtools

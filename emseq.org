@@ -3,6 +3,8 @@
 :ID:       cd9489fd-c6e7-4c64-8317-e3d9a283b36c
 :END:
 
+- [cite:@liu2020]
+
 - [[https://teams.microsoft.com/l/message/19:meeting_ZWFhYjE4YzktYWM0Zi00NzllLTk1NWItYjA5YTJkYWQwN2Jj@thread.v2/1769216157607?context=%7B%22contextType%22%3A%22chat%22%7D][teams]]
 - Matteo mosdepth update [[https://github.com/jeszyman/emseq/pull/1][PR #1]]
 
@@ -4613,6 +4615,13 @@ rule emseq_analysis_uxm_deconv:
           {input.pats}
         """
 #+end_src
+
+**** TODO Validate UXM deconvolution against in-silico admixtures
+UXM deconvolution is currently checked only against production data. Add a ground-truth test following the Liquid EcoTyper simulation design [cite:@zhang2026]:
+- Mix healthy-donor plasma EM-seq with atlas or tumour methylomes at known fractions, with donors split disjointly between the mixtures used for tuning and those used for scoring; score recovered vs expected fractions.
+- Check that the simulations resemble real plasma by placing simulated and real samples in one PCA coloured by tumour fraction.
+- Add a =samtools= downsampling rule (20x, 15x, 10x, 5x) and re-run deconvolution at each depth.
+- Add QC gates: drop reads with more than 3 unconverted Cs; flag samples with read pass rate <= 0.75 or median depth <= 10x at 450K CpGs.
 
 *** Ideas
 :PROPERTIES:

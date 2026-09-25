@@ -20,6 +20,17 @@
 #   emseq_align_methods            — list of alignment methods (e.g. ["bwa_meth"] or ["bwa_meth","biscuit"])
 #   EMSEQ_MINCOV                   — minimum coverage for methylKit
 #   FASTP_EXTRA                    — additional fastp arguments
+
+# Read pairs kept for dedup and filtering, applied with `samtools view -f 1 -F 12`:
+# mates on the same chromosome, facing inward, fragment <= 1000 bp. This
+# replaces the proper-pair flag (0x2), which bwa-meth sets from an insert-size
+# distribution inferred per library; on cfDNA it stops at about 270-280 bp and
+# a `-f 2` filter drops every dinucleosome-length fragment.
+EMSEQ_PAIR_FILTER = (
+    "mrname == rname && flag.reverse != flag.mreverse"
+    " && ((!flag.reverse && tlen > 0) || (flag.reverse && tlen < 0))"
+    " && tlen >= -1000 && tlen <= 1000"
+)
 # ── Spike-in Controls ────────────────────────────────────────────────────────
 # Align to pUC19 (methylated) and Lambda (unmethylated) for conversion QC.
 # Duplicates are retained — every read contributes to conversion rate estimation.
@@ -345,7 +356,8 @@ rule emseq_dedup:
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_dedup.tsv"
     params:
-        temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}.{wc.align_method}.coorsort"
+        temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}.{wc.align_method}.coorsort",
+        pair_filter = EMSEQ_PAIR_FILTER,
     threads: 8
     resources:
         concurrency = 25
@@ -358,8 +370,8 @@ rule emseq_dedup:
         echo "[dedup] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
         mkdir -p "$(dirname "{params.temp_prefix}")"
         rm -f {params.temp_prefix}.tmp.*
-        # -f 0x2: proper pairs only before name-sorting for dupsifter
-        samtools view -bh -f 0x2 "{input.bam}" \
+        # Both mates mapped and passing EMSEQ_PAIR_FILTER before name-sorting for dupsifter
+        samtools view -bh -f 1 -F 12 -e '{params.pair_filter}' "{input.bam}" \
         | samtools sort -n -@ {threads} -O BAM -T "{params.temp_prefix}.tmp" -o - \
         | dupsifter \
         --add-mate-tags \
@@ -369,7 +381,7 @@ rule emseq_dedup:
         samtools index -@ {threads} "{output.bam}"
         """
 rule emseq_filter_bam:
-    message: "Filter BAM to proper pairs, MAPQ>=30, autosomes, excluding blacklist and duplicates"
+    message: "Filter BAM to inward-facing pairs <= 1000 bp, MAPQ>=30, autosomes, excluding blacklist and duplicates"
     conda: ENV_EMSEQ
     input:
         bam   = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam",
@@ -381,6 +393,8 @@ rule emseq_filter_bam:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_filter_bam.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_filter_bam.tsv"
+    params:
+        pair_filter = EMSEQ_PAIR_FILTER,
     threads: 8
     output:
         bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.filt.bam",
@@ -389,14 +403,14 @@ rule emseq_filter_bam:
         """
         exec &>> "{log.cmd}"
         echo "[filter-bam] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
-        # -f 2: proper pairs only
+        # -f 1 -F 12 -e pair_filter: both mates mapped, EMSEQ_PAIR_FILTER
         # -q 30: MAPQ >= 30
-        # -F 3840 (0xF00): remove secondary + supplementary + failed QC + duplicates
+        # -F 3852 (0xF0C): also remove secondary + supplementary + failed QC + duplicates
         # bedtools -sorted stops reading at the last keep_bed contig; samtools then
         # writes trailing non-primary contigs into a closed pipe (SIGPIPE, exit 141).
         # Scope pipefail off to this one pipe so the benign 141 is not fatal.
         set +o pipefail
-        samtools view -@ {threads} -u -f 2 -q 30 -F 3840 "{input.bam}" \
+        samtools view -@ {threads} -u -f 1 -q 30 -F 3852 -e '{params.pair_filter}' "{input.bam}" \
           | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.exclude_bed}" -v -ubam \
           | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.keep_bed}" -ubam \
           > "{output.bam}.tmp"

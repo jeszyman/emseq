@@ -587,23 +587,23 @@ The wrapper assigns all variables before =include: "emseq.smk"= (see the Wrapper
 - *Bias detection*: Position-dependent methylation bias assessment (MethylDackel mbias)
 - *Reporting*: Aggregated QC report (MultiQC)
 
-*Design decision — duplicate marking vs. removal:* Deduplication is deliberately split into two rules. =emseq_dedup= uses dupsifter to *mark* duplicates (SAM flag 0x400) without removing them. =emseq_filter_bam= then *removes* marked duplicates as part of a combined filter (=-F 3840=: secondary + supplementary + failed QC + duplicates) while also requiring proper pairs (=-f 2=), MAPQ ≥ 30, and intersection with keep/exclude BED regions. Separating these steps ensures that the marked-but-unfiltered BAM is available for M-bias assessment, where the full read set is needed to accurately detect position-dependent biases before duplicate removal.
+*Design decision — duplicate marking vs. removal:* Deduplication is deliberately split into two rules. =emseq_dedup= uses dupsifter to *mark* duplicates (SAM flag 0x400) without removing them. =emseq_filter_bam= then *removes* marked duplicates as part of a combined filter (=-F 3852=: secondary + supplementary + failed QC + duplicates, and both mates mapped) while also requiring inward-facing pairs on one chromosome with a fragment of at most 1,000 bp (=EMSEQ_PAIR_FILTER=), MAPQ ≥ 30, and intersection with keep/exclude BED regions. Separating these steps ensures that the marked-but-unfiltered BAM is available for M-bias assessment, where the full read set is needed to accurately detect position-dependent biases before duplicate removal.
 
 [[file:resources/test_smk.png]]
 
 ***** Outputs
 
-| =emseq/fastqs/{lib}.trimmed_{R1,R2}.fastq.gz=                    | Adapter-trimmed paired-end reads                                           |
-| =emseq/bams/{lib}.{ref}.{aligner}.coorsort.deduped.bam=          | Coordinate-sorted BAM with duplicates marked (not removed)                 |
-| =emseq/bams/{lib}.{ref}.{aligner}.coorsort.filt.bam=             | Final filtered BAM: duplicates removed, MAPQ ≥ 30, proper pairs, on-target |
-| =emseq/dmr/tabix/{lib}.{ref}.{aligner}.methyldackel.txt.bgz=     | Per-CpG methylation calls, tabix-indexed                                   |
-| =emseq/meth/{lib}.{ref}.{aligner}_methyldackel_CpG.methylKit=    | Per-sample methylKit object                                                |
-| =emseq/spike/{lib}.{spike}.{aligner}_methyldackel_CpG.methylKit= | Spike-in methylation calls for conversion rate estimation                  |
-| =emseq/qc/{lib}.{raw,trimmed}_{R1,R2}_fastqc.{html,zip}=         | Per-sample FastQC reports (pre- and post-trimming)                         |
-| =emseq/qc/{lib}.{ref}.{aligner}_emseq_mbias.txt=                 | M-bias profile for position-dependent bias detection                       |
-| =emseq/qc/mosdepth_{lib}.{ref}.{aligner}.mosdepth.summary.txt=   | Coverage depth summary with threshold and quantization tracks              |
-| =emseq/qc/{lib}_emseq_fastp.{html,json}=                         | Fastp trimming report                                                      |
-| =emseq/qc/multiqc.html=                                          | Aggregated QC report across all samples                                    |
+| =emseq/fastqs/{lib}.trimmed_{R1,R2}.fastq.gz=                    | Adapter-trimmed paired-end reads                                                      |
+| =emseq/bams/{lib}.{ref}.{aligner}.coorsort.deduped.bam=          | Coordinate-sorted BAM with duplicates marked (not removed)                            |
+| =emseq/bams/{lib}.{ref}.{aligner}.coorsort.filt.bam=             | Final filtered BAM: duplicates removed, MAPQ ≥ 30, inward pairs ≤ 1,000 bp, on-target |
+| =emseq/dmr/tabix/{lib}.{ref}.{aligner}.methyldackel.txt.bgz=     | Per-CpG methylation calls, tabix-indexed                                              |
+| =emseq/meth/{lib}.{ref}.{aligner}_methyldackel_CpG.methylKit=    | Per-sample methylKit object                                                           |
+| =emseq/spike/{lib}.{spike}.{aligner}_methyldackel_CpG.methylKit= | Spike-in methylation calls for conversion rate estimation                             |
+| =emseq/qc/{lib}.{raw,trimmed}_{R1,R2}_fastqc.{html,zip}=         | Per-sample FastQC reports (pre- and post-trimming)                                    |
+| =emseq/qc/{lib}.{ref}.{aligner}_emseq_mbias.txt=                 | M-bias profile for position-dependent bias detection                                  |
+| =emseq/qc/mosdepth_{lib}.{ref}.{aligner}.mosdepth.summary.txt=   | Coverage depth summary with threshold and quantization tracks                         |
+| =emseq/qc/{lib}_emseq_fastp.{html,json}=                         | Fastp trimming report                                                                 |
+| =emseq/qc/multiqc.html=                                          | Aggregated QC report across all samples                                               |
 
 **** =emseq_analysis.smk= — Downstream Analysis
 
@@ -1254,10 +1254,10 @@ This will be indexed and used for alignment.
   Raw sequencing reads were processed with fastp with adapter detection enabled and quality filtering disabled. Quality filtering was disabled because base quality recalibration is unreliable for C-to-T converted libraries. FastQC was used to assess read quality before and after trimming.
 
 - Alignment and duplicate marking.
-  Reads were aligned to reference genomes using BWA-meth with default parameters. Resulting BAMs were coordinate-sorted and duplicates were marked using dupsifter (https://github.com/brentp/dupsifter), which performs read name-aware duplicate detection optimized for bisulfite-style alignments. Only properly paired reads (SAM flag 0x2) were retained prior to duplicate marking. Duplicates were marked (SAM flag 0x400) but not removed at this stage, preserving the full read set for M-bias assessment.
+  Reads were aligned to reference genomes using BWA-meth with default parameters. Resulting BAMs were coordinate-sorted and duplicates were marked using dupsifter (https://github.com/brentp/dupsifter), which performs read name-aware duplicate detection optimized for bisulfite-style alignments. Before duplicate marking, read pairs were retained when both mates mapped to one chromosome, facing inward, with a fragment length of at most 1,000 bp. The aligner's proper-pair flag was not used, because BWA-MEM sets it from an insert-size distribution inferred per library and, in cfDNA libraries, excludes fragments longer than about 270 bp. Duplicates were marked (SAM flag 0x400) but not removed at this stage, preserving the full read set for M-bias assessment.
 
 - BAM filtering.
-  Marked BAMs were filtered to retain only properly paired reads (SAM flag 0x2) with mapping quality ≥ 30, excluding secondary alignments, supplementary alignments, failed QC reads, and marked duplicates (SAM flag -F 3840). Reads were further intersected with autosomal keep regions and filtered against a blacklist BED.
+  Marked BAMs were filtered to retain the same read pairs with mapping quality ≥ 30, excluding secondary alignments, supplementary alignments, failed QC reads, and marked duplicates (SAM flag -F 3852). Reads were further intersected with autosomal keep regions and filtered against a blacklist BED.
 
 - Methylation calling.
   CpG methylation was extracted from filtered BAMs using MethylDackel in methylKit-compatible format. Per-sample methylKit objects were created with tabix indexing for downstream differential analysis.
@@ -1304,6 +1304,17 @@ All steps were executed using a reproducible Snakemake workflow with conda-based
 #   emseq_align_methods            — list of alignment methods (e.g. ["bwa_meth"] or ["bwa_meth","biscuit"])
 #   EMSEQ_MINCOV                   — minimum coverage for methylKit
 #   FASTP_EXTRA                    — additional fastp arguments
+
+# Read pairs kept for dedup and filtering, applied with `samtools view -f 1 -F 12`:
+# mates on the same chromosome, facing inward, fragment <= 1000 bp. This
+# replaces the proper-pair flag (0x2), which bwa-meth sets from an insert-size
+# distribution inferred per library; on cfDNA it stops at about 270-280 bp and
+# a `-f 2` filter drops every dinucleosome-length fragment.
+EMSEQ_PAIR_FILTER = (
+    "mrname == rname && flag.reverse != flag.mreverse"
+    " && ((!flag.reverse && tlen > 0) || (flag.reverse && tlen < 0))"
+    " && tlen >= -1000 && tlen <= 1000"
+)
 
 #+end_src
 
@@ -1795,7 +1806,8 @@ rule emseq_dedup:
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_dedup.tsv"
     params:
-        temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}.{wc.align_method}.coorsort"
+        temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}.{wc.align_method}.coorsort",
+        pair_filter = EMSEQ_PAIR_FILTER,
     threads: 8
     resources:
         concurrency = 25
@@ -1808,8 +1820,8 @@ rule emseq_dedup:
         echo "[dedup] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
         mkdir -p "$(dirname "{params.temp_prefix}")"
         rm -f {params.temp_prefix}.tmp.*
-        # -f 0x2: proper pairs only before name-sorting for dupsifter
-        samtools view -bh -f 0x2 "{input.bam}" \
+        # Both mates mapped and passing EMSEQ_PAIR_FILTER before name-sorting for dupsifter
+        samtools view -bh -f 1 -F 12 -e '{params.pair_filter}' "{input.bam}" \
         | samtools sort -n -@ {threads} -O BAM -T "{params.temp_prefix}.tmp" -o - \
         | dupsifter \
         --add-mate-tags \
@@ -1826,7 +1838,7 @@ rule emseq_dedup:
 :END:
 #+begin_src snakemake
 rule emseq_filter_bam:
-    message: "Filter BAM to proper pairs, MAPQ>=30, autosomes, excluding blacklist and duplicates"
+    message: "Filter BAM to inward-facing pairs <= 1000 bp, MAPQ>=30, autosomes, excluding blacklist and duplicates"
     conda: ENV_EMSEQ
     input:
         bam   = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.deduped.bam",
@@ -1838,6 +1850,8 @@ rule emseq_filter_bam:
         cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_filter_bam.log",
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_filter_bam.tsv"
+    params:
+        pair_filter = EMSEQ_PAIR_FILTER,
     threads: 8
     output:
         bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.filt.bam",
@@ -1846,14 +1860,14 @@ rule emseq_filter_bam:
         """
         exec &>> "{log.cmd}"
         echo "[filter-bam] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
-        # -f 2: proper pairs only
+        # -f 1 -F 12 -e pair_filter: both mates mapped, EMSEQ_PAIR_FILTER
         # -q 30: MAPQ >= 30
-        # -F 3840 (0xF00): remove secondary + supplementary + failed QC + duplicates
+        # -F 3852 (0xF0C): also remove secondary + supplementary + failed QC + duplicates
         # bedtools -sorted stops reading at the last keep_bed contig; samtools then
         # writes trailing non-primary contigs into a closed pipe (SIGPIPE, exit 141).
         # Scope pipefail off to this one pipe so the benign 141 is not fatal.
         set +o pipefail
-        samtools view -@ {threads} -u -f 2 -q 30 -F 3840 "{input.bam}" \
+        samtools view -@ {threads} -u -f 1 -q 30 -F 3852 -e '{params.pair_filter}' "{input.bam}" \
           | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.exclude_bed}" -v -ubam \
           | bedtools intersect -sorted -g "{input.fai}" -a stdin -b "{input.keep_bed}" -ubam \
           > "{output.bam}.tmp"
@@ -2433,6 +2447,8 @@ write_tsv(
 :END:
 - [[id:28f0b200-7052-424f-a9ff-35e3c6234efb][Cross-modal methylation-fragmentomics enrichment (career.org)]]
 - note that multicq inputs cannot promp new runs
+- *Estimate the natural-duplicate rate before dupsifter removes duplicates.* The EM-seq specific ways to measure it (transversion SNPs, CpG-state discordance within marked pairs) are in [[file:~/repos/frag/frag.org::Estimate the natural-duplicate rate before removing duplicates][frag Ideas]], with the general cfDNA argument.
+- *Let MethylDackel handle read-end bias, with no fixed read trim: apply its inclusion bounds from each library's M-bias.* =emseq_mbias= already writes a per-library M-bias profile, but =MethylDackel extract= runs without =--OT=/=--OB= bounds, so end-repair and adapter-read-through calls at read ends enter the per-CpG counts (see the M-bias section above). MethylDackel mbias prints suggested bounds per strand and read, and applying them at extraction, per library or as one cohort-wide bound from the pooled profile, is established practice: MethylDackel's help advises it, and the Pipeline Olympics benchmark applied sample-specific M-bias trimming for bwa-meth/MethylDackel ([[https://doi.org/10.1101/2024.09.16.609142][Lin 2024, bioRxiv]]). Fixed EM-seq clips in use for comparison: 5 bp at 5′ ends (NEB), 8 bp both ends (nf-core methylseq =--em_seq=), 10 bp both ends ([[https://doi.org/10.1101/2023.10.07.561361][Olova and Andrews 2023]]). The same profile can set rmeth's read-end trim ([[file:~/repos/rmeth/rmeth.org::*Ideas][rmeth Ideas]]).
 - *Do NOT implement* — high-coverage percentile filtering (=filterByCoverage(hi.perc=…)=) on the genome-wide DMR path. The earlier rationale (top-0.1% PCR-jackpot CpGs inflate =calculateDiffMeth= leverage and manufacture false DMRs) does not survive the EM-seq methods literature: percentile-based ("vertical") high-coverage filtering "has shown a high risk for increasing WGBS coverage biases and should only be used where coverage depth is expected to be extremely high … targeted methods such as RRBS, and not with whole genome protocols." For WGBS/EM-seq the correct PCR-artifact control is deduplication (already done in =emseq_dedup=) plus *horizontal* (per-region CpG-count) filtering, not vertical coverage trimming. If ever needed for a targeted/amplicon experiment, gate it strictly opt-in (default off); methylKit's conventional threshold is =hi.perc=99.9= (drop top 0.1%). Source: "Whole Genome Methylation Sequencing via Enzymatic Conversion (EM-seq): Protocol, Data Processing and Analysis", bioRxiv 2023, doi:10.1101/2023.10.07.561361 — https://www.biorxiv.org/content/10.1101/2023.10.07.561361v1.full
 - *Already covered — do not build as a new feature* — the proposed =Mk= read-level statistic (fraction/count of reads with ≥k methylated CpGs) is essentially *CHALM* (Xu 2021), one of the eight read-level metrics =mhaptk stat= already computes (rule =emseq_analysis_mhaptk_stat=; also MM, PDR, MHL, MCR, MBS, Entropy, R2). It is simply not enabled: =config/test.yaml= sets =haplotype.metrics: [MHL, PDR, Entropy]=; adding =CHALM= (k set via =--K/--minK/--maxK=) yields it with no new code. Caveat: the haplotype path (mHapTools→mhaptk) is currently *excluded from CI as fragile* (C++/htslib build), so a robust *genome-wide* read-level metric would instead need a non-mHapTools route (e.g. =biscuit epiread=). Ref: mHapTk, Bioinformatics 2022 — https://academic.oup.com/bioinformatics/article/38/22/5141/6731920
 - *Add a read-level incomplete-conversion filter.* EM-seq conversion failure concentrates in molecules that escape conversion entirely (incomplete denaturation, all-or-none per molecule): a converted read has 0-1 residual non-CpG C while a failed read keeps all ~25-30, so the per-read distribution is bimodal and a threshold (drop reads with >5 non-CpG methylation calls) removes ~90% of the artifact. In this alignment-based pipeline the shipped tool is Bismark =filter_non_conversion= (or an equivalent per-read CpH check on biscuit output); the repeat-meth pipeline implements the same rule alignment-free in its read-collapse step. Filter cost rises and benefit is real above ~1% residual CpH (sheared high-input tissue gDNA is the risk case; well-converted cfDNA sits at 0.4-0.7% where the aggregate lambda QC suffices). Do not apply to tissues with genuine mCH (brain, stem cells). Background and citations: [[id:9a4febeb-30b1-4a91-bf4b-b2ccff0c2f89][biotools Conversion artifacts]]; observed case: [[id:283ad769-343d-4e3a-8e2a-ea7140dad44b][repeat-meth ovarian tissue conversion QC]]; read filter quantified in [cite:@dai2025umbs].

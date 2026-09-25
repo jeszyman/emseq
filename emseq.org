@@ -10,6 +10,21 @@
 
 *TANGLE NOTE (2026-03-25):* All divergences from 2026-03-24 resolved (rule_threads, mosdepth quantize, wildcard constraints, haplotype deps). Org source and tangled files are in sync.
 
+** Plans
+:PROPERTIES:
+:TODO_SET: plans
+:PLANS_SINCE: [2026-09-25 Fri]
+:END:
+*** COMPLETE EM-seq analysis module
+:PROPERTIES:
+:ID:       85db17f4-f22f-4445-84e8-e1433b885364
+:END:
+[[file:docs/superpowers/plans/2026-03-16-analysis-module-plan.md]]
+*** COMPLETE Snakemake config-contract tool
+:PROPERTIES:
+:ID:       cea4afb9-72be-4ff2-9ba8-f4dde895e006
+:END:
+[[file:docs/superpowers/plans/2026-06-09-snakemake-config-contract.md]]
 ** [[id:bda70cff-0713-4e32-8da1-ee83924b8f00][README]]
 ** [[elisp:(let ((window-config (current-window-configuration))) (async-shell-command "bash ~/repos/mpnst/tools/shell/org_update.sh") (set-window-configuration window-config))][org update]]
 ** Repository setup and administration
@@ -1308,6 +1323,8 @@ and we expect above 90% methylation of exclusively CpG sites for pUC19
 [[file:./resources/vaisvila2021figs7c.png]]
 
 The spike workflow uses bwa-meth to quickly align to phage reference genomes. Coordinate-sorted BAM output is limited to only reads matching the phage index (-F 4). CpG methylation is called in methyldackel, allowing duplicates,
+
+The spike-in share of a library also matters beyond conversion QC. Lambda reads are unmethylated and pUC19 reads are CpG-methylated, so any spike-in read counted at a host locus pulls that locus toward 0 or 1. The host reference, ncbi_decoy_hg38, does not contain the spike-in genomes, so an alignment to a host locus does not compete with the correct spike-in alignment. The spike-in share can also differ between the arms of a comparison. In a breast cfDNA cohort, the healthy libraries carried about twice the spike-in of the cancer libraries, so unmethylated spike-in reads that reach host loci fall disproportionally on the healthy arm and make the affected loci appear more methylated in cancer. Report each library's spike-in read share and compare it between arms before any differential analysis.
 
 - [cite:@vaisvila2021]
 - [cite:@chauhan2024]
@@ -5213,6 +5230,9 @@ pipeline (breast PROMISE project, 2026-02-25).
 
 ** TODO Reconcile git tags to repo-level vX.Y.Z
 This repo carries two competing tag schemes — plain =v1.0.0/v1.0.1/v1.0.2= and =wf/emseq/v1.0.0 … v5.1.0= (numbers discontinuous between them). Standardize on repo-level plain =vX.Y.Z= per the biopipe versioning convention (no =wf/<workflow>/= prefix — a tag is a whole-repo snapshot; see [[id:271b4d5f-727e-496e-b835-8fe9f8655655][Bioinformatics pipeline]] Versioning). Before retiring the =wf/emseq/*= tags, confirm nothing pins them (consumers pin by whole-repo tag): check the breast and mpnst wrappers for =git checkout wf/emseq= or =wf/emseq= references.
+
+** TODO Measure spike-in reads that reach the host alignments
+The host reference (ncbi_decoy_hg38) holds no spike-in genome, so a lambda or pUC19 read can align to a host locus and be called there. Count, per library, the host-BAM reads that pass the MAPQ filter and align better to lambda or pUC19 than to hg38 (align the host-mapped reads to the phage references too), and report the spike-in read share per library by arm. The breast cfDNA libraries showed the arm imbalance in a k-mer pipeline (rmeth, repeat-meth =results/spikein_masked_2026-09-21/report.md= [2026-09-25 Fri]); the rate for bwa-meth on hg38 is unmeasured.
 
 ** Ideas
 - Standardized bench protocol

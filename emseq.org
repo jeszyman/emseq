@@ -4725,6 +4725,8 @@ git clone https://github.com/nloyfer/UXM_deconv.git ~/repos/UXM_deconv
 # Atlas file: ~/repos/UXM_deconv/supplemental/Atlas.U250.l4.hg38.tsv
 #+end_src
 
+- The U250 atlas holds 40 cell types with up to 250 markers each (9,520 marker rows), in hg19 and hg38 builds ([[https://github.com/nloyfer/UXM_deconv/tree/main/supplemental][UXM supplemental]]). The atlas build has to match the reference the reads were aligned to.
+
 *** wgbs_tools genome init
 
 #+begin_src sh

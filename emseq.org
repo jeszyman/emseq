@@ -5252,6 +5252,10 @@ This repo carries two competing tag schemes — plain =v1.0.0/v1.0.1/v1.0.2= and
 ** TODO Measure spike-in reads that reach the host alignments
 The host reference (ncbi_decoy_hg38) holds no spike-in genome, so a lambda or pUC19 read can align to a host locus and be called there. Count, per library, the host-BAM reads that pass the MAPQ filter and align better to lambda or pUC19 than to hg38 (align the host-mapped reads to the phage references too), and report the spike-in read share per library by arm. The breast cfDNA libraries showed the arm imbalance in a k-mer pipeline (rmeth, repeat-meth =results/spikein_masked_2026-09-21/report.md= [2026-09-25 Fri]); the rate for bwa-meth on hg38 is unmeasured.
 
+** WAITING methylKit unite splits a CpG across chunk borders
+SCHEDULED: <2026-11-04 Wed>
+- [2026-10-28 Wed] [[id:2dff0c41-22df-4eec-8214-cfeea6a0efe7][Jessica Linford]], running the pipeline on prostate EM-seq: after she made chunks smaller, the unite rule (=unite(destrand = TRUE, chunk.size = ...)= in make_methylkit_unite_db.R) gave two rows for a couple thousand of 2.7 million CpGs whose forward and reverse strands fell in different chunks, so the matrix had duplicate row names. She is testing de-stranding before chunking and will send the log and her fix; Jeff asked that the fix go to the whole group. ([[file:~/meetings/chaudhuri-bioinfo-huddle/2026-10-28-notes.md][bioinfo huddle 2026-10-28]])
+
 ** Ideas
 - Standardized bench protocol
   - Pradeeps protocol mods - [[https://mail.google.com/mail/u/0/#inbox/FMfcgzQVxlRMrkdpbmdDQwTpXqLNjKdM][gmail]]

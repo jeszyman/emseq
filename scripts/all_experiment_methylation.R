@@ -22,7 +22,7 @@ first_chunk <- TRUE
 for (chrom in chroms) {
     message(sprintf("Processing chromosome: %s", chrom))
 
-    chrom_gr <- GRanges(seqnames = chrom, ranges = IRanges(start = 1, end = .Machine$integer.max))
+    chrom_gr <- GRanges(seqnames = chrom, ranges = IRanges(start = 1, end = 536870912))  # tabix region limit (2^29); .Machine$integer.max fails scanTabix
 
     meth_sub <- selectByOverlap(meth, chrom_gr)
 

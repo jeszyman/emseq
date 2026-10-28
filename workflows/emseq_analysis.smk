@@ -181,6 +181,11 @@ rule emseq_analysis_annotate_cpg:
 # Requires external CpG reference and MHB BED (see Reference preparation).
 rule emseq_analysis_mhap_convert:
     message: "Convert filtered BAM to mhap format using mHapTools for haplotype analysis"
+    # mHapTools reads bisulfite polarity (unmethylated C as T); BAMs from
+    # methylated-C-to-T chemistries (taps, duet_*) carry the opposite polarity
+    # and supply their own haplotype targets.
+    wildcard_constraints:
+        align_method = "bwa_meth|biscuit",
     conda: ENV_HAPLOTYPE
     input:
         bam = f"{D_EMSEQ}/bams/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.coorsort.filt.bam",
@@ -291,6 +296,9 @@ rule emseq_analysis_wgbstools_init_genome:
         """
 rule emseq_analysis_bam2pat:
     message: "Convert chr-prefixed BAM to methylation pat file using wgbs_tools"
+    # wgbstools bam2pat reads bisulfite polarity; see emseq_analysis_mhap_convert.
+    wildcard_constraints:
+        align_method = "bwa_meth|biscuit",
     conda: ENV_DECONV
     input:
         bam = f"{D_EMSEQ}/deconv/{{library_id}}.{{emseq_ref_name}}.{{align_method}}.chr.bam",

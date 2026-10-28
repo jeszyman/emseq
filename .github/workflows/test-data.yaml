@@ -1,6 +1,7 @@
 name: test-data
 
 on:
+  push: {branches: [master]}
   pull_request:
     paths:
       - "tools/get_test_data.sh"

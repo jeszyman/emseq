@@ -26,7 +26,7 @@
 :END:
 [[file:docs/superpowers/plans/2026-06-09-snakemake-config-contract.md]]
 ** [[id:bda70cff-0713-4e32-8da1-ee83924b8f00][README]]
-** [[elisp:(let ((window-config (current-window-configuration))) (async-shell-command "bash ~/repos/mpnst/tools/shell/org_update.sh") (set-window-configuration window-config))][org update]]
+** [[elisp:(let ((window-config (current-window-configuration))) (async-shell-command "bash ~/repos/emseq/tools/shell/org_update.sh") (set-window-configuration window-config))][org update]]
 ** Repository setup and administration
 *** Org update
 #+begin_src bash :tangle ./tools/shell/org_update.sh
@@ -756,6 +756,7 @@ python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/re
 name: test-data
 
 on:
+  push: {branches: [master]}
   pull_request:
     paths:
       - "tools/get_test_data.sh"
@@ -849,6 +850,7 @@ jobs:
 name: smk-dry
 
 on:
+  push: {branches: [master]}
   pull_request:
     paths:
       - "workflows/**"
@@ -913,6 +915,7 @@ jobs:
 #+begin_src yaml :tangle ./.github/workflows/smk-run.yaml
 name: smk-run
 on:
+  push: {branches: [master]}
   pull_request:
     paths:
       - "workflows/**"
@@ -963,6 +966,7 @@ jobs:
 name: smk-analysis-dry
 
 on:
+  push: {branches: [master]}
   pull_request:
     paths:
       - "workflows/**"
@@ -1018,6 +1022,7 @@ jobs:
 #+begin_src yaml :tangle ./.github/workflows/smk-analysis-run.yaml
 name: smk-analysis-run
 on:
+  push: {branches: [master]}
   pull_request:
     paths:
       - "workflows/**"
@@ -1071,6 +1076,31 @@ jobs:
             --conda-frontend conda \
             --latency-wait 30 \
             --resources concurrency=50
+#+end_src
+
+*** License
+#+begin_src text :tangle ./LICENSE
+MIT License
+
+Copyright (c) 2026 Jeffrey Szymanski
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 #+end_src
 
 ** Conda environmental YAMLs
@@ -4751,6 +4781,14 @@ ln -s /path/to/ref/wgbstools/hg38_decoy ~/repos/wgbs_tools/references/hg38_decoy
 #+end_src
 
 ** Testing
+*** Test data provenance
+Sequencing type: whole-genome bisulfite sequencing (WGBS), used as an EM-seq-like C-to-T converted test input; the pipeline treats both the same way.
+Reads: four paired ENA runs, ERR022484, ERR022487, ERR022003, ERR022483, streamed by [[file:tools/get_test_data.sh][tools/get_test_data.sh]] and clipped to the first 60,000 read pairs each (=NREADS=, 240,000 FASTQ lines per mate), written as =lib001= to =lib004= under =tests/full/inputs/=. =lib003b= is a committed copy of =lib003= so methylKit sees distinct sample IDs in the test experiment.
+Reference: chr22 of GRCh38 (UCSC =chr22.fa.gz=) as =chr22.test.fa.gz=, with the =.fai=, the uncompressed FASTA, and the derived =chr22.keep.bed= and =chr22.exclude.blacklist.bed.gz= built by the same script.
+Spike references: lambda phage and pUC19 (NCBI efetch, L09137.2), full sequences.
+Blacklist: ENCODE hg38 blacklist v2 (Boyle lab), full file; the chr22-clipped exclude BED is derived from it.
+Analysis inputs: =hg38_CpG_chr22.gz= (+ =.tbi=), =test_mhb_chr22.bed=, and =Atlas.U25.l4.hg38_test.tsv= (a chr22 cut of the UXM deconvolution atlas) are committed alongside, produced outside the script.
+Committed versus ignored: =.gitignore= ignores =tests/full/*= and re-includes =tests/full/inputs/= and everything under it, so the inputs above are tracked and every pipeline output under =tests/full/= (data, logs, QC, analysis) is ignored. Current tracked list: =git ls-files tests/full/inputs=.
 *** Full test
 **** Configuration yaml
 #+begin_src yaml :tangle ./config/test.yaml
@@ -5190,6 +5228,9 @@ wget -O "$data_dir/inputs/$outfile" "$url"
 
 
 ** Reference
+:PROPERTIES:
+:ID:       9bfe7d90-1d29-4d71-80be-d1b69d09ecf5
+:END:
 - [[id:79dfda7e-8b6d-45c7-88d5-804979155763][cfDNA methylation]]
 - Alternative cfDNA WGMS profiling
   - TET-Assisted Pyridine Borane Sequencing (TAPS) [cite:@vavoulis2025]
@@ -6432,6 +6473,7 @@ out <- as_tibble(getData(md)) |>
 out
 #+end_src
 
+This block is exploratory and not tangled: it writes a CpG annotation parquet to /tmp for reuse within one session.
 #+begin_src R
 # ------- inputs: mb_base (base-resolution methylBase/DB for cohort) -------
 library(methylKit)
@@ -6524,7 +6566,8 @@ write_parquet(cpg_anno, "/tmp/cpg_annotation_hg38.parquet")   # <— reuse for e
 
 #+end_src
 
-#+begin_src R :tangle /tmp/test.R
+This block is exploratory and not tangled: it was a scratch script written to /tmp/test.R.
+#+begin_src R :tangle no
 #!/usr/bin/env Rscript
 
 suppressPackageStartupMessages({
@@ -6690,7 +6733,8 @@ readr::write_tsv(out, args$out)
 
 #+end_src
 
-#+begin_src R :tangle /tmp/test.R
+This block is exploratory and not tangled: it was a scratch script written to /tmp/test.R.
+#+begin_src R :tangle no
 #!/usr/bin/env Rscript
 
 suppressPackageStartupMessages({
@@ -6892,7 +6936,8 @@ readr::write_tsv(out, args$out)
 
 #+end_src
 
-#+begin_src R :tangle /tmp/test.R
+This block is exploratory and not tangled: it was a scratch script written to /tmp/test.R.
+#+begin_src R :tangle no
 #!/usr/bin/env Rscript
 
 suppressPackageStartupMessages({
@@ -7417,6 +7462,7 @@ deduplicate_bismark --bam --paired \
 
 #+end_src
 
+This block is exploratory and not tangled: it reads one-off /tmp TSVs from a single session.
 #+begin_src R
 library(tidyverse)
 

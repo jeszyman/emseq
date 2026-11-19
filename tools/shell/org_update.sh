@@ -9,7 +9,7 @@ REPOS=(emseq)
 REPO_DIR=~/repos/emseq
 README_ORG="$REPO_DIR/emseq.org"
 README_NODE=bda70cff-0713-4e32-8da1-ee83924b8f00
-README_EXPORT=~/repos/emacs/scripts/emacs_export_header_to_markdown.py
+README_EXPORT=~/repos/html/scripts/emacs_export_header_to_markdown.py
 # ----------------------------
 
 save_in_emacs() {

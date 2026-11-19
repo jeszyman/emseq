@@ -41,7 +41,7 @@ REPOS=(emseq)
 REPO_DIR=~/repos/emseq
 README_ORG="$REPO_DIR/emseq.org"
 README_NODE=bda70cff-0713-4e32-8da1-ee83924b8f00
-README_EXPORT=~/repos/emacs/scripts/emacs_export_header_to_markdown.py
+README_EXPORT=~/repos/html/scripts/emacs_export_header_to_markdown.py
 # ----------------------------
 
 save_in_emacs() {
@@ -677,7 +677,7 @@ Both have been validated on production-scale data.
 **** Utilities                                                     :noexport:
 [[file:README.md]]
 #+begin_src bash
-python3 ~/repos/emacs/scripts/emacs_export_header_to_markdown.py --org_file ~/repos/emseq/emseq.org --node_id bda70cff-0713-4e32-8da1-ee83924b8f00
+python3 ~/repos/html/scripts/emacs_export_header_to_markdown.py --org_file ~/repos/emseq/emseq.org --node_id bda70cff-0713-4e32-8da1-ee83924b8f00
 
 #+end_src
 

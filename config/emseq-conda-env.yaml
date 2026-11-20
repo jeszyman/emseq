@@ -12,7 +12,7 @@ dependencies:
   - bismark
   - bwa
   - bwameth
-  - methyldackel
+  - methyldackel=0.6.1
   - mosdepth
   - multiqc
   - pandas

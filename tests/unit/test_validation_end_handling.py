@@ -1,0 +1,179 @@
+# tests/unit/test_validation_end_handling.py
+"""Known-answer tests for scripts/emseq_validation_end_handling.py.
+
+The script turns MethylDackel mbias tables for the lambda and pUC19 controls
+into the numbers the read-end validation report quotes. A position counts as
+biased when the whole 95% Wilson interval of its pooled methylation lies more
+than 5 percentage points from the pooled methylation of the middle 60% of
+positions.
+"""
+import json
+import subprocess
+import sys
+
+import pytest
+
+from conftest import REPO_ROOT
+
+import emseq_validation_end_handling as v
+
+SCRIPT = REPO_ROOT / "scripts" / "emseq_validation_end_handling.py"
+END_STRAND = {"r1_start": "OT", "r1_end": "OB", "r2_start": "OB", "r2_end": "OT"}
+
+
+def test_wilson_interval():
+    lo, hi = v.wilson(0, 10)
+    assert lo == 0.0
+    assert hi == pytest.approx(0.2775, abs=1e-4)
+    lo, hi = v.wilson(50, 100)
+    assert (lo, hi) == pytest.approx((0.4038, 0.5962), abs=1e-4)
+
+
+def test_wilson_with_no_calls_is_none():
+    assert v.wilson(0, 0) is None
+
+
+def test_parse_bounds_reads_both_strands():
+    line = "Suggested inclusion options: --OT 0,0,6,0 --OB 0,0,0,146"
+    assert v.parse_bounds(line, "x.bounds.txt") == {"OT": (0, 0, 6, 0), "OB": (0, 0, 0, 146)}
+
+
+def test_parse_bounds_keeps_a_strand_that_is_absent_as_none():
+    assert v.parse_bounds("Suggested inclusion options: --OT 0,0,0,0", "x") == {"OT": (0, 0, 0, 0), "OB": None}
+
+
+def test_parse_bounds_without_the_line_names_the_file():
+    with pytest.raises(ValueError, match="lib1.puc19.CpG.bounds.txt"):
+        v.parse_bounds("", "lib1.puc19.CpG.bounds.txt")
+
+
+def test_end_bases_takes_each_end_from_the_strand_whose_position_1_is_that_end():
+    bounds = {"OT": (3, 0, 7, 0), "OB": (2, 0, 6, 0)}
+    assert v.end_bases(bounds, END_STRAND) == {"r1_start": 3, "r1_end": 2, "r2_start": 6, "r2_end": 7}
+
+
+def test_end_bases_is_none_where_the_strand_has_no_bound():
+    bounds = {"OT": (3, 0, 7, 0), "OB": None}
+    assert v.end_bases(bounds, END_STRAND) == {"r1_start": 3, "r1_end": None, "r2_start": None, "r2_end": 7}
+
+
+def test_reference_middle_pools_the_middle_sixty_percent():
+    # 10 positions; the middle 60% are positions 3 to 8
+    counts = [(0, 100)] * 2 + [(90, 10)] * 6 + [(0, 100)] * 2
+    assert v.reference_middle(counts) == pytest.approx(0.90)
+
+
+def test_biased_run_counts_consecutive_biased_positions_from_the_start():
+    assert v.biased_run([(10, 90), (20, 80), (95, 5), (96, 4)], 0.95) == 2
+
+
+def test_one_call_far_from_a_mid_range_reference_is_not_biased():
+    # the interval of 0 of 1 is 0 to 0.79, which reaches within 5 points of 0.5
+    assert v.biased_run([(0, 1), (50, 50)], 0.5) == 0
+
+
+def test_one_unmethylated_call_against_a_high_reference_is_biased():
+    # the same interval lies wholly below 0.95 - 0.05
+    assert v.biased_run([(0, 1), (95, 5)], 0.95) == 1
+
+
+def test_a_position_with_no_calls_ends_the_run():
+    assert v.biased_run([(10, 90), (0, 0), (10, 90)], 0.95) == 1
+
+
+def test_biased_within_counts_biased_positions_in_the_first_n():
+    counts = [(95, 5), (10, 90), (95, 5), (10, 90)] + [(95, 5)] * 8
+    assert v.biased_within(counts, 0.95, 10) == 2
+
+
+def series(start, n=150):
+    """Counts per position: `start` at the first positions, 97% methylated after."""
+    return list(start) + [(970, 30)] * (n - len(start))
+
+
+def tables(puc19_r2_start, lambda_r1_start=()):
+    low = [(1, 999)] * 150
+    t = {}
+    for context in ("CpG", "CHG", "CHH"):
+        t[("unmeth_lambda", context)] = {end: list(low) for end in END_STRAND}
+    t[("unmeth_lambda", "CpG")]["r1_start"] = list(lambda_r1_start) + low[len(lambda_r1_start):]
+    t[("puc19", "CpG")] = {end: series(()) for end in END_STRAND}
+    t[("puc19", "CpG")]["r2_start"] = series(puc19_r2_start)
+    return t
+
+
+def test_judge_fill_in_at_the_start_of_read_2_only():
+    result = v.judge(tables(puc19_r2_start=[(100, 900)] * 4))
+    assert result["P1"]["holds"] is True
+    assert result["P1"]["biased_run"] == 4
+    assert result["P2"]["holds"] is True
+    assert result["P3"]["holds"] is True
+
+
+def test_judge_p1_fails_without_a_biased_base_at_the_start_of_read_2():
+    assert v.judge(tables(puc19_r2_start=()))["P1"]["holds"] is False
+
+
+def test_judge_p2_and_p3_fail_when_lambda_is_biased_at_the_start_of_read_1():
+    result = v.judge(tables(puc19_r2_start=[(100, 900)] * 4, lambda_r1_start=[(300, 700)] * 3))
+    assert result["P2"]["holds"] is False
+    assert result["P3"]["holds"] is False
+    assert result["P3"]["biased"]["unmeth_lambda.CpG.r1_start"] == 3
+
+
+MBIAS_HEADER = "Strand\tRead\tPosition\tnMethylated\tnUnmethylated\n"
+
+
+def write_library(d, lib, source, context, rows, bounds):
+    (d / f"{lib}.{source}.{context}.txt").write_text(MBIAS_HEADER + "".join(rows))
+    (d / f"{lib}.{source}.{context}.bounds.txt").write_text(bounds)
+
+
+def mbias_rows(r2_start_meth):
+    rows = []
+    for strand in ("OT", "OB"):
+        for read in (1, 2):
+            for pos in range(1, 21):
+                meth = 970
+                if (strand, read) == ("OB", 2) and pos <= 3:
+                    meth = r2_start_meth
+                rows.append(f"{strand}\t{read}\t{pos}\t{meth}\t{1000 - meth}\n")
+    # position 21 has no row at all for OT read 1: zero calls there
+    return rows
+
+
+def run_script(tmp_path, bounds="Suggested inclusion options: --OT 0,0,0,0 --OB 0,0,4,0\n"):
+    d = tmp_path / "mbias"
+    d.mkdir()
+    for lib in ("libA", "libB"):
+        write_library(d, lib, "puc19", "CpG", mbias_rows(100), bounds)
+        for context in ("CpG", "CHG", "CHH"):
+            lam = [f"{s}\t{r}\t{p}\t1\t999\n" for s in ("OT", "OB") for r in (1, 2) for p in range(1, 21)]
+            write_library(d, lib, "unmeth_lambda", context, lam, "Suggested inclusion options: --OT 0,0,0,0 --OB 0,0,0,0\n")
+    out = tmp_path / "out"
+    cmd = [sys.executable, str(SCRIPT), "--mbias-dir", str(d), "--out-dir", str(out),
+           "--library-index", "libA=2", "libB=1", "--methyldackel-version", "0.6.1", "--pipeline-commit", "abc1234"]
+    return subprocess.run(cmd, capture_output=True, text=True), out
+
+
+def test_script_writes_values_and_a_position_table_without_library_names(tmp_path):
+    proc, out = run_script(tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    values = json.loads((out / "values.json").read_text())
+    assert values["n_libraries"] == 2
+    assert values["methyldackel_version"] == "0.6.1"
+    assert values["P1_holds"] is True
+    assert values["puc19_r2_start_biased_run"] == 3
+    assert values["puc19_r2_start_n_libraries_bound"] == 2
+    table = (out / "position.tsv").read_text()
+    assert "libA" not in table and "libB" not in table
+    header = table.splitlines()[0].split("\t")
+    assert header == ["source", "context", "strand", "read", "position", "library_index",
+                      "n_methylated", "n_unmethylated", "lower", "upper"]
+    assert {line.split("\t")[5] for line in table.splitlines()[1:]} == {"0", "1", "2"}
+
+
+def test_script_stops_and_names_the_library_when_the_bounds_line_is_absent(tmp_path):
+    proc, _ = run_script(tmp_path, bounds="")
+    assert proc.returncode != 0
+    assert "puc19.CpG.bounds.txt" in proc.stderr

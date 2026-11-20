@@ -1942,6 +1942,10 @@ rule emseq_samtools_stats:
 :PROPERTIES:
 :ID:       e645e8fb-1d2b-4d3c-9d6c-edcd8bf0d02c
 :END:
+
+- [2026-11-20 Fri] =scripts/make_single_amp_methylkit_obj.R= read =--mincov= as text (no integer type; line 8 at tag wf/emseq/v4.0.0), so in R =c(2, 9, 10, 12) >= "10"= is TRUE for all four and a threshold of 10 let CpGs with coverage 2 to 9 through. The two other methylKit scripts in this heading convert it with =as_int=. A review agent reports the same lines at v5.0.0 and v5.1.0 (unverified). Found during the [[file:~/career/projects/mayo_ewing/critique-draft1.0-2026-11-20.org][draft 1.0 critique]] of Roman's paper; whether that paper's DMR analysis used this script is unknown.
+- [2026-11-20 Fri] Fixed: =--mincov= now parsed with =type = "integer"=; re-tangled and tested on a four-CpG amp file (coverage 2, 9, 10, 12) with =--mincov 10=: the pre-fix script kept 4 CpGs, the fixed script keeps 2 (coverage 10 and 12).
+
 #+begin_src snakemake
 # ── Methylation Calling ──────────────────────────────────────────────────────
 rule emseq_methyldackel:
@@ -2014,7 +2018,7 @@ parser <- ArgumentParser()
 parser$add_argument("--amp_file", required = TRUE)
 parser$add_argument("--library_id", required = TRUE)
 parser$add_argument("--treatment", type = "integer", required = TRUE)
-parser$add_argument("--mincov", required = TRUE)
+parser$add_argument("--mincov", type = "integer", required = TRUE)
 parser$add_argument("--build", required = TRUE)
 parser$add_argument("--out_dir", required = TRUE)
 

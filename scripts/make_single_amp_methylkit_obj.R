@@ -5,7 +5,7 @@ parser <- ArgumentParser()
 parser$add_argument("--amp_file", required = TRUE)
 parser$add_argument("--library_id", required = TRUE)
 parser$add_argument("--treatment", type = "integer", required = TRUE)
-parser$add_argument("--mincov", required = TRUE)
+parser$add_argument("--mincov", type = "integer", required = TRUE)
 parser$add_argument("--build", required = TRUE)
 parser$add_argument("--out_dir", required = TRUE)
 

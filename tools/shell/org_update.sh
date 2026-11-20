@@ -9,6 +9,7 @@ REPOS=(emseq)
 REPO_DIR=~/repos/emseq
 README_ORG="$REPO_DIR/emseq.org"
 README_NODE=bda70cff-0713-4e32-8da1-ee83924b8f00
+METHOD_NODE=065c6944-8708-4da2-b855-f849dbd669f1
 README_EXPORT=~/repos/html/scripts/emacs_export_header_to_markdown.py
 # ----------------------------
 
@@ -25,6 +26,8 @@ update_readme() {
   echo "📝 exporting README.md from $README_ORG"
   pushd "$REPO_DIR" >/dev/null
   python3 "$README_EXPORT" --org_file "$README_ORG" --node_id "$README_NODE"
+  echo "📝 exporting METHOD.md from $README_ORG"
+  python3 "$README_EXPORT" --org_file "$README_ORG" --node_id "$METHOD_NODE"
   popd >/dev/null
 }
 

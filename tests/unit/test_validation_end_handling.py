@@ -86,6 +86,21 @@ def test_biased_within_counts_biased_positions_in_the_first_n():
     assert v.biased_within(counts, 0.95, 10) == 2
 
 
+def test_tlen_summary_gives_the_median_and_the_share_at_or_under_the_read_length(tmp_path):
+    f = tmp_path / "x.tlen.tsv"
+    # fragment lengths 100, 100, 150, 200: median 125, three of four at or under 150
+    f.write_text("100\t2\n150\t1\n200\t1\n")
+    assert v.tlen_summary([f], read_length=150) == {"median": 125.0, "share_le_read_pct": 75.0, "pairs": 4}
+
+
+def test_tlen_summary_pools_libraries(tmp_path):
+    a = tmp_path / "a.tlen.tsv"
+    b = tmp_path / "b.tlen.tsv"
+    a.write_text("100\t1\n")
+    b.write_text("300\t3\n")
+    assert v.tlen_summary([a, b], read_length=150) == {"median": 300.0, "share_le_read_pct": 25.0, "pairs": 4}
+
+
 def series(start, n=150):
     """Counts per position: `start` at the first positions, 97% methylated after."""
     return list(start) + [(970, 30)] * (n - len(start))
@@ -150,8 +165,14 @@ def run_script(tmp_path, bounds="Suggested inclusion options: --OT 0,0,0,0 --OB 
         for context in ("CpG", "CHG", "CHH"):
             lam = [f"{s}\t{r}\t{p}\t1\t999\n" for s in ("OT", "OB") for r in (1, 2) for p in range(1, 21)]
             write_library(d, lib, "unmeth_lambda", context, lam, "Suggested inclusion options: --OT 0,0,0,0 --OB 0,0,0,0\n")
+    c = tmp_path / "control"
+    c.mkdir()
+    for lib in ("libA", "libB"):
+        for source, reads in (("puc19", 1200), ("unmeth_lambda", 50000)):
+            (c / f"{lib}.{source}.reads.txt").write_text(f"{reads}\n")
+            (c / f"{lib}.{source}.tlen.tsv").write_text("15\t3\n30\t1\n")
     out = tmp_path / "out"
-    cmd = [sys.executable, str(SCRIPT), "--mbias-dir", str(d), "--out-dir", str(out),
+    cmd = [sys.executable, str(SCRIPT), "--mbias-dir", str(d), "--control-dir", str(c), "--out-dir", str(out),
            "--library-index", "libA=2", "libB=1", "--methyldackel-version", "0.6.1", "--pipeline-commit", "abc1234"]
     return subprocess.run(cmd, capture_output=True, text=True), out
 
@@ -165,6 +186,21 @@ def test_script_writes_values_and_a_position_table_without_library_names(tmp_pat
     assert values["P1_holds"] is True
     assert values["puc19_r2_start_biased_run"] == 3
     assert values["puc19_r2_start_n_libraries_bound"] == 2
+    assert values["puc19_r2_start_suggested_bound_max"] == 4
+    assert values["puc19_r2_start_position1_pct"] == 10.0
+    assert values["puc19_r2_start_position2_pct"] == 10.0
+    # positions 4 to 20 of that end are 97% methylated
+    assert values["puc19_r2_start_mean_after_run_pct"] == 97.0
+    assert values["puc19_r1_start_mean_after_run_pct"] == 97.0
+    assert values["puc19_usable_reads"] == 2400
+    assert values["puc19_usable_reads_text"] == "2,400"
+    assert values["unmeth_lambda_usable_reads_text"] == "100,000"
+    assert values["read_length"] == 20
+    assert values["puc19_tlen_median"] == 15.0
+    assert values["puc19_share_tlen_le_read_pct"] == 75.0
+    assert values["unmeth_lambda_overall_pct"] == 0.1
+    assert values["unmeth_lambda_max_position_pct"] == 0.1
+    assert values["puc19_total_calls_text"] == "160,000"
     table = (out / "position.tsv").read_text()
     assert "libA" not in table and "libB" not in table
     header = table.splitlines()[0].split("\t")

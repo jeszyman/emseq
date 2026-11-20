@@ -67,16 +67,51 @@ rule emseq_validation_mbias:
         rm -f "{output.bounds}.stderr" "{params.svg_prefix}"_O?.svg "{params.svg_prefix}"_CTO?.svg
         """
 
+rule emseq_validation_control_reads:
+    message: "Usable read count and fragment lengths of a control alignment"
+    conda: ENV_EMSEQ
+    input:
+        bam = f"{D_EMSEQ}/spike/{{library_id}}.{{source}}.bwa_meth.coorsort.bam",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{source}}_emseq_validation_control_reads.log",
+    wildcard_constraints:
+        source = "puc19|unmeth_lambda",
+    threads: 2
+    output:
+        reads = f"{D_EMSEQ}/validation/control/{{library_id}}.{{source}}.reads.txt",
+        tlen  = f"{D_EMSEQ}/validation/control/{{library_id}}.{{source}}.tlen.tsv",
+    shell:
+        """
+        exec 2>> "{log.cmd}"
+        echo "[validation-control-reads] $(date) lib={wildcards.library_id} source={wildcards.source}" >&2
+        # Usable reads are the ones MethylDackel counts by default: MAPQ 10 or
+        # more, primary, not QC-fail, not duplicate (-F 0xF00). bwa-meth marks
+        # short partial alignments of host reads to a control as QC-fail.
+        samtools view -@ {threads} -c -q 10 -F 0xF00 "{input.bam}" > "{output.reads}"
+        # Fragment length (TLEN) of usable pairs, taken from the mate with a
+        # positive TLEN, as length and count
+        samtools view -@ {threads} -q 10 -F 0xF00 -f 1 "{input.bam}" \
+          | awk '$9 > 0 && $9 <= 1000 {{n[$9]++}} END {{for (l in n) print l "\t" n[l]}}' \
+          | sort -k1,1n > "{output.tlen}"
+        """
+
 rule emseq_validation_values:
     message: "Numbers and position table for the read-end validation report"
     conda: ENV_EMSEQ
     input:
         tables = VALIDATION_MBIAS_TABLES,
+        control = expand(
+            f"{D_EMSEQ}/validation/control/{{library_id}}.{{source}}.{{kind}}",
+            library_id=emseq_library_ids,
+            source=list(VALIDATION_CONTROL_CONTEXTS),
+            kind=["reads.txt", "tlen.tsv"],
+        ),
     log:
         cmd = f"{D_LOGS}/emseq_validation_values.log",
     params:
         script = f"{R_EMSEQ}/scripts/emseq_validation_end_handling.py",
         mbias_dir = f"{D_EMSEQ}/validation/mbias",
+        control_dir = f"{D_EMSEQ}/validation/control",
         out_dir = f"{R_EMSEQ}/results/end-handling-{VALIDATION_DATASET}",
         index = " ".join(f"{lib}={idx}" for lib, idx in VALIDATION_INDEX.items()),
         repo = R_EMSEQ,
@@ -89,6 +124,7 @@ rule emseq_validation_values:
         echo "[validation-values] $(date) dataset={VALIDATION_DATASET}"
         python "{params.script}" \
           --mbias-dir "{params.mbias_dir}" \
+          --control-dir "{params.control_dir}" \
           --out-dir "{params.out_dir}" \
           --library-index {params.index} \
           --methyldackel-version "$(MethylDackel --version 2>&1 | head -n 1)" \

@@ -52,6 +52,7 @@ REPOS=(emseq)
 REPO_DIR=~/repos/emseq
 README_ORG="$REPO_DIR/emseq.org"
 README_NODE=bda70cff-0713-4e32-8da1-ee83924b8f00
+METHOD_NODE=065c6944-8708-4da2-b855-f849dbd669f1
 README_EXPORT=~/repos/html/scripts/emacs_export_header_to_markdown.py
 # ----------------------------
 
@@ -68,6 +69,8 @@ update_readme() {
   echo "📝 exporting README.md from $README_ORG"
   pushd "$REPO_DIR" >/dev/null
   python3 "$README_EXPORT" --org_file "$README_ORG" --node_id "$README_NODE"
+  echo "📝 exporting METHOD.md from $README_ORG"
+  python3 "$README_EXPORT" --org_file "$README_ORG" --node_id "$METHOD_NODE"
   popd >/dev/null
 }
 
@@ -1288,40 +1291,7 @@ This will be indexed and used for alignment.
 
 *** Writeup
 
-**** Core processing (emseq.smk)
-
-- Sample preparation and sequencing.
-  Cell-free DNA was extracted and prepared using the NEBNext® Enzymatic Methyl-seq (EM-seq) Kit following the manufacturer's protocol. Libraries were sequenced on an Illumina platform using paired-end 150 bp reads.
-
-- Sequencing read pre-processing and quality control.
-  Raw sequencing reads were processed with fastp with adapter detection enabled and quality filtering disabled. Quality filtering was disabled because base quality recalibration is unreliable for C-to-T converted libraries. FastQC was used to assess read quality before and after trimming.
-
-- Alignment and duplicate marking.
-  Reads were aligned to reference genomes using BWA-meth with default parameters. Resulting BAMs were coordinate-sorted and duplicates were marked using dupsifter (https://github.com/brentp/dupsifter), which performs read name-aware duplicate detection optimized for bisulfite-style alignments. Before duplicate marking, read pairs were retained when both mates mapped to one chromosome, facing inward, with a fragment length of at most 1,000 bp. The aligner's proper-pair flag was not used, because BWA-MEM sets it from an insert-size distribution inferred per library and, in cfDNA libraries, excludes fragments longer than about 270 bp. Duplicates were marked (SAM flag 0x400) but not removed at this stage, preserving the full read set for M-bias assessment.
-
-- BAM filtering.
-  Marked BAMs were filtered to retain the same read pairs with mapping quality ≥ 30, excluding secondary alignments, supplementary alignments, failed QC reads, and marked duplicates (SAM flag -F 3852). Reads were further intersected with autosomal keep regions and filtered against a blacklist BED.
-
-- Methylation calling.
-  CpG methylation was extracted from filtered BAMs using MethylDackel in methylKit-compatible format. Per-sample methylKit objects were created with tabix indexing for downstream differential analysis.
-
-- Quality control.
-  Coverage profiles were generated using mosdepth on filtered BAMs with threshold summaries and quantization tracks. Spike-in conversion rates were estimated from unmethylated Lambda (expected methylation < 1%) and fully methylated CpG pUC19 (expected > 90% CpG methylation) [cite:@vaisvila2021;@chauhan2024;@emseq2023manual]. Position-dependent methylation bias was assessed using MethylDackel mbias on marked (pre-filter) BAMs to ensure detection across the full read set.
-
-**** Downstream analysis (emseq_analysis.smk)
-
-- Differential methylation.
-  Per-sample methylKit tabix databases were united across treatment groups as defined by the experiment map. Differential methylation was called at both per-CpG and tiled (windowed) resolution using methylKit. Positional methylation values were extracted for significant sites. Differentially methylated regions were annotated with genomic features including CpG islands, shores, shelves, inter-CGI regions, gene promoters, exons, and introns using annotatr.
-
-- Methylation haplotypes.
-  Filtered BAMs were converted to mhap format using mHapTools. Per-region haplotype metrics (MHL, PDR, entropy) were computed for each methylation haplotype block using mhaptk.
-
-- Tissue deconvolution.
-  BAM contig names were reheadered from numeric to chr-prefixed format for wgbs_tools compatibility. Per-read methylation pattern files were generated using wgbs_tools bam2pat. Cell-type-of-origin fractions were estimated via UXM deconvolution against a reference tissue atlas.
-
-**** Pipeline orchestration
-
-All steps were executed using a reproducible Snakemake workflow with conda-based environment isolation. The pipeline is split into two modules: =emseq.smk= for core processing (FASTQ to methylation calls) and =emseq_analysis.smk= for downstream analysis (DMR, haplotypes, deconvolution). Both modules are included from a project-specific wrapper Snakefile. Logging was performed at each rule level.
+The method text is under [[id:065c6944-8708-4da2-b855-f849dbd669f1][Method]].
 
 *** Preamble
 #+begin_src snakemake
@@ -5326,6 +5296,161 @@ wget -O "$data_dir/inputs/$outfile" "$url"
 #+end_src
 
 
+** Method
+:PROPERTIES:
+:ID:       065c6944-8708-4da2-b855-f849dbd669f1
+:export_file_name: METHOD
+:END:
+*** Introduction
+
+Enzymatic methyl sequencing (EM-seq) measures cytosine methylation at single-base resolution without bisulfite. The TET2 enzyme oxidizes 5-methylcytosine and 5-hydroxymethylcytosine, and the APOBEC3A deaminase then converts the unprotected cytosines to uracil, which is copied as thymine during amplification [cite:@vaisvila2021]. A methylated cytosine therefore reads as C and an unmethylated cytosine as T, as in a bisulfite library, and EM-seq reads are analyzed with the aligners and callers written for bisulfite sequencing [cite:@emseq2023manual]. The enzymatic conversion works from picograms of DNA [cite:@vaisvila2021], which suits plasma cell-free DNA (cfDNA), where a blood draw yields nanograms.
+
+This pipeline takes paired-end EM-seq reads to per-CpG methylation calls with their quality measures, and from the calls to differential methylation, methylation haplotypes, and tissue-of-origin fractions. It was written for plasma cfDNA. Plasma fragments are short, with a modal length near 167 bp, and they are cut at preferred positions and carry single-stranded overhangs. Several steps that are routine for sheared genomic DNA behave differently on such fragments, and the pipeline's departures from common practice are stated with the measurement behind them under [[*Design decisions][Design decisions]].
+
+This report first follows the data through the pipeline ([[fig-core-dataflow]]), from trimming and alignment to methylation calling, the spike-in controls, and quality control, and then describes the downstream analyses and the output files. The closing sections give the design decisions, the limitations, and the prior work that the pipeline draws on.
+*** Overview and data flow
+
+The input is paired-end reads from an EM-seq library, as one pair of FASTQ files per library. The outputs are a per-CpG table of methylated and unmethylated calls for each library, quality-control reports, and cohort tables of differential methylation, methylation haplotypes, and tissue-of-origin fractions.
+
+#+name: fig-core-dataflow
+#+caption: *The core processing rules and their dependencies.* Rule graph of =workflows/emseq.smk= as drawn by Snakemake for the in-repository test libraries, which are aligned with both bwa-meth and BISCUIT.
+[[file:resources/test_smk.png]]
+
+The stages of [[fig-core-dataflow]] are listed in order with the Snakemake rules that run them. Core processing is in [[file:workflows/emseq.smk][=emseq.smk=]], downstream analysis is in [[file:workflows/emseq_analysis.smk][=emseq_analysis.smk=]], and a project wrapper sets the configuration and includes both [cite:@molder2021].
+
+1. *Reference indexing*, run once per reference (=emseq_bwa_meth_index=, =emseq_biscuit_index=). The reference FASTA is converted in silico and indexed for the chosen aligner.
+2. *Trimming* (=emseq_fastp=). Adapter sequence is removed from both mates.
+3. *Alignment* (=emseq_align_bwameth=, =emseq_align_biscuit=). Trimmed pairs are aligned to the converted reference and sorted by coordinate.
+4. *Duplicate marking* (=emseq_dedup=). Pairs that pass the pair test are kept, and duplicates among them are flagged.
+5. *Filtering* (=emseq_filter_bam=). Flagged duplicates, low mapping quality, and reads outside the kept regions are removed.
+6. *Methylation calling* (=emseq_methyldackel=, =emseq_make_single_methylkit_amp_obj=). Methylated and unmethylated calls are counted at each CpG and stored as an indexed table.
+7. *Spike-in controls* (=emseq_align_bwameth_spike=, =emseq_methyldackel_spike=). The trimmed reads are aligned to the lambda and pUC19 references, and control methylation is counted.
+8. *Quality control* (=emseq_fastqc=, =emseq_mosdepth=, =emseq_mbias=, =emseq_samtools_stats=, =emseq_multiqc=). Read quality, coverage, methylation by read position, and alignment statistics are collected into one report.
+9. *Downstream analysis* (the rules of =emseq_analysis.smk=). Libraries are compared between two groups, read-level methylation patterns are summarized, and tissue-of-origin fractions are estimated.
+*** Trimming
+
+Adapters are removed with [[https://github.com/OpenGene/fastp][fastp]] [cite:@chen2018fastp] with adapter detection for paired-end reads switched on (=--detect_adapter_for_pe=). Adapter removal matters more in a converted library than in an ordinary one. The EM-seq adaptor is synthesized with methylated cytosines so that it survives conversion, and an untrimmed adaptor base therefore enters the calls as a methylated cytosine at the 3' end of the read. Plasma fragments are often shorter than the read, so a large share of plasma reads run into the adaptor.
+
+Read-level quality filtering is switched off (=--disable_quality_filtering=), and no fixed number of bases is clipped from either end of either mate. Low-quality bases are instead excluded when methylation is counted, by the base-quality threshold of the caller, so that they still contribute to alignment. A read shorter than 15 bases after adapter removal is discarded, which is the fastp default, and discarded reads are written to a separate file. The reason no bases are clipped is given under [[*Read-end handling][Read-end handling]].
+*** Alignment
+
+Reads are aligned with [[https://github.com/brentp/bwa-meth][bwa-meth]], which converts the reference and the reads in silico (C to T in read 1 and G to A in read 2), aligns the converted reads with BWA-MEM, and restores the original read sequence in the output so that the caller can read the methylation state. The reference index is built once per reference with =bwameth.py index-mem2=. [[https://github.com/huishenlab/biscuit][BISCUIT]] [cite:@zhou2024] is available as a second aligner, and the wrapper variable =emseq_align_methods= sets which aligners run. Alignments are sorted by coordinate with samtools [cite:@li2011samtools]. A library can be aligned to more than one reference in one run, and the reference name is part of each output file name.
+*** Duplicate marking and filtering
+
+Read pairs are first tested for a plausible fragment. A pair is kept when both mates are mapped to the same chromosome, face each other, and span a fragment of at most 1,000 bp. The aligner's proper-pair flag is left unused here, for the reason given under [[*Pairs without the proper-pair flag][Pairs without the proper-pair flag]]. Duplicates among the kept pairs are flagged with [[https://github.com/huishenlab/dupsifter][dupsifter]].
+
+Duplicates are flagged in one rule and removed in the next. The filtering rule keeps pairs that pass the same pair test with a mapping quality of 30 or more, and removes secondary and supplementary alignments, alignments flagged as failing quality control, and flagged duplicates (=samtools view -q 30 -F 3852=). It then removes reads that overlap a blacklist BED and keeps reads within a keep BED, such as the autosomes and sex chromosomes of GRCh38. Last, the sequence dictionary of the BAM header is cut down to the primary chromosomes, so that the caller and the coverage tools see a primary-only alignment when the reference carries decoy and unplaced contigs.
+*** Methylation calling
+
+Methylation is counted with [[https://github.com/dpryan79/MethylDackel][MethylDackel]] (=extract --methylKit --keepDiscordant=, version 0.6.1) on the filtered alignment. A call is the base a read shows at a reference CpG: C for methylated and T for unmethylated on a read from the original top strand, and G and A on a read from the original bottom strand. MethylDackel counts a base when its quality is 5 or more and its alignment has a mapping quality of 10 or more, which the filter has already raised to 30. Where the two mates of a pair overlap, the position is counted once for the pair. The option =--keepDiscordant= makes MethylDackel count pairs whose proper-pair flag is unset, which it otherwise ignores.
+
+All read positions are counted. No bases are excluded at read ends, and the measurement behind that state of the pipeline is under [[*Read-end handling][Read-end handling]]. The per-CpG counts are then loaded into [[https://github.com/al2na/methylKit][methylKit]] [cite:@akalin2012methylkit] with a minimum coverage set in the configuration (=emseq-mincov=) and written as a tabix-indexed table, one per library.
+*** Spike-in controls
+
+The EM-seq kit supplies two control DNAs that are added to each sample before library preparation: unmethylated lambda DNA, and pUC19 DNA methylated at CpG sites. Lambda measures conversion. A cytosine that reads as methylated in lambda escaped conversion, so lambda methylation is the non-conversion rate of the library, and it is expected to be below 1%. pUC19 measures protection. A CpG that reads as unmethylated in pUC19 was converted despite its methylation, and pUC19 CpG methylation is expected to be above 90% [cite:@vaisvila2021;@chauhan2024;@emseq2023manual].
+
+The trimmed reads of each library are aligned separately to the lambda and pUC19 references with bwa-meth, mapped reads are kept without duplicate marking, and methylation is counted with the same MethylDackel command as for the sample. A library that was prepared without a control still gives alignments to that control's reference, because short stretches of sample reads match it. bwa-meth flags most of these partial alignments as failing quality control and MethylDackel leaves them out, but some pass. In {{{val(end-handling-plasma-pilot,n_libraries)}}} plasma libraries prepared without pUC19, {{{val(end-handling-plasma-pilot,puc19_usable_reads_text)}}} reads in total were counted on the pUC19 reference, with {{{val(end-handling-plasma-pilot,puc19_overall_pct,%.1f)}}}% CpG methylation over {{{val(end-handling-plasma-pilot,puc19_total_calls_text)}}} calls. A pUC19 table with a few hundred calls and low methylation therefore indicates a control that was never added.
+*** Quality control
+
+Read quality is reported before and after trimming with FastQC, and fastp writes its own trimming report. Coverage is profiled on the filtered alignment with [[https://github.com/brentp/mosdepth][mosdepth]] [cite:@pedersen2018], which gives the depth distribution, the depth within the kept regions, and the share of bases at or above each depth threshold set in the configuration. Alignment statistics come from =samtools stats= and =samtools flagstat= on the filtered alignment.
+
+Methylation by read position is tabulated with =MethylDackel mbias= on the duplicate-marked alignment, before the mapping-quality and region filters. MethylDackel leaves out flagged duplicates by default, so the table excludes them as the calls do. The table gives, for each strand and mate, the methylated and unmethylated calls at each position along the read, which is the form in which a position-dependent bias is looked for in converted libraries [cite:@hansen2012bsmooth]. [[https://github.com/MultiQC/MultiQC][MultiQC]] collects the reports of all libraries into one page.
+*** Downstream analysis
+
+Differential methylation is called with methylKit between the two groups of an experiment, which the configuration defines as a list of libraries with a group label for each (=meth-map=). Per-library coverage is normalized, the libraries are united over the CpGs covered in at least a set number of libraries per group, and a difference is tested at each CpG and in windows of a set width. An experiment must have exactly two groups, and the scripts stop otherwise, because the difference that methylKit reports is unreliable with more than two groups. Significant CpGs and windows are annotated with [[https://github.com/rcavalcante/annotatr][annotatr]] for CpG islands, shores, shelves, promoters, exons, and introns.
+
+Methylation haplotypes describe the methylation of consecutive CpGs on single molecules. The filtered alignment is converted to the mhap format with [[https://github.com/butyuhao/mHapTools][mHapTools]], and the methylated haplotype load, the proportion of discordant reads, and the methylation entropy are computed for each methylation haplotype block [cite:@guo2017] with mhaptk.
+
+Tissue-of-origin fractions are estimated with UXM against a reference atlas of cell-type methylation [cite:@loyfer2023]. Contig names are first rewritten to the form wgbstools expects, and per-read methylation patterns are written with =wgbstools bam2pat= [cite:@loyfer2026wgbstools]. The in-repository test covers differential methylation and annotation. The haplotype and deconvolution rules need compiled external tools and a genome-wide reference, and they are run on full data sets outside the test.
+*** Pipeline outputs
+
+The files a library or an experiment produces are listed in [[tab-outputs]]. Paths are relative to the data directory set in the configuration, and the placeholders stand for the library, the reference, the aligner, and the experiment.
+
+#+name: tab-outputs
+#+caption: Output files of the core processing and the downstream analysis.
+| File                                                               | Content                                                                     |
+|--------------------------------------------------------------------+-----------------------------------------------------------------------------|
+| <36>                                                               | <36>                                                                        |
+| =emseq/fastqs/{lib}.trimmed_{R1,R2}.fastq.gz=                      | Adapter-trimmed reads                                                       |
+| =emseq/bams/{lib}.{ref}.{aligner}.coorsort.deduped.bam=            | Pairs that pass the pair test, with duplicates flagged                      |
+| =emseq/bams/{lib}.{ref}.{aligner}.coorsort.filt.bam=               | Filtered alignment that the caller reads                                    |
+| =emseq/meth/{lib}.{ref}.{aligner}_methyldackel_CpG.methylKit=      | Per-CpG coverage and percent methylated, as MethylDackel writes it          |
+| =emseq/dmr/tabix/{lib}.{ref}.{aligner}.methyldackel.txt.bgz=       | The same calls as a tabix-indexed methylKit table                           |
+| =emseq/spike/{lib}.{control}.{aligner}_methyldackel_CpG.methylKit= | Per-CpG calls on the lambda or pUC19 reference                              |
+| =emseq/qc/{lib}.{ref}.{aligner}_emseq_mbias.txt=                   | Methylated and unmethylated calls by strand, mate, and read position        |
+| =emseq/qc/mosdepth_{lib}.{ref}.{aligner}.mosdepth.summary.txt=     | Depth summary, with distribution, threshold, and quantized tracks beside it |
+| =emseq/qc/multiqc.html=                                            | Collected quality report for all libraries                                  |
+| =emseq/dmr/diff/methylDiff_{experiment}.txt.bgz=                   | Per-CpG differences between the two groups                                  |
+| =emseq/dmr/diff/methylBase_{experiment}.tiled.txt.bgz=             | United methylation in windows                                               |
+| =emseq/dmr/annotation/{experiment}_annotated.tsv=                  | Differentially methylated regions with genomic annotation                   |
+| =emseq/haplotype/{lib}.{ref}.{aligner}_mhl.txt=                    | Haplotype metrics per methylation haplotype block                           |
+| =emseq/deconv/uxm_results.csv=                                     | Tissue-of-origin fractions for all libraries                                |
+*** Design decisions
+**** Read-end handling
+
+Methylation is counted at all read positions. End repair fills recessed 3' ends with unmethylated cytosine before conversion, so the last bases of each original strand read as unmethylated whatever the template carried. Read 2 starts on that end, and read 1 reaches it on fragments no longer than the read. In one plasma cfDNA library carrying both spike-in controls ({{{val(end-handling-plasma-spiked,puc19_usable_reads_text)}}} usable pUC19 reads), pUC19 CpG methylation was {{{val(end-handling-plasma-spiked,puc19_r2_start_position1_pct,%.1f)}}}% at the base that begins read 2 and {{{val(end-handling-plasma-spiked,puc19_r1_end_position1_pct,%.1f)}}}% at the last base of read 1, compared to {{{val(end-handling-plasma-spiked,puc19_r2_start_reference_pct,%.1f)}}}% in the middle of the read. At the two 5' ends it was {{{val(end-handling-plasma-spiked,puc19_r1_start_position1_pct,%.1f)}}}% and {{{val(end-handling-plasma-spiked,puc19_r2_end_position1_pct,%.1f)}}}% ([[fig-end-handling-controls]]). Lambda stayed at or below {{{val(end-handling-plasma-spiked,unmeth_lambda_max_position_pct,%.1f)}}}% at all four read ends.
+
+The loss is therefore at the 3' end of the original strand and absent from the 5' end. The clip of 10 bases from both ends of both mates that [[https://github.com/FelixKrueger/Bismark/blob/master/docs/src/content/docs/usage/library-types.md][Bismark]] recommends for EM-seq would remove correctly called bases at the 5' ends. The [[https://github.com/nebiolabs/EM-seq][NEB EM-seq pipeline]] instead excludes bases at the start of read 2 when methylation is counted (=--nOT 0,0,0,5 --nOB 0,0,5,0=). On read pairs constructed by hand, those options excluded 4 or 5 bases of read 2 and left the same bases counted from read 1 where the two mates overlapped ([[file:tests/unit/test_methyldackel_bounds.py][tests/unit/test_methyldackel_bounds.py]]). On fragments no longer than the read, which are common in plasma, an exclusion that names read 2 alone leaves the filled-in bases in the counts.
+
+#+name: fig-end-handling-controls
+#+caption: *The methylated control loses methylation at the 3' end of the original strand.* CpG methylation of pUC19 and lambda by position from the read end, with panels grouped by the strand end that the read end covers. n = 1 plasma cfDNA library. Bands are 95% Wilson intervals.
+[[file:resources/figures/validation_end_handling_plasma-spiked.png]]
+**** Pairs without the proper-pair flag
+
+BWA-MEM sets the proper-pair flag from a range of fragment lengths that it infers for each batch of reads. In a plasma library that range is narrow, because most fragments are close to 167 bp, and pairs from longer fragments are left unflagged although they are correctly placed. A filter on the flag then removes the fragments of two nucleosomes and longer. The pipeline tests each pair directly, for the same chromosome, inward orientation, and a fragment of at most 1,000 bp, in both the duplicate-marking rule and the filtering rule ([[file:tests/unit/test_pair_filter.py][tests/unit/test_pair_filter.py]]).
+
+MethylDackel applies the flag a second time. By default it ignores a pair whose flag is unset, which would discard at calling the pairs that the pair test keeps. The calling commands therefore pass =--keepDiscordant= ([[file:tests/unit/test_methyldackel_unflagged_pairs.py][tests/unit/test_methyldackel_unflagged_pairs.py]]).
+**** Duplicates flagged before removal
+
+Duplicate marking and duplicate removal are separate rules, so that the alignment with duplicates flagged but present remains on disk beside the filtered one. The flagged alignment holds the pairs of all mapping qualities and regions, and it is the input for methylation by read position and for any analysis that needs the pairs the filter removes.
+*** Limitations
+**** End-repair fill-in is uncorrected
+
+The methylation loss at the 3' end of each original strand enters the per-CpG counts. On the control fragments it was confined to about two bases at more than 5 percentage points, with a smaller difference from the 5' ends over the 30 bases nearest the read end ({{{val(end-handling-plasma-spiked,puc19_r2_start_mean_after_run_pct,%.1f)}}}% at the start of read 2 against {{{val(end-handling-plasma-spiked,puc19_r1_start_mean_after_run_pct,%.1f)}}}% at the start of read 1). Plasma cfDNA carries longer native overhangs than the fragmented controls, and the loss has been reported to be larger in plasma from patients with cancer than in plasma from controls [cite:@wang2026jeepers], so it can differ between the groups a study compares. The measurement rests on one library.
+**** Spike-in reads in the sample alignment
+
+The sample reference holds no lambda or pUC19 sequence, so a control read can align to a human locus and be counted there. The share of control reads that reach the filtered sample alignment has not been measured for this pipeline.
+**** Two groups per experiment
+
+Differential methylation compares two groups. A design with more groups is run as pairwise experiments, and a continuous outcome has to be made binary or analyzed outside the pipeline.
+*** Prior work
+
+The pipeline assembles published tools, and its processing follows the NEB pipeline most closely. [[tab-prior-work]] sets it beside the pipelines in common use for EM-seq.
+
+#+name: tab-prior-work
+#+caption: Read-end handling, alignment, and calling in pipelines used for EM-seq.
+| Pipeline                                                                 | Trimming                                                 | Aligner and caller                     | Read ends at calling                    |
+|--------------------------------------------------------------------------+----------------------------------------------------------+----------------------------------------+-----------------------------------------|
+| <16>                                                                     | <16>                                                     | <16>                                   | <16>                                    |
+| This pipeline                                                            | fastp, adapters only                                     | bwa-meth or BISCUIT, MethylDackel      | All positions counted                   |
+| [[https://github.com/nebiolabs/EM-seq][NEB EM-seq]]                      | fastp, adapters only                                     | bwa-meth, MethylDackel                 | Bases at the start of read 2 excluded   |
+| [[https://github.com/nf-core/methylseq][nf-core/methylseq]] (=--em_seq=) | Trim Galore, 10 bases clipped at both ends of both mates | Bismark, or bwa-meth with MethylDackel | No exclusion with MethylDackel          |
+| [[https://github.com/maxplanck-ie/snakepipes][snakePipes]] WGBS          | fastp                                                    | bwa-meth, MethylDackel                 | MethylDackel's suggested bounds applied |
+
+The pipeline differs from the NEB pipeline at read ends, where it counts all positions. The tools it calls are bwa-meth, BISCUIT [cite:@zhou2024], MethylDackel, dupsifter, methylKit [cite:@akalin2012methylkit], mosdepth [cite:@pedersen2018], and wgbstools [cite:@loyfer2026wgbstools].
+*** Abbreviations
+
+- *BAM:* binary alignment map, the alignment file format
+- *cfDNA:* cell-free DNA
+- *EM-seq:* enzymatic methyl sequencing
+- *MAPQ:* mapping quality
+- *MHB:* methylation haplotype block
+- *NEB:* New England Biolabs
+- *TET2:* ten-eleven translocation methylcytosine dioxygenase 2
+- *TLEN:* the fragment length field of an alignment record
+- *UXM:* the deconvolution tool that estimates tissue-of-origin fractions from read-level methylation
+*** Glossary
+
+- *Conversion:* The enzymatic change of unmethylated cytosine to uracil, read as thymine. Under-conversion leaves an unmethylated cytosine reading as methylated.
+- *Fill-in:* The bases a polymerase adds at a recessed 3' end during end repair. They are made with unmethylated cytosine and read as unmethylated.
+- *M-bias:* Methylation tabulated by position along the read. A level that changes toward a read end marks a position-dependent artifact.
+- *Original top and original bottom strand:* The two strands of the input fragment. After conversion they are no longer complementary, and a pair is assigned to one of them by the orientation of read 1.
+- *Proper-pair flag:* The alignment flag an aligner sets when the two mates of a pair lie at an expected distance and orientation.
+- *Spike-in control:* DNA of known methylation added to a sample before library preparation. Lambda is unmethylated and pUC19 is methylated at CpG sites.
+- *Usable read:* A read that MethylDackel counts by default, with a mapping quality of 10 or more and without the secondary, supplementary, duplicate, or failed-quality-control flags.
+*** References
+
+#+print_bibliography:
 ** Validation
 :PROPERTIES:
 :ID:       7d546ca0-3b6e-46a6-bf76-491534805410
@@ -5408,16 +5533,51 @@ rule emseq_validation_mbias:
         rm -f "{output.bounds}.stderr" "{params.svg_prefix}"_O?.svg "{params.svg_prefix}"_CTO?.svg
         """
 
+rule emseq_validation_control_reads:
+    message: "Usable read count and fragment lengths of a control alignment"
+    conda: ENV_EMSEQ
+    input:
+        bam = f"{D_EMSEQ}/spike/{{library_id}}.{{source}}.bwa_meth.coorsort.bam",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{source}}_emseq_validation_control_reads.log",
+    wildcard_constraints:
+        source = "puc19|unmeth_lambda",
+    threads: 2
+    output:
+        reads = f"{D_EMSEQ}/validation/control/{{library_id}}.{{source}}.reads.txt",
+        tlen  = f"{D_EMSEQ}/validation/control/{{library_id}}.{{source}}.tlen.tsv",
+    shell:
+        """
+        exec 2>> "{log.cmd}"
+        echo "[validation-control-reads] $(date) lib={wildcards.library_id} source={wildcards.source}" >&2
+        # Usable reads are the ones MethylDackel counts by default: MAPQ 10 or
+        # more, primary, not QC-fail, not duplicate (-F 0xF00). bwa-meth marks
+        # short partial alignments of host reads to a control as QC-fail.
+        samtools view -@ {threads} -c -q 10 -F 0xF00 "{input.bam}" > "{output.reads}"
+        # Fragment length (TLEN) of usable pairs, taken from the mate with a
+        # positive TLEN, as length and count
+        samtools view -@ {threads} -q 10 -F 0xF00 -f 1 "{input.bam}" \
+          | awk '$9 > 0 && $9 <= 1000 {{n[$9]++}} END {{for (l in n) print l "\t" n[l]}}' \
+          | sort -k1,1n > "{output.tlen}"
+        """
+
 rule emseq_validation_values:
     message: "Numbers and position table for the read-end validation report"
     conda: ENV_EMSEQ
     input:
         tables = VALIDATION_MBIAS_TABLES,
+        control = expand(
+            f"{D_EMSEQ}/validation/control/{{library_id}}.{{source}}.{{kind}}",
+            library_id=emseq_library_ids,
+            source=list(VALIDATION_CONTROL_CONTEXTS),
+            kind=["reads.txt", "tlen.tsv"],
+        ),
     log:
         cmd = f"{D_LOGS}/emseq_validation_values.log",
     params:
         script = f"{R_EMSEQ}/scripts/emseq_validation_end_handling.py",
         mbias_dir = f"{D_EMSEQ}/validation/mbias",
+        control_dir = f"{D_EMSEQ}/validation/control",
         out_dir = f"{R_EMSEQ}/results/end-handling-{VALIDATION_DATASET}",
         index = " ".join(f"{lib}={idx}" for lib, idx in VALIDATION_INDEX.items()),
         repo = R_EMSEQ,
@@ -5430,6 +5590,7 @@ rule emseq_validation_values:
         echo "[validation-values] $(date) dataset={VALIDATION_DATASET}"
         python "{params.script}" \
           --mbias-dir "{params.mbias_dir}" \
+          --control-dir "{params.control_dir}" \
           --out-dir "{params.out_dir}" \
           --library-index {params.index} \
           --methyldackel-version "$(MethylDackel --version 2>&1 | head -n 1)" \
@@ -5582,6 +5743,8 @@ def parse_args():
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("--mbias-dir", required=True, type=Path,
                    help="directory of {library}.{source}.{context}.txt and .bounds.txt files")
+    p.add_argument("--control-dir", required=True, type=Path,
+                   help="directory of {library}.{source}.reads.txt and .tlen.tsv files")
     p.add_argument("--out-dir", required=True, type=Path)
     p.add_argument("--library-index", required=True, nargs="+", metavar="LIBRARY=INDEX",
                    help="index that stands for each library in the output files")
@@ -5602,6 +5765,7 @@ def main():
     args.out_dir.mkdir(parents=True, exist_ok=True)
     write_position_table(counts, args.out_dir / "position.tsv")
     values = build_values(counts, bounds, len(index), args.methyldackel_version, args.pipeline_commit)
+    values.update(control_values(args.control_dir, index, values["read_length"]))
     (args.out_dir / "values.json").write_text(json.dumps(values, indent=2, sort_keys=True) + "\n")
     return 0
 
@@ -5719,6 +5883,43 @@ def read_mbias(path):
     return table
 
 
+def tlen_summary(paths, read_length):
+    """Median fragment length and share at or under the read length, pooled over files."""
+    lengths = {}
+    for path in paths:
+        for line in Path(path).read_text().splitlines():
+            length, n = line.split("\t")
+            lengths[int(length)] = lengths.get(int(length), 0) + int(n)
+    pairs = sum(lengths.values())
+    if pairs == 0:
+        return {"median": None, "share_le_read_pct": None, "pairs": 0}
+    ordered = sorted(lengths)
+    cumulative, lower, upper = 0, None, None
+    for length in ordered:
+        cumulative += lengths[length]
+        if lower is None and cumulative >= pairs / 2:
+            lower = length
+        if upper is None and cumulative >= pairs / 2 + 1:
+            upper = length
+    if pairs % 2 == 1 or upper is None:
+        upper = lower
+    short = sum(n for length, n in lengths.items() if length <= read_length)
+    return {"median": (lower + upper) / 2, "share_le_read_pct": round(100 * short / pairs, 2), "pairs": pairs}
+
+
+def control_values(control_dir, index, read_length):
+    """Usable read counts and fragment lengths of the controls, pooled over libraries."""
+    values = {}
+    for source in CONTROL_CONTEXTS:
+        reads = sum(int((control_dir / f"{library}.{source}.reads.txt").read_text().split()[0]) for library in index)
+        summary = tlen_summary([control_dir / f"{library}.{source}.tlen.tsv" for library in index], read_length)
+        values[f"{source}_usable_reads"] = reads
+        values[f"{source}_usable_reads_text"] = f"{reads:,}"
+        values[f"{source}_tlen_median"] = summary["median"]
+        values[f"{source}_share_tlen_le_read_pct"] = summary["share_le_read_pct"]
+    return values
+
+
 def load(mbias_dir, index):
     """Counts and suggested bounds per library, source, and context."""
     counts, bounds = {}, {}
@@ -5790,6 +5991,7 @@ def build_values(counts, bounds, n_libraries, methyldackel_version, pipeline_com
         "n_libraries": n_libraries,
         "threshold_points": THRESHOLD * 100,
         "clip_window": CLIP_WINDOW,
+        "read_length": max(len(series) for ends in tables.values() for series in ends.values()),
         "P1_holds": judged["P1"]["holds"],
         "P2_holds": judged["P2"]["holds"],
         "P3_holds": judged["P3"]["holds"],
@@ -5806,13 +6008,116 @@ def build_values(counts, bounds, n_libraries, methyldackel_version, pipeline_com
             total = first[0] + first[1]
             values[f"{key}_position1_pct"] = round(first[0] / total * 100, 2) if total else None
             values[f"{key}_position1_calls"] = total
+            second = series[1] if len(series) > 1 else (0, 0)
+            total2 = second[0] + second[1]
+            values[f"{key}_position2_pct"] = round(second[0] / total2 * 100, 2) if total2 else None
+            # mean over the first 30 positions that follow the biased run
+            after = series[values[f"{key}_biased_run"]:30]
+            after_total = sum(m + u for m, u in after)
+            values[f"{key}_mean_after_run_pct"] = round(100 * sum(m for m, _ in after) / after_total, 2) if after_total else None
             suggested = [end_bases(b, END_STRAND)[end] for (s, c, _), b in bounds.items() if (s, c) == (source, context)]
             values[f"{key}_n_libraries_bound"] = sum(1 for x in suggested if x)
+            values[f"{key}_suggested_bound_max"] = max([x for x in suggested if x is not None], default=None)
+    # totals per control, and the largest lambda value near a read end
+    for source, contexts in CONTROL_CONTEXTS.items():
+        meth = total = 0
+        largest = 0.0
+        for context in contexts:
+            for (strand, read) in (("OT", 1), ("OT", 2), ("OB", 1), ("OB", 2)):
+                series = pooled_series(counts, source, context, strand, read)
+                meth += sum(m for m, _ in series)
+                total += sum(m + u for m, u in series)
+            for end, series in tables[(source, context)].items():
+                for m, u in series[:30]:
+                    if m + u:
+                        largest = max(largest, 100 * m / (m + u))
+        values[f"{source}_total_calls"] = total
+        values[f"{source}_total_calls_text"] = f"{total:,}"
+        values[f"{source}_overall_pct"] = round(100 * meth / total, 2) if total else None
+        values[f"{source}_max_position_pct"] = round(largest, 2)
     return values
 
 
 if __name__ == "__main__":
     sys.exit(main())
+#+end_src
+**** Figure script
+
+#+begin_src R :tangle ./scripts/emseq_validation_end_handling_plot.R
+#!/usr/bin/env Rscript
+# Control methylation by position from each read end (M-bias plot).
+#
+# Reads the position table of the read-end validation and draws CpG
+# methylation of the pUC19 and lambda controls over the first bases from
+# each of the four read ends, pooled over libraries, with 95% Wilson
+# intervals. The image carries no caption; the report supplies it.
+
+suppressPackageStartupMessages({
+  library(argparse)
+  library(ggplot2)
+})
+
+parser <- ArgumentParser(description = "M-bias plot of the lambda and pUC19 controls")
+parser$add_argument("--position", required = TRUE, help = "position.tsv from the values script")
+parser$add_argument("--values", required = TRUE, help = "values.json from the values script")
+parser$add_argument("--out", required = TRUE, help = "output PNG")
+parser$add_argument("--max-position", type = "integer", default = 30,
+                    help = "bases from the read end to show")
+args <- parser$parse_args()
+
+# Strand whose table position 1 sits at each read end; MethylDackel counts
+# positions from the left end of the stored alignment
+# (tests/unit/test_methyldackel_bounds.py).
+#
+# Read 1 starts at the 5' end of the original strand and read 2 starts at its
+# 3' end. The last base of a read is the opposite strand end only on a
+# fragment the read runs through, so the two "end of read" panels mix strand
+# ends with interior bases. Panels are ordered 5' side first.
+ends <- data.frame(
+  end    = c("5' end of strand\nStart of read 1", "5' end of strand\nEnd of read 2",
+             "3' end of strand\nStart of read 2", "3' end of strand\nEnd of read 1"),
+  strand = c("OT", "OT", "OB", "OB"),
+  read   = c(1, 2, 2, 1)
+)
+controls <- c(puc19 = "pUC19 (CpG methylated)", unmeth_lambda = "Lambda (unmethylated)")
+
+d <- read.delim(args$position, stringsAsFactors = FALSE)
+d <- d[d$library_index == 0 & d$context == "CpG" & d$position <= args$max_position, ]
+d <- merge(d, ends, by = c("strand", "read"))
+d$end <- factor(d$end, levels = ends$end)
+d$control <- factor(controls[d$source], levels = controls)
+d$pct <- 100 * d$n_methylated / (d$n_methylated + d$n_unmethylated)
+d$lower_pct <- 100 * d$lower
+d$upper_pct <- 100 * d$upper
+
+palette <- setNames(c("#1F5F99", "#D9730D"), controls)
+
+p <- ggplot(d, aes(position, pct, color = control, fill = control)) +
+  geom_ribbon(aes(ymin = lower_pct, ymax = upper_pct), alpha = 0.25, color = NA) +
+  geom_line(linewidth = 0.5) +
+  geom_point(size = 1.1) +
+  facet_wrap(~end, nrow = 1) +
+  scale_color_manual(values = palette, name = NULL) +
+  scale_fill_manual(values = palette, name = NULL) +
+  scale_x_continuous(breaks = c(1, 10, 20, 30), expand = expansion(mult = 0.03)) +
+  scale_y_continuous(breaks = seq(0, 100, 25), limits = c(0, 100), expand = expansion(mult = 0.03)) +
+  labs(x = "Bases from read end", y = "CpG methylation (%)") +
+  theme_classic(base_size = 11, base_family = "sans") +
+  theme(
+    strip.background = element_blank(),
+    strip.text = element_text(size = 11, hjust = 0),
+    axis.title.x = element_text(margin = margin(t = 8)),
+    axis.title.y = element_text(margin = margin(r = 8)),
+    axis.text = element_text(color = "black"),
+    panel.spacing.x = unit(14, "pt"),
+    legend.position = "bottom",
+    legend.text = element_text(size = 10),
+    legend.key.size = unit(0.4, "cm"),
+    legend.margin = margin(t = 0),
+    plot.margin = margin(8, 12, 6, 8, "pt")
+  )
+
+ggsave(args$out, p, width = 8.5, height = 3.4, dpi = 300, bg = "white")
 #+end_src
 
 ** Reference
@@ -8177,3 +8482,6 @@ meth <- meth %>% rename(global_meth = `global%meth`)
 # Run two-sample t-test
 t.test(global_meth ~ dx, data = meth)
 #+end_src
+
+# {{{val(WORKFLOW,KEY)}}} is KEY's value in results/WORKFLOW/values.json, written by that workflow's values rule; an optional third argument is a format string, e.g. {{{val(end-handling-plasma-spiked,puc19_tlen_median,%.0f)}}}.
+#+MACRO: val (eval (let* ((f (expand-file-name (format "results/%s/values.json" $1) (locate-dominating-file default-directory "results"))) (v (and (file-exists-p f) (gethash $2 (with-temp-buffer (insert-file-contents f) (json-parse-buffer)))))) (if v (format (if (and $3 (not (string-empty-p $3))) $3 "%s") v) (format "[val: no %s in %s]" $2 $1))))

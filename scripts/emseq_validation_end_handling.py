@@ -46,6 +46,12 @@ def parse_args():
         type=Path,
         help="directory of {library}.{source}.{context}.txt and .bounds.txt files",
     )
+    p.add_argument(
+        "--control-dir",
+        required=True,
+        type=Path,
+        help="directory of {library}.{source}.reads.txt and .tlen.tsv files",
+    )
     p.add_argument("--out-dir", required=True, type=Path)
     p.add_argument(
         "--library-index",
@@ -73,6 +79,7 @@ def main():
     values = build_values(
         counts, bounds, len(index), args.methyldackel_version, args.pipeline_commit
     )
+    values.update(control_values(args.control_dir, index, values["read_length"]))
     (args.out_dir / "values.json").write_text(
         json.dumps(values, indent=2, sort_keys=True) + "\n"
     )
@@ -202,6 +209,53 @@ def read_mbias(path):
     return table
 
 
+def tlen_summary(paths, read_length):
+    """Median fragment length and share at or under the read length, pooled over files."""
+    lengths = {}
+    for path in paths:
+        for line in Path(path).read_text().splitlines():
+            length, n = line.split("\t")
+            lengths[int(length)] = lengths.get(int(length), 0) + int(n)
+    pairs = sum(lengths.values())
+    if pairs == 0:
+        return {"median": None, "share_le_read_pct": None, "pairs": 0}
+    ordered = sorted(lengths)
+    cumulative, lower, upper = 0, None, None
+    for length in ordered:
+        cumulative += lengths[length]
+        if lower is None and cumulative >= pairs / 2:
+            lower = length
+        if upper is None and cumulative >= pairs / 2 + 1:
+            upper = length
+    if pairs % 2 == 1 or upper is None:
+        upper = lower
+    short = sum(n for length, n in lengths.items() if length <= read_length)
+    return {
+        "median": (lower + upper) / 2,
+        "share_le_read_pct": round(100 * short / pairs, 2),
+        "pairs": pairs,
+    }
+
+
+def control_values(control_dir, index, read_length):
+    """Usable read counts and fragment lengths of the controls, pooled over libraries."""
+    values = {}
+    for source in CONTROL_CONTEXTS:
+        reads = sum(
+            int((control_dir / f"{library}.{source}.reads.txt").read_text().split()[0])
+            for library in index
+        )
+        summary = tlen_summary(
+            [control_dir / f"{library}.{source}.tlen.tsv" for library in index],
+            read_length,
+        )
+        values[f"{source}_usable_reads"] = reads
+        values[f"{source}_usable_reads_text"] = f"{reads:,}"
+        values[f"{source}_tlen_median"] = summary["median"]
+        values[f"{source}_share_tlen_le_read_pct"] = summary["share_le_read_pct"]
+    return values
+
+
 def load(mbias_dir, index):
     """Counts and suggested bounds per library, source, and context."""
     counts, bounds = {}, {}
@@ -312,6 +366,9 @@ def build_values(counts, bounds, n_libraries, methyldackel_version, pipeline_com
         "n_libraries": n_libraries,
         "threshold_points": THRESHOLD * 100,
         "clip_window": CLIP_WINDOW,
+        "read_length": max(
+            len(series) for ends in tables.values() for series in ends.values()
+        ),
         "P1_holds": judged["P1"]["holds"],
         "P2_holds": judged["P2"]["holds"],
         "P3_holds": judged["P3"]["holds"],
@@ -334,12 +391,47 @@ def build_values(counts, bounds, n_libraries, methyldackel_version, pipeline_com
                 round(first[0] / total * 100, 2) if total else None
             )
             values[f"{key}_position1_calls"] = total
+            second = series[1] if len(series) > 1 else (0, 0)
+            total2 = second[0] + second[1]
+            values[f"{key}_position2_pct"] = (
+                round(second[0] / total2 * 100, 2) if total2 else None
+            )
+            # mean over the first 30 positions that follow the biased run
+            after = series[values[f"{key}_biased_run"] : 30]
+            after_total = sum(m + u for m, u in after)
+            values[f"{key}_mean_after_run_pct"] = (
+                round(100 * sum(m for m, _ in after) / after_total, 2)
+                if after_total
+                else None
+            )
             suggested = [
                 end_bases(b, END_STRAND)[end]
                 for (s, c, _), b in bounds.items()
                 if (s, c) == (source, context)
             ]
             values[f"{key}_n_libraries_bound"] = sum(1 for x in suggested if x)
+            values[f"{key}_suggested_bound_max"] = max(
+                [x for x in suggested if x is not None], default=None
+            )
+    # totals per control, and the largest lambda value near a read end
+    for source, contexts in CONTROL_CONTEXTS.items():
+        meth = total = 0
+        largest = 0.0
+        for context in contexts:
+            for strand, read in (("OT", 1), ("OT", 2), ("OB", 1), ("OB", 2)):
+                series = pooled_series(counts, source, context, strand, read)
+                meth += sum(m for m, _ in series)
+                total += sum(m + u for m, u in series)
+            for end, series in tables[(source, context)].items():
+                for m, u in series[:30]:
+                    if m + u:
+                        largest = max(largest, 100 * m / (m + u))
+        values[f"{source}_total_calls"] = total
+        values[f"{source}_total_calls_text"] = f"{total:,}"
+        values[f"{source}_overall_pct"] = (
+            round(100 * meth / total, 2) if total else None
+        )
+        values[f"{source}_max_position_pct"] = round(largest, 2)
     return values
 
 

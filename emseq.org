@@ -25,6 +25,15 @@
 :ID:       cea4afb9-72be-4ff2-9ba8-f4dde895e006
 :END:
 [[file:docs/superpowers/plans/2026-06-09-snakemake-config-contract.md]]
+*** ACTIVE Validation tier: read-end handling
+:PROPERTIES:
+:ID:       99e53181-4b7d-4854-9a58-92868846be3c
+:END:
+:LOGBOOK:
+- State "ACTIVE"     from "FUTURE"     [2026-11-20 Fri 12:38]
+:END:
+
+[[file:docs/plans/2026-11-20-validation-tier-end-handling.md]]
 ** [[id:bda70cff-0713-4e32-8da1-ee83924b8f00][README]]
 ** [[elisp:(let ((window-config (current-window-configuration))) (async-shell-command "bash ~/repos/emseq/tools/shell/org_update.sh") (set-window-configuration window-config))][org update]]
 ** Repository setup and administration
@@ -702,6 +711,7 @@ python3 ~/repos/html/scripts/emacs_export_header_to_markdown.py --org_file ~/rep
 - Development since last tag
   - [2026-06-08 Mon] methylKit: per-sample coverage normalization + per-experiment scratch isolation of destrand intermediates (unite + tiled) + guard restricting treatment to two groups; =emseq_filter_bam= prunes the BAM =@SQ= header to primary contigs; added =scripts/emseq_checks.R= data-integrity library; removed unused biscuit/testdata conda env yamls.
   - [2026-08-13 Wed] Removed mosdepth =--fast-mode= (=-x=) to fix PE overlap double-counting on short-insert libraries.
+  - [2026-11-20 Fri] =emseq_methyldackel=, =emseq_methyldackel_spike= and =emseq_mbias= pass =--keepDiscordant=. MethylDackel ignores pairs without the proper-pair flag by default, which dropped the cfDNA fragments of about 280 bp or longer that =EMSEQ_PAIR_FILTER= keeps and nearly all pUC19 spike-in pairs (24 of 21,620 mapped reads flagged in one breast pilot library). Spike-in and host methylation tables made before this date need a rerun of those rules.
 - wf/emseq/v5.1.0
   - [2026-04-07 Mon] Parameterized =align_method= in modules:
     - New required wrapper variable =emseq_align_methods= — list of alignment methods to run. Replaces hardcoded =["biscuit","bwa_meth"]= in =emseq_multiqc= and =emseq_analysis_uxm_deconv= rules.
@@ -1432,9 +1442,12 @@ rule emseq_methyldackel_spike:
         exec &>> "{log.cmd}"
         echo "[methyldackel-spike] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
         mkdir -p "$(dirname "{params.out_prefix}")"
+        # --keepDiscordant: count pairs without the proper-pair flag; bwa-meth
+        # leaves it unset on nearly all spike-in pairs
         MethylDackel extract \
           -@ {threads} \
           --methylKit \
+          --keepDiscordant \
           "{input.fasta}" \
           "{input.bam}" \
           -o "{params.out_prefix}"
@@ -1811,9 +1824,12 @@ rule emseq_mbias:
         echo "[mbias] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
         # Runs on deduped BAM (not filtered) — full read set needed for bias detection
         # --noSVG: text output only, avoids R dependency
+        # --keepDiscordant: count pairs without the proper-pair flag, which
+        # bwa-meth leaves unset on cfDNA fragments of about 280 bp or longer
         MethylDackel mbias \
           -@ {threads} \
           --noSVG \
+          --keepDiscordant \
           "{input.fasta}" "{input.bam}" > "{output.txt}"
         """
 #+end_src
@@ -1969,9 +1985,12 @@ rule emseq_methyldackel:
         """
         exec &>> "{log.cmd}"
         echo "[methyldackel] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
+        # --keepDiscordant: count the pairs EMSEQ_PAIR_FILTER keeps without the
+        # proper-pair flag (cfDNA fragments of about 280 bp or longer)
         MethylDackel extract \
           -@ {threads} \
           --methylKit \
+          --keepDiscordant \
           "{input.fasta}" \
           "{input.bam}" \
           -o "{params.out_prefix}"

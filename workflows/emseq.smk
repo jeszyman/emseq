@@ -85,9 +85,12 @@ rule emseq_methyldackel_spike:
         exec &>> "{log.cmd}"
         echo "[methyldackel-spike] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
         mkdir -p "$(dirname "{params.out_prefix}")"
+        # --keepDiscordant: count pairs without the proper-pair flag; bwa-meth
+        # leaves it unset on nearly all spike-in pairs
         MethylDackel extract \
           -@ {threads} \
           --methylKit \
+          --keepDiscordant \
           "{input.fasta}" \
           "{input.bam}" \
           -o "{params.out_prefix}"
@@ -336,9 +339,12 @@ rule emseq_mbias:
         echo "[mbias] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
         # Runs on deduped BAM (not filtered) — full read set needed for bias detection
         # --noSVG: text output only, avoids R dependency
+        # --keepDiscordant: count pairs without the proper-pair flag, which
+        # bwa-meth leaves unset on cfDNA fragments of about 280 bp or longer
         MethylDackel mbias \
           -@ {threads} \
           --noSVG \
+          --keepDiscordant \
           "{input.fasta}" "{input.bam}" > "{output.txt}"
         """
 # ── Post-alignment Processing ────────────────────────────────────────────────
@@ -467,9 +473,12 @@ rule emseq_methyldackel:
         """
         exec &>> "{log.cmd}"
         echo "[methyldackel] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
+        # --keepDiscordant: count the pairs EMSEQ_PAIR_FILTER keeps without the
+        # proper-pair flag (cfDNA fragments of about 280 bp or longer)
         MethylDackel extract \
           -@ {threads} \
           --methylKit \
+          --keepDiscordant \
           "{input.fasta}" \
           "{input.bam}" \
           -o "{params.out_prefix}"

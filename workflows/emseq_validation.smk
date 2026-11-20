@@ -49,8 +49,8 @@ rule emseq_validation_mbias:
         echo "[validation-mbias] $(date) lib={wildcards.library_id} source={wildcards.source} context={wildcards.context}" >&2
         # An output prefix (no --noSVG) makes MethylDackel print its suggested
         # bounds, on stderr; --txt sends the table to stdout.
-        # --keepDiscordant: bwa-meth leaves the proper-pair flag unset on
-        # nearly all control pairs.
+        # --keepDiscordant: count pairs without the proper-pair flag, as the
+        # pipeline's calling rules do.
         # -D: the control alignments are deeper than the default cap of 2000.
         MethylDackel mbias \
           -@ {threads} \

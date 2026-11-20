@@ -713,7 +713,7 @@ python3 ~/repos/html/scripts/emacs_export_header_to_markdown.py --org_file ~/rep
 - Development since last tag
   - [2026-06-08 Mon] methylKit: per-sample coverage normalization + per-experiment scratch isolation of destrand intermediates (unite + tiled) + guard restricting treatment to two groups; =emseq_filter_bam= prunes the BAM =@SQ= header to primary contigs; added =scripts/emseq_checks.R= data-integrity library; removed unused biscuit/testdata conda env yamls.
   - [2026-08-13 Wed] Removed mosdepth =--fast-mode= (=-x=) to fix PE overlap double-counting on short-insert libraries.
-  - [2026-11-20 Fri] =emseq_methyldackel=, =emseq_methyldackel_spike= and =emseq_mbias= pass =--keepDiscordant=. MethylDackel ignores pairs without the proper-pair flag by default, which dropped the cfDNA fragments of about 280 bp or longer that =EMSEQ_PAIR_FILTER= keeps and nearly all pUC19 spike-in pairs (24 of 21,620 mapped reads flagged in one breast pilot library). Spike-in and host methylation tables made before this date need a rerun of those rules.
+  - [2026-11-20 Fri] =emseq_methyldackel=, =emseq_methyldackel_spike= and =emseq_mbias= pass =--keepDiscordant=. MethylDackel ignores pairs without the proper-pair flag by default, which dropped the cfDNA fragments of about 280 bp or longer that =EMSEQ_PAIR_FILTER= keeps. On spike-in alignments the option changes little: in one breast pilot library, 0 of 24 usable pUC19 reads and 197 of 37,444 usable lambda reads lacked the flag (usable means MAPQ 10 or more and not marked QC-fail). Host methylation tables made between [2026-09-25 Fri] and this date need a rerun of =emseq_methyldackel=.
 - wf/emseq/v5.1.0
   - [2026-04-07 Mon] Parameterized =align_method= in modules:
     - New required wrapper variable =emseq_align_methods= — list of alignment methods to run. Replaces hardcoded =["biscuit","bwa_meth"]= in =emseq_multiqc= and =emseq_analysis_uxm_deconv= rules.
@@ -1444,8 +1444,8 @@ rule emseq_methyldackel_spike:
         exec &>> "{log.cmd}"
         echo "[methyldackel-spike] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
         mkdir -p "$(dirname "{params.out_prefix}")"
-        # --keepDiscordant: count pairs without the proper-pair flag; bwa-meth
-        # leaves it unset on nearly all spike-in pairs
+        # --keepDiscordant: count pairs without the proper-pair flag, as the
+        # host calling does
         MethylDackel extract \
           -@ {threads} \
           --methylKit \
@@ -5390,8 +5390,8 @@ rule emseq_validation_mbias:
         echo "[validation-mbias] $(date) lib={wildcards.library_id} source={wildcards.source} context={wildcards.context}" >&2
         # An output prefix (no --noSVG) makes MethylDackel print its suggested
         # bounds, on stderr; --txt sends the table to stdout.
-        # --keepDiscordant: bwa-meth leaves the proper-pair flag unset on
-        # nearly all control pairs.
+        # --keepDiscordant: count pairs without the proper-pair flag, as the
+        # pipeline's calling rules do.
         # -D: the control alignments are deeper than the default cap of 2000.
         MethylDackel mbias \
           -@ {threads} \

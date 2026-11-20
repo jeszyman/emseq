@@ -85,8 +85,8 @@ rule emseq_methyldackel_spike:
         exec &>> "{log.cmd}"
         echo "[methyldackel-spike] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
         mkdir -p "$(dirname "{params.out_prefix}")"
-        # --keepDiscordant: count pairs without the proper-pair flag; bwa-meth
-        # leaves it unset on nearly all spike-in pairs
+        # --keepDiscordant: count pairs without the proper-pair flag, as the
+        # host calling does
         MethylDackel extract \
           -@ {threads} \
           --methylKit \

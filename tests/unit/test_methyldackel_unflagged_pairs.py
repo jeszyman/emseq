@@ -4,8 +4,7 @@
 MethylDackel ignores a paired alignment whose proper-pair flag (0x2) is unset
 unless it is given --keepDiscordant. bwa-meth (BWA-MEM) sets that flag from an
 insert-size range it infers per batch of reads, so it leaves the flag unset on
-cfDNA fragments of about 280 bp or longer, and on nearly every pUC19 control
-pair (too few pairs per batch to infer a range). The pipeline keeps those pairs
+cfDNA fragments of about 280 bp or longer. The pipeline keeps those pairs
 at filtering (EMSEQ_PAIR_FILTER), so each MethylDackel command must keep them
 at calling too.
 """

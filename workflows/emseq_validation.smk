@@ -12,6 +12,11 @@
 #   VALIDATION_DATASET             label of the data set in result paths
 #   VALIDATION_INDEX               dict from library ID to its index in result files
 #   VALIDATION_CONTROL_CONTEXTS    dict from control reference name to its cytosine contexts
+#   VALIDATION_HOST_REF            name of the sample reference
+#   VALIDATION_FRAGMENT_SOURCES    sources tallied by distance from the strand ends (puc19, unmeth_lambda, host)
+#   VALIDATION_CHECK_INDEX         index of the library that checks the measures, or None
+#   VALIDATION_END_SETTINGS        dict from calling setting to its MethylDackel flags, empty to skip the comparison
+#   VALIDATION_FRAGMENT_PANELS     list of (data set, source, panel title, excluded library index) for the strand-end figure
 
 # MethylDackel mbias options for one cytosine context
 VALIDATION_CONTEXT_FLAGS = {"CpG": "", "CHG": "--noCpG --CHG", "CHH": "--noCpG --CHH"}
@@ -95,11 +100,105 @@ rule emseq_validation_control_reads:
           | sort -k1,1n > "{output.tlen}"
         """
 
+def _validation_fragment_bam(wildcards):
+    """Filtered host alignment for the sample reads, spike alignment for a control."""
+    if wildcards.source == "host":
+        return f"{D_EMSEQ}/bams/{wildcards.library_id}.{VALIDATION_HOST_REF}.bwa_meth.coorsort.filt.bam"
+    return f"{D_EMSEQ}/spike/{wildcards.library_id}.{wildcards.source}.bwa_meth.coorsort.bam"
+
+def _validation_fragment_fasta(wildcards):
+    name = VALIDATION_HOST_REF if wildcards.source == "host" else wildcards.source
+    return f"{D_REF}/bwa_meth/{name}/{name}.fa"
+
+rule emseq_validation_fragment_end:
+    message: "CpG calls by distance from the 5' and 3' ends of the original strand"
+    conda: ENV_EMSEQ
+    input:
+        bam   = _validation_fragment_bam,
+        fasta = _validation_fragment_fasta,
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{source}}_emseq_validation_fragment_end.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{source}}_emseq_validation_fragment_end.tsv"
+    params:
+        script = f"{R_EMSEQ}/scripts/emseq_validation_fragment_end.py",
+    wildcard_constraints:
+        source = "puc19|unmeth_lambda|host",
+    threads: 1
+    output:
+        ends      = f"{D_EMSEQ}/validation/fragment_end/{{library_id}}.{{source}}.ends.tsv",
+        agreement = f"{D_EMSEQ}/validation/fragment_end/{{library_id}}.{{source}}.agreement.tsv",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[validation-fragment-end] $(date) lib={wildcards.library_id} source={wildcards.source}"
+        python "{params.script}" \
+          --bam "{input.bam}" \
+          --fasta "{input.fasta}" \
+          --out-ends "{output.ends}" \
+          --out-agreement "{output.agreement}"
+        """
+
+VALIDATION_FRAGMENT_TABLES = [
+    f"{D_EMSEQ}/validation/fragment_end/{library_id}.{source}.ends.tsv"
+    for library_id in emseq_library_ids
+    for source in VALIDATION_FRAGMENT_SOURCES
+]
+VALIDATION_EXTRACT_TABLES = [
+    f"{D_EMSEQ}/validation/extract/{library_id}.{end_setting}_CpG.bedGraph"
+    for library_id in emseq_library_ids
+    for end_setting in VALIDATION_END_SETTINGS
+]
+
+def _validation_values_extra_args():
+    """Arguments of the values script for the plasma measures that the config switches on."""
+    args = []
+    if VALIDATION_FRAGMENT_SOURCES:
+        args += ["--fragment-dir", f"{D_EMSEQ}/validation/fragment_end",
+                 "--fragment-sources", *VALIDATION_FRAGMENT_SOURCES]
+    if VALIDATION_CHECK_INDEX is not None:
+        args += ["--check-index", str(VALIDATION_CHECK_INDEX)]
+    if VALIDATION_END_SETTINGS:
+        args += ["--extract-dir", f"{D_EMSEQ}/validation/extract",
+                 "--extract-settings", *VALIDATION_END_SETTINGS]
+    return " ".join(args)
+
+rule emseq_validation_extract:
+    message: "CpG calls on the sample alignment under one read-end setting"
+    conda: ENV_EMSEQ
+    input:
+        bam   = lambda wc: f"{D_EMSEQ}/bams/{wc.library_id}.{VALIDATION_HOST_REF}.bwa_meth.coorsort.filt.bam",
+        fasta = f"{D_REF}/bwa_meth/{VALIDATION_HOST_REF}/{VALIDATION_HOST_REF}.fa",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{end_setting}}_emseq_validation_extract.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{end_setting}}_emseq_validation_extract.tsv"
+    params:
+        flags = lambda wc: VALIDATION_END_SETTINGS[wc.end_setting],
+        out_prefix = lambda wc, output: output.bedgraph.rsplit("_CpG.bedGraph", 1)[0],
+    threads: 4
+    output:
+        bedgraph = f"{D_EMSEQ}/validation/extract/{{library_id}}.{{end_setting}}_CpG.bedGraph",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[validation-extract] $(date) lib={wildcards.library_id} setting={wildcards.end_setting}"
+        MethylDackel extract \
+          -@ {threads} \
+          --keepDiscordant \
+          {params.flags} \
+          "{input.fasta}" \
+          "{input.bam}" \
+          -o "{params.out_prefix}"
+        """
+
 rule emseq_validation_values:
     message: "Numbers and position table for the read-end validation report"
     conda: ENV_EMSEQ
     input:
         tables = VALIDATION_MBIAS_TABLES,
+        fragment = VALIDATION_FRAGMENT_TABLES,
+        extract = VALIDATION_EXTRACT_TABLES,
         control = expand(
             f"{D_EMSEQ}/validation/control/{{library_id}}.{{source}}.{{kind}}",
             library_id=emseq_library_ids,
@@ -114,6 +213,7 @@ rule emseq_validation_values:
         control_dir = f"{D_EMSEQ}/validation/control",
         out_dir = f"{R_EMSEQ}/results/end-handling-{VALIDATION_DATASET}",
         index = " ".join(f"{lib}={idx}" for lib, idx in VALIDATION_INDEX.items()),
+        extra = _validation_values_extra_args(),
         repo = R_EMSEQ,
     output:
         values   = f"{R_EMSEQ}/results/end-handling-{VALIDATION_DATASET}/values.json",
@@ -128,7 +228,35 @@ rule emseq_validation_values:
           --out-dir "{params.out_dir}" \
           --library-index {params.index} \
           --methyldackel-version "$(MethylDackel --version 2>&1 | head -n 1)" \
-          --pipeline-commit "$(git -C "{params.repo}" rev-parse --short HEAD)"
+          --pipeline-commit "$(git -C "{params.repo}" rev-parse --short HEAD)" \
+          {params.extra}
+        """
+
+rule emseq_validation_fragment_figure:
+    message: "Figure of methylation by distance from the strand ends"
+    conda: ENV_EMSEQ
+    input:
+        tables = [f"{R_EMSEQ}/results/end-handling-{dataset}/fragment_end.tsv"
+                  for dataset, _, _, _ in VALIDATION_FRAGMENT_PANELS],
+    log:
+        cmd = f"{D_LOGS}/emseq_validation_fragment_figure.log",
+    params:
+        script = f"{R_EMSEQ}/scripts/emseq_validation_fragment_end_plot.R",
+        sources = " ".join(source for _, source, _, _ in VALIDATION_FRAGMENT_PANELS),
+        labels = " ".join(f"'{label}'" for _, _, label, _ in VALIDATION_FRAGMENT_PANELS),
+        excluded = " ".join(str(index) for _, _, _, index in VALIDATION_FRAGMENT_PANELS),
+    output:
+        png = f"{R_EMSEQ}/resources/figures/validation_fragment_end_{VALIDATION_DATASET}.png",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[validation-fragment-figure] $(date) dataset={VALIDATION_DATASET}"
+        Rscript "{params.script}" \
+          --table {input.tables} \
+          --source {params.sources} \
+          --label {params.labels} \
+          --exclude-index {params.excluded} \
+          --out "{output.png}"
         """
 
 rule emseq_validation_figure:

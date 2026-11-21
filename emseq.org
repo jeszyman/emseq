@@ -25,6 +25,18 @@
 :ID:       cea4afb9-72be-4ff2-9ba8-f4dde895e006
 :END:
 [[file:docs/superpowers/plans/2026-06-09-snakemake-config-contract.md]]
+*** COMPLETE JEEPERS test on one deep plasma library
+CLOSED: [2026-11-21 Sat 07:26]
+:PROPERTIES:
+:ID:       be04fd25-2136-45dc-8ca2-440513a14620
+:END:
+:LOGBOOK:
+- State "COMPLETE"   from "ACTIVE"     [2026-11-21 Sat 07:26]
+- State "ACTIVE"     from "FUTURE"     [2026-11-20 Fri 18:19]
+:END:
+
+[[file:docs/plans/2026-11-20-jeepers-test.md]]
+
 *** ACTIVE Validation tier: read-end handling
 :PROPERTIES:
 :ID:       99e53181-4b7d-4854-9a58-92868846be3c
@@ -1137,6 +1149,7 @@ dependencies:
   - bwa
   - bwameth
   - methyldackel=0.6.1
+  - pysam
   - mosdepth
   - multiqc
   - pandas
@@ -5368,9 +5381,9 @@ The files a library or an experiment produces are listed in [[tab-outputs]]. Pat
 
 #+name: tab-outputs
 #+caption: Output files of the core processing and the downstream analysis.
-| File                                                               | Content                                                                     |
-|--------------------------------------------------------------------+-----------------------------------------------------------------------------|
-| <36>                                                               | <36>                                                                        |
+| File                                                             | Content                                                                     |
+|------------------------------------------------------------------+-----------------------------------------------------------------------------|
+| <36>                                                             | <36>                                                                        |
 | =emseq/fastqs/{lib}.trimmed_{R1,R2}.fastq.gz=                      | Adapter-trimmed reads                                                       |
 | =emseq/bams/{lib}.{ref}.{aligner}.coorsort.deduped.bam=            | Pairs that pass the pair test, with duplicates flagged                      |
 | =emseq/bams/{lib}.{ref}.{aligner}.coorsort.filt.bam=               | Filtered alignment that the caller reads                                    |
@@ -5395,6 +5408,16 @@ The loss is therefore at the 3' end of the original strand and absent from the 5
 #+name: fig-end-handling-controls
 #+caption: *The methylated control loses methylation at the 3' end of the original strand.* CpG methylation of pUC19 and lambda by position from the read end, with panels grouped by the strand end that the read end covers. n = 1 plasma cfDNA library. Bands are 95% Wilson intervals.
 [[file:resources/figures/validation_end_handling_plasma-spiked.png]]
+
+The loss was then measured on plasma reads themselves. Each CpG call was placed at its distance from the two ends of its original strand, on fragments of 160 bp or longer, where a base within 80 of one end is nearer that end than the other. The 5' end of a strand is not filled in, and over both strands the 5' and 3' tallies cover the same genomic positions, so the difference between the two ends at equal distance is the loss ([[fig-end-handling-strand-ends]]). In {{{val(end-handling-plasma-pilot,host_n_libraries_judged)}}} plasma libraries, methylation at the 3' end was {{{val(end-handling-plasma-pilot,host_p3_pct_d1,%.1f)}}}% at the last base, {{{val(end-handling-plasma-pilot,host_p3_pct_d10,%.1f)}}}% at base 10, and {{{val(end-handling-plasma-pilot,host_p3_pct_d30,%.1f)}}}% at base 30, compared to {{{val(end-handling-plasma-pilot,host_p5_pct_d10,%.1f)}}}% and {{{val(end-handling-plasma-pilot,host_p5_pct_d30,%.1f)}}}% at bases 10 and 30 from the 5' end. The difference was {{{val(end-handling-plasma-pilot,host_loss_points_d10,%.1f)}}} percentage points at base 10 (range {{{val(end-handling-plasma-pilot,host_loss_points_d10_min,%.1f)}}} to {{{val(end-handling-plasma-pilot,host_loss_points_d10_max,%.1f)}}} across libraries), {{{val(end-handling-plasma-pilot,host_loss_points_d30,%.1f)}}} at base 30, and {{{val(end-handling-plasma-pilot,host_loss_points_d50,%.1f)}}} at base 50, and it exceeded 5 points over {{{val(end-handling-plasma-pilot,host_loss_run)}}} bases from the 3' end. On the pUC19 control of the library that carries it, the same difference exceeded 5 points over {{{val(end-handling-plasma-spiked,puc19_loss_run)}}} bases. The loss in plasma is thus several times longer than on the fragmented control, consistent with the single-stranded overhangs of plasma fragments.
+
+Excluding read ends at calling removes part of the affected calls. The NEB options left {{{val(end-handling-plasma-pilot,host_kept_neb_pct,%.1f)}}}% of the calls within the {{{val(end-handling-plasma-pilot,host_loss_run)}}} bases nearest the 3' end in the counts, and a mask of 10 bases at both ends of both mates left {{{val(end-handling-plasma-pilot,host_kept_all10_pct,%.1f)}}}%. Global CpG methylation over all calls was {{{val(end-handling-plasma-pilot,host_global_none_all_calls_pct,%.1f)}}}% with all positions counted, {{{val(end-handling-plasma-pilot,host_global_neb_all_calls_pct,%.1f)}}}% with the NEB options, and {{{val(end-handling-plasma-pilot,host_global_all10_all_calls_pct,%.1f)}}}% with the 10-base mask. The rise over all positions counted was {{{val(end-handling-plasma-pilot,host_global_all_calls_diff_neb_points,%.2f)}}} points (95% interval {{{val(end-handling-plasma-pilot,host_global_all_calls_diff_neb_lower_points,%.2f)}}} to {{{val(end-handling-plasma-pilot,host_global_all_calls_diff_neb_upper_points,%.2f)}}}) for the NEB options and {{{val(end-handling-plasma-pilot,host_global_all_calls_diff_all10_points,%.2f)}}} points ({{{val(end-handling-plasma-pilot,host_global_all_calls_diff_all10_lower_points,%.2f)}}} to {{{val(end-handling-plasma-pilot,host_global_all_calls_diff_all10_upper_points,%.2f)}}}) for the 10-base mask, paired over the {{{val(end-handling-plasma-pilot,host_n_libraries_judged)}}} libraries, with {{{val(end-handling-plasma-pilot,host_calls_dropped_neb_pct,%.1f)}}}% and {{{val(end-handling-plasma-pilot,host_calls_dropped_all10_pct,%.1f)}}}% of calls removed. Both masks therefore leave most of the loss in the counts.
+
+At equal distance from the 3' end, calls made by read 1 were {{{val(end-handling-plasma-pilot,host_mate_difference_points,%.1f)}}} points higher than calls made by read 2 in plasma, and {{{val(end-handling-plasma-spiked,puc19_mate_difference_points,%.1f)}}} points higher on pUC19. Read 1 reaches the 3' end only on fragments no longer than the read, so in plasma the two mates sample fragments of different lengths, and this comparison cannot tell an effect of the sequencing cycle from an effect of fragment length.
+
+#+name: fig-end-handling-strand-ends
+#+caption: *Plasma reads lose methylation over tens of bases at the 3' end of the original strand.* CpG methylation by distance from the 5' and 3' ends of the original strand, on fragments of 160 bp or longer, counted once per fragment. Thick lines pool the libraries and thin lines are single libraries. Plasma, n = 7 libraries. pUC19, n = 1 library. Bands are 95% Wilson intervals.
+[[file:resources/figures/validation_fragment_end_plasma-pilot.png]]
 **** Pairs without the proper-pair flag
 
 BWA-MEM sets the proper-pair flag from a range of fragment lengths that it infers for each batch of reads. In a plasma library that range is narrow, because most fragments are close to 167 bp, and pairs from longer fragments are left unflagged although they are correctly placed. A filter on the flag then removes the fragments of two nucleosomes and longer. The pipeline tests each pair directly, for the same chromosome, inward orientation, and a fragment of at most 1,000 bp, in both the duplicate-marking rule and the filtering rule ([[file:tests/unit/test_pair_filter.py][tests/unit/test_pair_filter.py]]).
@@ -5406,7 +5429,7 @@ Duplicate marking and duplicate removal are separate rules, so that the alignmen
 *** Limitations
 **** End-repair fill-in is uncorrected
 
-The methylation loss at the 3' end of each original strand enters the per-CpG counts. On the control fragments it was confined to about two bases at more than 5 percentage points, with a smaller difference from the 5' ends over the 30 bases nearest the read end ({{{val(end-handling-plasma-spiked,puc19_r2_start_mean_after_run_pct,%.1f)}}}% at the start of read 2 against {{{val(end-handling-plasma-spiked,puc19_r1_start_mean_after_run_pct,%.1f)}}}% at the start of read 1). Plasma cfDNA carries longer native overhangs than the fragmented controls, and the loss has been reported to be larger in plasma from patients with cancer than in plasma from controls [cite:@wang2026jeepers], so it can differ between the groups a study compares. The measurement rests on one library.
+The methylation loss at the 3' end of each original strand enters the per-CpG counts. In plasma it exceeded 5 percentage points over {{{val(end-handling-plasma-pilot,host_loss_run)}}} bases from the 3' end ([[*Read-end handling][Read-end handling]]), which is a large part of a fragment near 167 bp, and neither read-end mask tested removes most of it. The loss has been reported to be larger in plasma from patients with cancer than in plasma from controls [cite:@wang2026jeepers], so it can differ between the groups a study compares. The plasma measurement rests on {{{val(end-handling-plasma-pilot,host_n_libraries_judged)}}} libraries from one sequencing run at about 2 million read pairs each, on fragments of 160 bp or longer, and the control measurement on one library.
 **** Spike-in reads in the sample alignment
 
 The sample reference holds no lambda or pUC19 sequence, so a control read can align to a human locus and be counted there. The share of control reads that reach the filtered sample alignment has not been measured for this pipeline.
@@ -5419,13 +5442,13 @@ The pipeline assembles published tools, and its processing follows the NEB pipel
 
 #+name: tab-prior-work
 #+caption: Read-end handling, alignment, and calling in pipelines used for EM-seq.
-| Pipeline                                                                 | Trimming                                                 | Aligner and caller                     | Read ends at calling                    |
-|--------------------------------------------------------------------------+----------------------------------------------------------+----------------------------------------+-----------------------------------------|
-| <16>                                                                     | <16>                                                     | <16>                                   | <16>                                    |
-| This pipeline                                                            | fastp, adapters only                                     | bwa-meth or BISCUIT, MethylDackel      | All positions counted                   |
-| [[https://github.com/nebiolabs/EM-seq][NEB EM-seq]]                      | fastp, adapters only                                     | bwa-meth, MethylDackel                 | Bases at the start of read 2 excluded   |
+| Pipeline                     | Trimming                                                 | Aligner and caller                     | Read ends at calling                    |
+|------------------------------+----------------------------------------------------------+----------------------------------------+-----------------------------------------|
+| <16>                         | <16>                                                     | <16>                                   | <16>                                    |
+| This pipeline                | fastp, adapters only                                     | bwa-meth or BISCUIT, MethylDackel      | All positions counted                   |
+| [[https://github.com/nebiolabs/EM-seq][NEB EM-seq]]                   | fastp, adapters only                                     | bwa-meth, MethylDackel                 | Bases at the start of read 2 excluded   |
 | [[https://github.com/nf-core/methylseq][nf-core/methylseq]] (=--em_seq=) | Trim Galore, 10 bases clipped at both ends of both mates | Bismark, or bwa-meth with MethylDackel | No exclusion with MethylDackel          |
-| [[https://github.com/maxplanck-ie/snakepipes][snakePipes]] WGBS          | fastp                                                    | bwa-meth, MethylDackel                 | MethylDackel's suggested bounds applied |
+| [[https://github.com/maxplanck-ie/snakepipes][snakePipes]] WGBS              | fastp                                                    | bwa-meth, MethylDackel                 | MethylDackel's suggested bounds applied |
 
 The pipeline differs from the NEB pipeline at read ends, where it counts all positions. The tools it calls are bwa-meth, BISCUIT [cite:@zhou2024], MethylDackel, dupsifter, methylKit [cite:@akalin2012methylkit], mosdepth [cite:@pedersen2018], and wgbstools [cite:@loyfer2026wgbstools].
 *** Abbreviations
@@ -5478,6 +5501,11 @@ A validation checks one method choice of the pipeline on data held outside the r
 #   VALIDATION_DATASET             label of the data set in result paths
 #   VALIDATION_INDEX               dict from library ID to its index in result files
 #   VALIDATION_CONTROL_CONTEXTS    dict from control reference name to its cytosine contexts
+#   VALIDATION_HOST_REF            name of the sample reference
+#   VALIDATION_FRAGMENT_SOURCES    sources tallied by distance from the strand ends (puc19, unmeth_lambda, host)
+#   VALIDATION_CHECK_INDEX         index of the library that checks the measures, or None
+#   VALIDATION_END_SETTINGS        dict from calling setting to its MethylDackel flags, empty to skip the comparison
+#   VALIDATION_FRAGMENT_PANELS     list of (data set, source, panel title, excluded library index) for the strand-end figure
 
 # MethylDackel mbias options for one cytosine context
 VALIDATION_CONTEXT_FLAGS = {"CpG": "", "CHG": "--noCpG --CHG", "CHH": "--noCpG --CHH"}
@@ -5561,11 +5589,105 @@ rule emseq_validation_control_reads:
           | sort -k1,1n > "{output.tlen}"
         """
 
+def _validation_fragment_bam(wildcards):
+    """Filtered host alignment for the sample reads, spike alignment for a control."""
+    if wildcards.source == "host":
+        return f"{D_EMSEQ}/bams/{wildcards.library_id}.{VALIDATION_HOST_REF}.bwa_meth.coorsort.filt.bam"
+    return f"{D_EMSEQ}/spike/{wildcards.library_id}.{wildcards.source}.bwa_meth.coorsort.bam"
+
+def _validation_fragment_fasta(wildcards):
+    name = VALIDATION_HOST_REF if wildcards.source == "host" else wildcards.source
+    return f"{D_REF}/bwa_meth/{name}/{name}.fa"
+
+rule emseq_validation_fragment_end:
+    message: "CpG calls by distance from the 5' and 3' ends of the original strand"
+    conda: ENV_EMSEQ
+    input:
+        bam   = _validation_fragment_bam,
+        fasta = _validation_fragment_fasta,
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{source}}_emseq_validation_fragment_end.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{source}}_emseq_validation_fragment_end.tsv"
+    params:
+        script = f"{R_EMSEQ}/scripts/emseq_validation_fragment_end.py",
+    wildcard_constraints:
+        source = "puc19|unmeth_lambda|host",
+    threads: 1
+    output:
+        ends      = f"{D_EMSEQ}/validation/fragment_end/{{library_id}}.{{source}}.ends.tsv",
+        agreement = f"{D_EMSEQ}/validation/fragment_end/{{library_id}}.{{source}}.agreement.tsv",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[validation-fragment-end] $(date) lib={wildcards.library_id} source={wildcards.source}"
+        python "{params.script}" \
+          --bam "{input.bam}" \
+          --fasta "{input.fasta}" \
+          --out-ends "{output.ends}" \
+          --out-agreement "{output.agreement}"
+        """
+
+VALIDATION_FRAGMENT_TABLES = [
+    f"{D_EMSEQ}/validation/fragment_end/{library_id}.{source}.ends.tsv"
+    for library_id in emseq_library_ids
+    for source in VALIDATION_FRAGMENT_SOURCES
+]
+VALIDATION_EXTRACT_TABLES = [
+    f"{D_EMSEQ}/validation/extract/{library_id}.{end_setting}_CpG.bedGraph"
+    for library_id in emseq_library_ids
+    for end_setting in VALIDATION_END_SETTINGS
+]
+
+def _validation_values_extra_args():
+    """Arguments of the values script for the plasma measures that the config switches on."""
+    args = []
+    if VALIDATION_FRAGMENT_SOURCES:
+        args += ["--fragment-dir", f"{D_EMSEQ}/validation/fragment_end",
+                 "--fragment-sources", *VALIDATION_FRAGMENT_SOURCES]
+    if VALIDATION_CHECK_INDEX is not None:
+        args += ["--check-index", str(VALIDATION_CHECK_INDEX)]
+    if VALIDATION_END_SETTINGS:
+        args += ["--extract-dir", f"{D_EMSEQ}/validation/extract",
+                 "--extract-settings", *VALIDATION_END_SETTINGS]
+    return " ".join(args)
+
+rule emseq_validation_extract:
+    message: "CpG calls on the sample alignment under one read-end setting"
+    conda: ENV_EMSEQ
+    input:
+        bam   = lambda wc: f"{D_EMSEQ}/bams/{wc.library_id}.{VALIDATION_HOST_REF}.bwa_meth.coorsort.filt.bam",
+        fasta = f"{D_REF}/bwa_meth/{VALIDATION_HOST_REF}/{VALIDATION_HOST_REF}.fa",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{end_setting}}_emseq_validation_extract.log",
+    benchmark:
+        f"{D_BENCHMARK}/{{library_id}}.{{end_setting}}_emseq_validation_extract.tsv"
+    params:
+        flags = lambda wc: VALIDATION_END_SETTINGS[wc.end_setting],
+        out_prefix = lambda wc, output: output.bedgraph.rsplit("_CpG.bedGraph", 1)[0],
+    threads: 4
+    output:
+        bedgraph = f"{D_EMSEQ}/validation/extract/{{library_id}}.{{end_setting}}_CpG.bedGraph",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[validation-extract] $(date) lib={wildcards.library_id} setting={wildcards.end_setting}"
+        MethylDackel extract \
+          -@ {threads} \
+          --keepDiscordant \
+          {params.flags} \
+          "{input.fasta}" \
+          "{input.bam}" \
+          -o "{params.out_prefix}"
+        """
+
 rule emseq_validation_values:
     message: "Numbers and position table for the read-end validation report"
     conda: ENV_EMSEQ
     input:
         tables = VALIDATION_MBIAS_TABLES,
+        fragment = VALIDATION_FRAGMENT_TABLES,
+        extract = VALIDATION_EXTRACT_TABLES,
         control = expand(
             f"{D_EMSEQ}/validation/control/{{library_id}}.{{source}}.{{kind}}",
             library_id=emseq_library_ids,
@@ -5580,6 +5702,7 @@ rule emseq_validation_values:
         control_dir = f"{D_EMSEQ}/validation/control",
         out_dir = f"{R_EMSEQ}/results/end-handling-{VALIDATION_DATASET}",
         index = " ".join(f"{lib}={idx}" for lib, idx in VALIDATION_INDEX.items()),
+        extra = _validation_values_extra_args(),
         repo = R_EMSEQ,
     output:
         values   = f"{R_EMSEQ}/results/end-handling-{VALIDATION_DATASET}/values.json",
@@ -5594,7 +5717,35 @@ rule emseq_validation_values:
           --out-dir "{params.out_dir}" \
           --library-index {params.index} \
           --methyldackel-version "$(MethylDackel --version 2>&1 | head -n 1)" \
-          --pipeline-commit "$(git -C "{params.repo}" rev-parse --short HEAD)"
+          --pipeline-commit "$(git -C "{params.repo}" rev-parse --short HEAD)" \
+          {params.extra}
+        """
+
+rule emseq_validation_fragment_figure:
+    message: "Figure of methylation by distance from the strand ends"
+    conda: ENV_EMSEQ
+    input:
+        tables = [f"{R_EMSEQ}/results/end-handling-{dataset}/fragment_end.tsv"
+                  for dataset, _, _, _ in VALIDATION_FRAGMENT_PANELS],
+    log:
+        cmd = f"{D_LOGS}/emseq_validation_fragment_figure.log",
+    params:
+        script = f"{R_EMSEQ}/scripts/emseq_validation_fragment_end_plot.R",
+        sources = " ".join(source for _, source, _, _ in VALIDATION_FRAGMENT_PANELS),
+        labels = " ".join(f"'{label}'" for _, _, label, _ in VALIDATION_FRAGMENT_PANELS),
+        excluded = " ".join(str(index) for _, _, _, index in VALIDATION_FRAGMENT_PANELS),
+    output:
+        png = f"{R_EMSEQ}/resources/figures/validation_fragment_end_{VALIDATION_DATASET}.png",
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[validation-fragment-figure] $(date) dataset={VALIDATION_DATASET}"
+        Rscript "{params.script}" \
+          --table {input.tables} \
+          --source {params.sources} \
+          --label {params.labels} \
+          --exclude-index {params.excluded} \
+          --out "{output.png}"
         """
 
 rule emseq_validation_figure:
@@ -5677,6 +5828,16 @@ meth_map = config.get("meth-map", {})
 # --- Validation ---
 VALIDATION_DATASET = config["validation-dataset"]
 VALIDATION_INDEX = config["validation-library-index"]
+VALIDATION_HOST_REF = config["validation-host-ref"]
+VALIDATION_FRAGMENT_SOURCES = config.get("validation-fragment-end-sources", [])
+VALIDATION_CHECK_INDEX = config.get("validation-check-index")
+# Read-end settings compared at calling, with flags that
+# tests/unit/test_methyldackel_bounds.py pins for MethylDackel 0.6.1
+VALIDATION_END_SETTINGS = {
+    "none": "",
+    "neb": "--nOT 0,0,0,5 --nOB 0,0,5,0",
+    "all10": "--nOT 10,11,10,11 --nOB 10,11,10,11",
+} if config.get("validation-compare-settings", False) else {}
 # pUC19 is methylated at CpG only; lambda is unmethylated in all three contexts
 VALIDATION_CONTROL_CONTEXTS = {"puc19": ["CpG"], "unmeth_lambda": ["CpG", "CHG", "CHH"]}
 
@@ -5684,11 +5845,19 @@ _unindexed = [lib for lib in emseq_library_ids if lib not in VALIDATION_INDEX]
 if _unindexed:
     raise ValueError(f"validation-library-index has no entry for: {', '.join(_unindexed)}")
 
+# Panels of the strand-end figure: this data set's sources, then panels read
+# from the committed tables of other data sets
+VALIDATION_FRAGMENT_PANELS = [
+    (panel.get("dataset", VALIDATION_DATASET), panel["source"], panel["label"], panel.get("exclude-index", 0))
+    for panel in config.get("validation-fragment-figure", [])
+]
+
 # --- Rule all ---
 rule all:
     input:
         f"{R_EMSEQ}/results/end-handling-{VALIDATION_DATASET}/values.json",
         f"{R_EMSEQ}/resources/figures/validation_end_handling_{VALIDATION_DATASET}.png",
+        [f"{R_EMSEQ}/resources/figures/validation_fragment_end_{VALIDATION_DATASET}.png"] if VALIDATION_FRAGMENT_PANELS else [],
 
 # -----------------------------
 # Include modules
@@ -5750,6 +5919,16 @@ def parse_args():
                    help="index that stands for each library in the output files")
     p.add_argument("--methyldackel-version", required=True)
     p.add_argument("--pipeline-commit", required=True)
+    p.add_argument("--fragment-dir", type=Path,
+                   help="directory of {library}.{source}.ends.tsv files from the fragment-end tally")
+    p.add_argument("--fragment-sources", nargs="*", default=[],
+                   help="sources tallied by distance from the strand ends")
+    p.add_argument("--check-index", type=int,
+                   help="index of the library that checks the measures and is left out of the judged tallies")
+    p.add_argument("--extract-dir", type=Path,
+                   help="directory of {library}.{setting}_CpG.bedGraph files from the calling settings")
+    p.add_argument("--extract-settings", nargs="*", default=[],
+                   help="calling settings compared, with 'none' as the reference")
     return p.parse_args()
 
 
@@ -5766,6 +5945,11 @@ def main():
     write_position_table(counts, args.out_dir / "position.tsv")
     values = build_values(counts, bounds, len(index), args.methyldackel_version, args.pipeline_commit)
     values.update(control_values(args.control_dir, index, values["read_length"]))
+    if args.fragment_sources:
+        values.update(fragment_values(args.fragment_dir, args.fragment_sources, index, args.check_index,
+                                      args.out_dir / "fragment_end.tsv"))
+    if args.extract_settings:
+        values.update(extract_values(args.extract_dir, args.extract_settings, index, args.check_index))
     (args.out_dir / "values.json").write_text(json.dumps(values, indent=2, sort_keys=True) + "\n")
     return 0
 
@@ -6038,6 +6222,439 @@ def build_values(counts, bounds, n_libraries, methyldackel_version, pipeline_com
     return values
 
 
+# ==============================================================================
+# Plasma measures
+# ==============================================================================
+
+# Two-sided 95% critical values of Student's t by degrees of freedom
+T_975 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262,
+         10: 2.228, 11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145, 15: 2.131, 20: 2.086, 30: 2.042}
+LOSS_DISTANCES = (1, 5, 10, 20, 30, 40, 50, 80)
+LONG_MAX_DISTANCE = 80         # a base this near one end of a long fragment is nearer it than the other end
+CHECK_DISTANCES = range(71, 81)
+
+
+def proportion_difference(a, b):
+    """a minus b as proportions of (methylated, unmethylated) counts, with a 95% interval."""
+    na, nb = a[0] + a[1], b[0] + b[1]
+    if na == 0 or nb == 0:
+        return None
+    pa, pb = a[0] / na, b[0] / nb
+    half = Z * (pa * (1 - pa) / na + pb * (1 - pb) / nb) ** 0.5
+    return pa - pb, pa - pb - half, pa - pb + half
+
+
+def end_loss(five_prime, three_prime):
+    """Per distance, 5' methylation minus 3' methylation with its 95% interval."""
+    return [proportion_difference(a, b) for a, b in zip(five_prime, three_prime)]
+
+
+def loss_run(losses, threshold=THRESHOLD):
+    """Count of consecutive distances from the first whose whole interval exceeds the threshold."""
+    run = 0
+    for loss in losses:
+        if loss is None or loss[1] <= threshold:
+            break
+        run += 1
+    return run
+
+
+def pool(counts):
+    return sum(m for m, _ in counts), sum(u for _, u in counts)
+
+
+def mate_difference(read1, read2):
+    """Read 1 minus read 2 methylation, pooled over positions, with a 95% interval."""
+    return proportion_difference(pool(read1), pool(read2))
+
+
+def paired_interval(differences):
+    """Mean of per-library differences with a 95% t interval."""
+    n = len(differences)
+    mean = sum(differences) / n
+    if n < 2:
+        return mean, None, None
+    sd = (sum((d - mean) ** 2 for d in differences) / (n - 1)) ** 0.5
+    t = T_975.get(n - 1, Z)
+    half = t * sd / n ** 0.5
+    return mean, mean - half, mean + half
+
+
+def read_ends(path):
+    """{fragments: {(end, mate, distance): (methylated, unmethylated, kept_neb, kept_all10)}}."""
+    tallies = {}
+    for line in Path(path).read_text().splitlines()[1:]:
+        fragments, end, mate, distance, meth, unmeth, kept_neb, kept_all10 = line.split("\t")
+        tallies.setdefault(fragments, {})[(end, int(mate), int(distance))] = (
+            int(meth), int(unmeth), int(kept_neb), int(kept_all10))
+    return tallies
+
+
+def summed(libraries, fragments, end, mate, distances):
+    """Per distance, counts summed over libraries."""
+    rows = []
+    for distance in distances:
+        cells = [t.get(fragments, {}).get((end, mate, distance), (0, 0, 0, 0)) for t in libraries]
+        rows.append(tuple(sum(c[i] for c in cells) for i in range(4)))
+    return rows
+
+
+def fragment_values(fragment_dir, sources, index, check_index, table_path):
+    """Loss by distance from the strand ends, judged on the libraries other than the check library."""
+    values, table = {}, []
+    long_distances = range(1, LONG_MAX_DISTANCE + 1)
+    for source in sources:
+        tallies = {idx: read_ends(fragment_dir / f"{library}.{source}.ends.tsv") for library, idx in index.items()}
+        judged = [t for idx, t in tallies.items() if idx != check_index]
+        five = summed(judged, "long", "5p", 0, long_distances)
+        three = summed(judged, "long", "3p", 0, long_distances)
+        losses = end_loss([c[:2] for c in five], [c[:2] for c in three])
+        run = loss_run(losses)
+        values[f"{source}_n_libraries_judged"] = len(judged)
+        values[f"{source}_loss_run"] = run
+        for distance in LOSS_DISTANCES:
+            loss = losses[distance - 1]
+            values[f"{source}_loss_points_d{distance}"] = None if loss is None else round(100 * loss[0], 1)
+            for name, counts in (("p5", five), ("p3", three)):
+                meth, unmeth = counts[distance - 1][:2]
+                values[f"{source}_{name}_pct_d{distance}"] = round(100 * meth / (meth + unmeth), 1) if meth + unmeth else None
+        per_library = []
+        for t in judged:
+            loss = proportion_difference(summed([t], "long", "5p", 0, [10])[0][:2], summed([t], "long", "3p", 0, [10])[0][:2])
+            if loss is not None:
+                per_library.append(round(100 * loss[0], 1))
+        values[f"{source}_loss_points_d10_min"] = min(per_library) if per_library else None
+        values[f"{source}_loss_points_d10_max"] = max(per_library) if per_library else None
+        if check_index in tallies:
+            check = [tallies[check_index]]
+            far = proportion_difference(pool([c[:2] for c in summed(check, "long", "5p", 0, CHECK_DISTANCES)]),
+                                        pool([c[:2] for c in summed(check, "long", "3p", 0, CHECK_DISTANCES)]))
+            values[f"{source}_check_difference_points"] = None if far is None else round(100 * far[0], 1)
+            values[f"{source}_check_passes"] = far is not None and abs(far[0]) <= THRESHOLD
+        if run:
+            within = range(1, run + 1)
+            mates = mate_difference([c[:2] for c in summed(judged, "all", "3p", 1, within)],
+                                    [c[:2] for c in summed(judged, "all", "3p", 2, within)])
+            if mates is not None:
+                values[f"{source}_mate_difference_points"] = round(100 * mates[0], 1)
+                values[f"{source}_mate_difference_lower_points"] = round(100 * mates[1], 1)
+                values[f"{source}_mate_difference_upper_points"] = round(100 * mates[2], 1)
+                values[f"{source}_P5_holds"] = -THRESHOLD <= mates[1] and mates[2] <= THRESHOLD
+            once = summed(judged, "all", "3p", 0, within)
+            total = sum(c[0] + c[1] for c in once)
+            values[f"{source}_kept_neb_pct"] = round(100 * sum(c[2] for c in once) / total, 1) if total else None
+            values[f"{source}_kept_all10_pct"] = round(100 * sum(c[3] for c in once) / total, 1) if total else None
+        pooled = {}
+        for t in judged:
+            for fragments, cells in t.items():
+                for key, cell in cells.items():
+                    old = pooled.setdefault((fragments,) + key, (0, 0, 0, 0))
+                    pooled[(fragments,) + key] = tuple(a + b for a, b in zip(old, cell))
+        for key, cell in sorted(pooled.items()):
+            table.append((source,) + key + (0,) + cell)
+        for idx, t in sorted(tallies.items()):
+            for fragments, cells in t.items():
+                for key, cell in sorted(cells.items()):
+                    table.append((source, fragments) + key + (idx,) + cell)
+    with open(table_path, "w") as out:
+        out.write("source\tfragments\tend\tmate\tdistance\tlibrary_index\tn_methylated\tn_unmethylated"
+                  "\tn_kept_neb\tn_kept_all10\n")
+        for row in table:
+            out.write("\t".join(str(x) for x in row) + "\n")
+    return values
+
+
+def global_cpg(bedgraphs):
+    """Per setting, percent methylated over CpGs called under every setting and over all its calls."""
+    calls = {}
+    for setting, path in bedgraphs.items():
+        cells = {}
+        for line in Path(path).read_text().splitlines():
+            if line.startswith("track"):
+                continue
+            contig, start, _, _, meth, unmeth = line.split("\t")
+            cells[(contig, start)] = (int(meth), int(unmeth))
+        calls[setting] = cells
+    shared = set.intersection(*(set(c) for c in calls.values()))
+    result = {}
+    for setting, cells in calls.items():
+        meth_all, total_all = sum(m for m, _ in cells.values()), sum(m + u for m, u in cells.values())
+        meth_shared = sum(cells[k][0] for k in shared)
+        total_shared = sum(cells[k][0] + cells[k][1] for k in shared)
+        result[setting] = {
+            "shared_pct": round(100 * meth_shared / total_shared, 2) if total_shared else None,
+            "all_pct": round(100 * meth_all / total_all, 2) if total_all else None,
+            "calls": total_all,
+        }
+    return result
+
+
+def extract_values(extract_dir, settings, index, check_index):
+    """Global CpG methylation under each calling setting, compared with 'none' per library."""
+    per_library = {}
+    for library, idx in index.items():
+        if idx == check_index:
+            continue
+        per_library[idx] = global_cpg({s: extract_dir / f"{library}.{s}_CpG.bedGraph" for s in settings})
+    values = {}
+    for setting in settings:
+        shared = [r[setting]["shared_pct"] for r in per_library.values()]
+        values[f"host_global_{setting}_pct"] = round(sum(shared) / len(shared), 2)
+        every = [r[setting]["all_pct"] for r in per_library.values()]
+        values[f"host_global_{setting}_all_calls_pct"] = round(sum(every) / len(every), 2)
+        if setting == "none":
+            continue
+        mean, lower, upper = paired_interval([r[setting]["all_pct"] - r["none"]["all_pct"] for r in per_library.values()])
+        values[f"host_global_all_calls_diff_{setting}_points"] = round(mean, 2)
+        values[f"host_global_all_calls_diff_{setting}_lower_points"] = None if lower is None else round(lower, 2)
+        values[f"host_global_all_calls_diff_{setting}_upper_points"] = None if upper is None else round(upper, 2)
+        differences = [r[setting]["shared_pct"] - r["none"]["shared_pct"] for r in per_library.values()]
+        mean, lower, upper = paired_interval(differences)
+        values[f"host_global_diff_{setting}_points"] = round(mean, 2)
+        values[f"host_global_diff_{setting}_lower_points"] = None if lower is None else round(lower, 2)
+        values[f"host_global_diff_{setting}_upper_points"] = None if upper is None else round(upper, 2)
+        dropped = [100 * (1 - r[setting]["calls"] / r["none"]["calls"]) for r in per_library.values()]
+        values[f"host_calls_dropped_{setting}_pct"] = round(sum(dropped) / len(dropped), 2)
+    return values
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+#+end_src
+**** Fragment-end tally script
+
+#+begin_src python :tangle ./scripts/emseq_validation_fragment_end.py
+#!/usr/bin/env python3
+"""Tally CpG calls by distance from the ends of the original strand.
+
+End repair fills the 3' end of each original strand with unmethylated
+cytosine, so methylation falls toward that end. The 5' end of the same strand
+is not filled in and serves as the control. For each read pair this script
+places each CpG call at its distance from the strand's 3' end and from its 5'
+end, and writes the tallies by mate and once per fragment.
+
+It also tallies, for CpGs covered by both mates of a pair, whether the mates
+agree, and how many once-per-fragment calls two read-end masks leave in.
+
+Exit codes: 0 success, 1 runtime error, 2 usage error.
+"""
+import argparse
+import sys
+from pathlib import Path
+
+import pysam
+
+# ==============================================================================
+# Constants
+# ==============================================================================
+
+MIN_MAPQ = 10                    # MethylDackel default
+MIN_BASE_QUALITY = 5             # MethylDackel default
+MAX_FRAGMENT = 1000              # as EMSEQ_PAIR_FILTER
+# Bases at the start of read 2 that --nOT 0,0,0,5 --nOB 0,0,5,0 exclude, per
+# strand (tests/unit/test_methyldackel_bounds.py)
+NEB_MASK = {"OT": 4, "OB": 5}
+CLIP = 10                        # bases a 10-base clip removes at each read end
+# On a fragment of this length or longer, a base within 80 of one strand end
+# is nearer that end than the other, so the two ends can be compared
+LONG_FRAGMENT = 160
+SKIP_FLAGS = 0x4 | 0x8 | 0x100 | 0x200 | 0x400 | 0x800
+FLUSH_EVERY = 200000             # reads between sweeps of unmatched mates
+
+
+def parse_args():
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p.add_argument("--bam", required=True, type=Path, help="coordinate-sorted, indexed alignment")
+    p.add_argument("--fasta", required=True, type=Path, help="indexed reference FASTA")
+    p.add_argument("--out-ends", required=True, type=Path)
+    p.add_argument("--out-agreement", required=True, type=Path)
+    p.add_argument("--max-distance", type=int, default=150)
+    p.add_argument("--long-fragment", type=int, default=LONG_FRAGMENT,
+                   help="fragment length from which a fragment also enters the 'long' tally")
+    return p.parse_args()
+
+
+def main():
+    args = parse_args()
+    try:
+        every, agreement = tally(args.bam, args.fasta, max_distance=args.max_distance)
+        long_only, _ = tally(args.bam, args.fasta, max_distance=args.max_distance, min_fragment=args.long_fragment)
+    except (OSError, ValueError) as err:
+        print(f"error: {err}", file=sys.stderr)
+        return 1
+    write_ends({"all": every, "long": long_only}, args.out_ends)
+    write_agreement(agreement, args.out_agreement)
+    return 0
+
+
+# ==============================================================================
+# Tally
+# ==============================================================================
+
+def tally(bam, fasta, max_distance=150, min_fragment=0):
+    """Tallies by strand end and by mate agreement for one alignment.
+
+    Fragments shorter than min_fragment are left out.
+
+    Returns (ends, agreement). ends maps (end, mate, distance) to a dict of
+    n_methylated, n_unmethylated, n_kept_neb, and n_kept_all10, where end is
+    "3p" or "5p", mate is 1, 2, or 0 for one call per fragment, and the two
+    kept counts are filled for mate 0 only. agreement maps (mate, cycle) to a
+    dict of n_agree and n_disagree.
+    """
+    ends, agreement = {}, {}
+    pending = {}
+    with pysam.AlignmentFile(str(bam)) as alignment, pysam.FastaFile(str(fasta)) as reference:
+        seen = 0
+        for read in alignment:
+            if not usable(read) or abs(read.template_length) < min_fragment:
+                continue
+            mate = pending.pop(read.query_name, None)
+            calls = read_calls(read, reference)
+            this = (read, calls)
+            if mate is None:
+                pending[read.query_name] = this
+            else:
+                add_fragment(ends, agreement, mate, this, max_distance)
+            seen += 1
+            if seen % FLUSH_EVERY == 0:
+                sweep(pending, ends, agreement, read, max_distance)
+        for single in pending.values():
+            add_fragment(ends, agreement, single, None, max_distance)
+    return ends, agreement
+
+
+def usable(read):
+    """Read of an inward-facing pair on one contig that MethylDackel would count."""
+    if not read.is_paired or read.flag & SKIP_FLAGS:
+        return False
+    if read.mapping_quality < MIN_MAPQ or read.reference_id != read.next_reference_id:
+        return False
+    if read.is_reverse == read.mate_is_reverse:
+        return False
+    return 0 < abs(read.template_length) <= MAX_FRAGMENT
+
+
+def strand_of(read):
+    """Original top (OT) or original bottom (OB) strand the pair derives from."""
+    return "OT" if read.is_read1 != read.is_reverse else "OB"
+
+
+def read_calls(read, reference):
+    """{reference position: (methylated, cycle, read length)} for the read's CpG calls.
+
+    The position is that of the CpG cytosine on the top strand for an OT read
+    and of the CpG guanine for an OB read. The cycle is the base's position in
+    sequencing order, from 1.
+    """
+    strand = strand_of(read)
+    start, end = read.reference_start, read.reference_end
+    contig = read.reference_name
+    left = max(0, start - 1)
+    segment = reference.fetch(contig, left, end + 1).upper()
+    offset = start - left
+    if strand == "OT":
+        sites = [start + i for i in range(end - start)
+                 if segment[offset + i] == "C" and segment[offset + i + 1:offset + i + 2] == "G"]
+        methylated, unmethylated = "C", "T"
+    else:
+        sites = [start + i for i in range(end - start)
+                 if segment[offset + i] == "G" and offset + i > 0 and segment[offset + i - 1] == "C"]
+        methylated, unmethylated = "G", "A"
+    if not sites:
+        return {}
+    wanted = set(sites)
+    sequence, qualities, length = read.query_sequence, read.query_qualities, read.query_length
+    calls = {}
+    for query_pos, ref_pos in read.get_aligned_pairs(matches_only=True):
+        if ref_pos not in wanted or qualities[query_pos] < MIN_BASE_QUALITY:
+            continue
+        base = sequence[query_pos]
+        if base not in (methylated, unmethylated):
+            continue
+        cycle = length - query_pos if read.is_reverse else query_pos + 1
+        calls[ref_pos] = (base == methylated, cycle, length)
+    return calls
+
+
+def fragment_bounds(read):
+    """0-based, end-exclusive bounds of the fragment, from one mate."""
+    length = abs(read.template_length)
+    if read.is_reverse:
+        return read.reference_end - length, read.reference_end
+    return read.reference_start, read.reference_start + length
+
+
+def add_fragment(ends, agreement, first, second, max_distance):
+    """Add one fragment's calls; second is None when the mate was not seen."""
+    reads = [first] + ([second] if second is not None else [])
+    forward = next((r for r, _ in reads if not r.is_reverse), reads[0][0])
+    start, end = fragment_bounds(forward)
+    strand = strand_of(reads[0][0])
+    by_mate = {1: {}, 2: {}}
+    for read, calls in reads:
+        by_mate[1 if read.is_read1 else 2] = calls
+    for position in set(by_mate[1]) | set(by_mate[2]):
+        from_left, from_right = position - start + 1, end - position
+        distance = {"5p": from_left, "3p": from_right} if strand == "OT" else {"5p": from_right, "3p": from_left}
+        one, two = by_mate[1].get(position), by_mate[2].get(position)
+        pooled = one if one is not None else two
+        # Read 1 supplies the call where both mates cover a base, so the NEB
+        # mask removes a call only when read 2 alone covers it
+        kept_neb = one is not None or two[1] > NEB_MASK[strand]
+        kept_all10 = any(c is not None and CLIP < c[1] <= c[2] - CLIP for c in (one, two))
+        for end_name, d in distance.items():
+            if not 1 <= d <= max_distance:
+                continue
+            for mate, call in ((1, one), (2, two)):
+                if call is not None:
+                    count(ends, (end_name, mate, d), call[0])
+            row = count(ends, (end_name, 0, d), pooled[0])
+            row["n_kept_neb"] += kept_neb
+            row["n_kept_all10"] += kept_all10
+        if one is not None and two is not None:
+            agree = one[0] == two[0]
+            for mate, call in ((1, one), (2, two)):
+                cell = agreement.setdefault((mate, call[1]), {"n_agree": 0, "n_disagree": 0})
+                cell["n_agree" if agree else "n_disagree"] += 1
+
+
+def count(ends, key, methylated):
+    row = ends.setdefault(key, {"n_methylated": 0, "n_unmethylated": 0, "n_kept_neb": 0, "n_kept_all10": 0})
+    row["n_methylated" if methylated else "n_unmethylated"] += 1
+    return row
+
+
+def sweep(pending, ends, agreement, current, max_distance):
+    """Tally reads whose mate can no longer arrive in a coordinate-sorted file."""
+    stale = [name for name, (read, _) in pending.items()
+             if read.reference_id != current.reference_id
+             or read.reference_start < current.reference_start - MAX_FRAGMENT]
+    for name in stale:
+        add_fragment(ends, agreement, pending.pop(name), None, max_distance)
+
+
+# ==============================================================================
+# Outputs
+# ==============================================================================
+
+def write_ends(tallies, path):
+    """tallies maps a fragment set ("all" or "long") to its ends tally."""
+    with open(path, "w") as out:
+        out.write("fragments\tend\tmate\tdistance\tn_methylated\tn_unmethylated\tn_kept_neb\tn_kept_all10\n")
+        for fragments, ends in tallies.items():
+            for (end, mate, distance), row in sorted(ends.items()):
+                out.write(f"{fragments}\t{end}\t{mate}\t{distance}\t{row['n_methylated']}\t{row['n_unmethylated']}"
+                          f"\t{row['n_kept_neb']}\t{row['n_kept_all10']}\n")
+
+
+def write_agreement(agreement, path):
+    with open(path, "w") as out:
+        out.write("mate\tcycle\tn_agree\tn_disagree\n")
+        for (mate, cycle), cell in sorted(agreement.items()):
+            out.write(f"{mate}\t{cycle}\t{cell['n_agree']}\t{cell['n_disagree']}\n")
+
+
 if __name__ == "__main__":
     sys.exit(main())
 #+end_src
@@ -6118,6 +6735,1514 @@ p <- ggplot(d, aes(position, pct, color = control, fill = control)) +
   )
 
 ggsave(args$out, p, width = 8.5, height = 3.4, dpi = 300, bg = "white")
+#+end_src
+**** Strand-end figure script
+
+#+begin_src R :tangle ./scripts/emseq_validation_fragment_end_plot.R
+#!/usr/bin/env Rscript
+# CpG methylation by distance from the 5' and 3' ends of the original strand.
+#
+# Reads one or more fragment-end tables of the read-end validation and draws
+# one panel per table: methylation over the first bases from each strand end,
+# on fragments long enough that a base is nearer its own end than the other,
+# counted once per fragment and pooled over the judged libraries, with 95%
+# Wilson intervals. Single libraries are drawn as thin lines behind the pooled
+# line. The image carries no caption; the report supplies it.
+
+suppressPackageStartupMessages({
+  library(argparse)
+  library(ggplot2)
+})
+
+parser <- ArgumentParser(description = "Methylation by distance from the strand ends")
+parser$add_argument("--table", required = TRUE, nargs = "+", help = "fragment_end.tsv files, one per panel")
+parser$add_argument("--source", required = TRUE, nargs = "+", help = "source to draw from each table")
+parser$add_argument("--label", required = TRUE, nargs = "+", help = "panel title for each table")
+parser$add_argument("--exclude-index", type = "integer", nargs = "*",
+                    help = "library index to leave out of each panel, 0 for none")
+parser$add_argument("--out", required = TRUE, help = "output PNG")
+args <- parser$parse_args()
+
+end_labels <- c("5p" = "5' end of strand", "3p" = "3' end of strand")
+z <- qnorm(0.975)
+
+panels <- lapply(seq_along(args$table), function(i) {
+  d <- read.delim(args$table[i], stringsAsFactors = FALSE)
+  d <- d[d$source == args$source[i] & d$fragments == "long" & d$mate == 0 & d$distance <= 80, ]
+  excluded <- if (!is.null(args$exclude_index) && length(args$exclude_index) >= i) args$exclude_index[i] else 0
+  d <- d[d$library_index != excluded | excluded == 0, ]
+  d$panel <- args$label[i]
+  d
+})
+d <- do.call(rbind, panels)
+d$panel <- factor(d$panel, levels = args$label)
+d$end <- factor(end_labels[d$end], levels = end_labels)
+d$n <- d$n_methylated + d$n_unmethylated
+d <- d[d$n > 0, ]
+prop <- d$n_methylated / d$n
+mid <- (prop + z^2 / (2 * d$n)) / (1 + z^2 / d$n)
+half <- z * sqrt(prop * (1 - prop) / d$n + z^2 / (4 * d$n^2)) / (1 + z^2 / d$n)
+d$pct <- 100 * prop
+d$lower_pct <- 100 * (mid - half)
+d$upper_pct <- 100 * (mid + half)
+
+pooled <- d[d$library_index == 0, ]
+single <- d[d$library_index != 0, ]
+palette <- setNames(c("#1F5F99", "#D9730D"), end_labels)
+
+p <- ggplot(pooled, aes(distance, pct, color = end, fill = end)) +
+  geom_line(data = single, aes(group = interaction(library_index, end)), linewidth = 0.2, alpha = 0.45) +
+  geom_ribbon(aes(ymin = lower_pct, ymax = upper_pct), alpha = 0.25, color = NA) +
+  geom_line(linewidth = 0.6) +
+  facet_wrap(~panel, nrow = 1) +
+  scale_color_manual(values = palette, name = NULL) +
+  scale_fill_manual(values = palette, name = NULL) +
+  scale_x_continuous(breaks = c(1, 20, 40, 60, 80), expand = expansion(mult = 0.02)) +
+  scale_y_continuous(breaks = seq(0, 100, 25), limits = c(0, 100), expand = expansion(mult = 0.03)) +
+  labs(x = "Bases from strand end", y = "CpG methylation (%)") +
+  theme_classic(base_size = 11, base_family = "sans") +
+  theme(
+    strip.background = element_blank(),
+    strip.text = element_text(size = 11, hjust = 0),
+    axis.title.x = element_text(margin = margin(t = 8)),
+    axis.title.y = element_text(margin = margin(r = 8)),
+    axis.text = element_text(color = "black"),
+    panel.spacing.x = unit(18, "pt"),
+    legend.position = "bottom",
+    legend.text = element_text(size = 10),
+    legend.key.size = unit(0.4, "cm"),
+    legend.margin = margin(t = 0),
+    plot.margin = margin(8, 12, 6, 8, "pt")
+  )
+
+ggsave(args$out, p, width = 3.4 * length(args$table) + 0.6, height = 3.6, dpi = 300, bg = "white")
+#+end_src
+
+*** JEEPERS test
+
+Scripts for the test of JEEPERS sibling-mode correction on one deep plasma library ([[file:docs/reports/2026-11-20-jeepers-test.md][report]]). They prepare the input, run JEEPERS unmodified from a clone outside this repository, and score its calls against the opposite strand of the same molecule; no JEEPERS code is held here. Unit tests are in [[file:tests/unit/][tests/unit/]] (=test_jeepers_*.py=).
+
+**** Input preparation script
+
+#+begin_src python :tangle ./scripts/emseq_jeepers_input.py
+#!/usr/bin/env python3
+"""Write the BAM that JEEPERS reads from a stored coordinate-sorted BAM.
+
+JEEPERS (Wang 2026) accepts only read pairs flagged 99/147 or 163/83 whose
+two reads align without gaps or clipping. This script keeps, within one
+region, the pairs that are not flagged duplicate, have MAPQ 10 or higher on
+both reads, carry one of those two flag pairs, and have a CIGAR of one M
+operation on both reads. It writes a table of the pairs dropped by each
+condition; a pair is counted under the first condition it fails, in the
+order duplicate, mapq, flags, gapped. A read whose mate is not in the region,
+and any secondary or supplementary record, is counted under flags.
+
+For the spike-in controls three more options apply. --dedup-coordinates
+keeps the first pair of each start, end, and strand. --shift adds a constant
+to every position and to the contig length, so that all positions have the
+same number of digits (JEEPERS sorts positions as text). --contig-name
+renames the contig (JEEPERS needs the text "chr" in the name).
+
+The output header holds only the region's contig.
+"""
+from __future__ import annotations
+
+import argparse
+import collections
+import sys
+
+MIN_MAPQ = 10
+DUPLICATE = 0x400
+# read 1 forward with read 2 reverse is an original-top pair; read 1 reverse
+# with read 2 forward is an original-bottom pair
+FLAG_PAIRS = {frozenset((99, 147)): "OT", frozenset((163, 83)): "OB"}
+REASONS = ("duplicate", "mapq", "flags", "gapped", "coordinate_duplicate")
+CIGAR_MATCH = 0
+
+
+def ungapped(read) -> bool:
+    cigar = read.cigartuples
+    return cigar is not None and len(cigar) == 1 and cigar[0][0] == CIGAR_MATCH
+
+
+def classify_pair(r1, r2) -> str:
+    """Return "keep" or the first condition the pair fails."""
+    if r1.is_duplicate or r2.is_duplicate:
+        return "duplicate"
+    if r1.mapping_quality < MIN_MAPQ or r2.mapping_quality < MIN_MAPQ:
+        return "mapq"
+    if frozenset((r1.flag, r2.flag)) not in FLAG_PAIRS:
+        return "flags"
+    if not (ungapped(r1) and ungapped(r2)):
+        return "gapped"
+    return "keep"
+
+
+def pair_strand(r1, r2) -> str:
+    return FLAG_PAIRS[frozenset((r1.flag, r2.flag))]
+
+
+def select_pairs(reads, dedup_coordinates: bool = False):
+    """Return (names to keep, Counter of pairs by outcome) for an iterable of reads.
+
+    Reads are grouped by name in the order given. A name with other than two
+    records is one pair dropped under "flags".
+    """
+    groups: dict[str, list] = collections.OrderedDict()
+    for read in reads:
+        groups.setdefault(read.query_name, []).append(read)
+    keep: set[str] = set()
+    counts: collections.Counter = collections.Counter()
+    seen: set[tuple] = set()
+    for name, members in groups.items():
+        if len(members) != 2:
+            if any(m.is_duplicate for m in members):
+                counts["duplicate"] += 1
+            else:
+                counts["flags"] += 1
+            continue
+        reason = classify_pair(*members)
+        if reason == "keep" and dedup_coordinates:
+            key = (
+                min(m.reference_start for m in members),
+                max(m.reference_end for m in members),
+                pair_strand(*members),
+            )
+            if key in seen:
+                reason = "coordinate_duplicate"
+            seen.add(key)
+        counts[reason] += 1
+        if reason == "keep":
+            keep.add(name)
+    return keep, counts
+
+
+def output_header(header, contig: str, shift: int = 0, contig_name: str | None = None):
+    """Header dict with only `contig`, its length raised by shift, renamed if asked."""
+    d = header.to_dict()
+    sq = [dict(s) for s in d.get("SQ", []) if s["SN"] == contig]
+    if not sq:
+        raise ValueError(f"contig {contig} is not in the BAM header")
+    sq[0]["LN"] = int(sq[0]["LN"]) + shift
+    if contig_name:
+        sq[0]["SN"] = contig_name
+    d["SQ"] = sq
+    return d
+
+
+def rewrite(read, header, shift: int = 0, contig_name: str | None = None):
+    """The read against the output header, with POS and PNEXT raised by shift."""
+    import pysam
+
+    d = read.to_dict()
+    if contig_name:
+        d["ref_name"] = contig_name
+    if d["next_ref_name"] not in ("=", "*"):
+        d["next_ref_name"] = "="
+    d["ref_pos"] = str(int(d["ref_pos"]) + shift)
+    d["next_ref_pos"] = str(int(d["next_ref_pos"]) + shift)
+    return pysam.AlignedSegment.from_dict(d, header)
+
+
+def prepare(bam, region, out_bam, out_dropped, dedup_coordinates=False, shift=0, contig_name=None):
+    import pysam
+
+    with pysam.AlignmentFile(bam) as src:
+        contig = region.split(":")[0] if region else src.references[0]
+        fetch = (lambda: src.fetch(region=region)) if region else (lambda: src.fetch(contig))
+        keep, counts = select_pairs(fetch(), dedup_coordinates)
+        header = pysam.AlignmentHeader.from_dict(output_header(src.header, contig, shift, contig_name))
+        with pysam.AlignmentFile(out_bam, "wb", header=header) as out:
+            for read in fetch():
+                if read.query_name in keep:
+                    out.write(rewrite(read, header, shift, contig_name))
+    pysam.index(out_bam)
+    with open(out_dropped, "w") as fh:
+        fh.write("outcome\tpairs\n")
+        fh.write(f"keep\t{counts['keep']}\n")
+        for reason in REASONS:
+            fh.write(f"{reason}\t{counts[reason]}\n")
+    return counts
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    p.add_argument("--bam", required=True)
+    p.add_argument("--region", help="contig or contig:start-end; default the first contig")
+    p.add_argument("--out-bam", required=True)
+    p.add_argument("--out-dropped", required=True)
+    p.add_argument("--dedup-coordinates", action="store_true")
+    p.add_argument("--shift", type=int, default=0)
+    p.add_argument("--contig-name")
+    a = p.parse_args(argv)
+    counts = prepare(a.bam, a.region, a.out_bam, a.out_dropped, a.dedup_coordinates, a.shift, a.contig_name)
+    print("\t".join(f"{k}={v}" for k, v in sorted(counts.items())), file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()
+#+end_src
+
+**** CpG region script
+
+#+begin_src python :tangle ./scripts/emseq_jeepers_regions.py
+#!/usr/bin/env python3
+"""Write the CpG region file that JEEPERS's Bam2Txt.py reads, from a reference.
+
+One row per CpG: contig, position minus 1, position plus 1, the 1-based
+position of the C, a running index from 1, and a block number. JEEPERS
+corrects each block in its own process. A new block starts where consecutive
+CpGs are more than `gap` bases apart and the current block already holds
+`min_block` CpGs. --max-block also caps the number of CpGs in a block, cutting
+at the widest gap near the cap; JEEPERS holds one array of fragments by
+CpGs per block, so its memory grows with the square of block size.
+
+--shift adds a constant to every position and --contig-name sets column 1,
+to match a BAM written by emseq_jeepers_input.py with the same options.
+"""
+from __future__ import annotations
+
+import argparse
+import re
+
+CG = re.compile("CG")
+
+
+def cpg_rows(seq: str, contig: str, offset: int = 0, shift: int = 0, gap: int = 2000, min_block: int = 5000,
+             max_block: int | None = None, cut_window: int = 2000):
+    """Yield (contig, pos - 1, pos + 1, pos, index, block) for each CG in seq.
+
+    pos = offset + shift + i + 1 for a CG at string index i, where offset is
+    the 0-based reference coordinate of the first base of seq.
+
+    With max_block, no block holds more than max_block CpGs: when a block
+    would take one more, it is cut at the widest gap between consecutive
+    CpGs among its last cut_window CpGs (the later gap on a tie), and the
+    CpGs after the cut open the next block. JEEPERS gives a fragment to
+    each block in which it covers a CpG, so cutting at a wide gap keeps
+    fragments from being split between two blocks.
+    """
+    positions = [offset + shift + m.start() + 1 for m in CG.finditer(seq.upper())]
+    starts = [0] if positions else []  # index of the first CpG of each block
+    for i in range(1, len(positions)):
+        held = i - starts[-1]
+        if positions[i] - positions[i - 1] > gap and held >= min_block:
+            starts.append(i)
+        elif max_block is not None and held >= max_block:
+            first = max(starts[-1] + 1, i - cut_window + 1)
+            cut = max(range(first, i + 1), key=lambda c: (positions[c] - positions[c - 1], c))
+            starts.append(cut)
+    block, next_start = 0, 0
+    for i, pos in enumerate(positions):
+        if next_start < len(starts) and starts[next_start] == i:
+            block += 1
+            next_start += 1
+        yield (contig, pos - 1, pos + 1, pos, i + 1, block)
+
+
+def parse_region(region: str):
+    """(contig, 0-based start or None, end or None) from contig or contig:start-end."""
+    if ":" not in region:
+        return region, None, None
+    contig, span = region.rsplit(":", 1)
+    start, end = span.replace(",", "").split("-")
+    return contig, int(start) - 1, int(end)
+
+
+def main(argv=None):
+    import pysam
+
+    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    p.add_argument("--fasta", required=True)
+    p.add_argument("--region", help="contig or contig:start-end; default the first contig")
+    p.add_argument("--out", required=True)
+    p.add_argument("--shift", type=int, default=0)
+    p.add_argument("--contig-name")
+    p.add_argument("--max-block", type=int, help="largest number of CpGs in a block; default no limit")
+    a = p.parse_args(argv)
+    with pysam.FastaFile(a.fasta) as fa:
+        contig, start, end = parse_region(a.region) if a.region else (fa.references[0], None, None)
+        seq = fa.fetch(contig, start, end)
+    n = block = 0
+    with open(a.out, "w") as out:
+        for row in cpg_rows(seq, a.contig_name or contig, offset=start or 0, shift=a.shift, max_block=a.max_block):
+            out.write("\t".join(map(str, row)) + "\n")
+            n, block = row[4], row[5]
+    print(f"CpGs {n} blocks {block}")
+
+
+if __name__ == "__main__":
+    main()
+#+end_src
+
+**** Held-out strand script
+
+#+begin_src python :tangle ./scripts/emseq_jeepers_holdout.py
+#!/usr/bin/env python3
+"""Hold out opposite strands of the same molecule before JEEPERS runs.
+
+In a BAM written by emseq_jeepers_input.py, an original-top fragment and an
+original-bottom fragment with identical start and end are the two strands of
+one molecule, apart from the chance rate. This script lists those pairs,
+puts one strand of each in set A and the other in set B by a seeded choice,
+and writes the BAM without set A and the BAM without set B. A strand is then
+scored from the JEEPERS run in which its partner was removed, so the
+partner's calls cannot enter JEEPERS's reference for it.
+
+It also lists near pairs, a bottom and a top fragment that share one end and
+differ by one base at the other, as the chance comparison. Near pairs are
+not removed from any BAM.
+
+The pairs table has columns kind (same or near), top, bottom, and removed_in
+(A or B: the set, and so the removed-from BAM, of the top read; empty for
+near pairs).
+"""
+from __future__ import annotations
+
+import argparse
+import random
+
+SEED = 20261120
+TOP_FLAGS, BOTTOM_FLAGS = (99, 147), (163, 83)
+
+
+def fragments(bam_path: str):
+    """{(start, end, strand): read name} of the first fragment at each key, in file order.
+
+    start and end are 1-based inclusive; strand is OT or OB.
+    """
+    import pysam
+
+    spans: dict[str, list] = {}
+    with pysam.AlignmentFile(bam_path) as bam:
+        for read in bam.fetch(until_eof=True):
+            strand = "OT" if read.flag in TOP_FLAGS else "OB" if read.flag in BOTTOM_FLAGS else None
+            if strand is None:
+                continue
+            s = spans.setdefault(read.query_name, [read.reference_start + 1, read.reference_end, strand])
+            s[0] = min(s[0], read.reference_start + 1)
+            s[1] = max(s[1], read.reference_end)
+    first: dict[tuple, str] = {}
+    for name, (start, end, strand) in spans.items():
+        first.setdefault((start, end, strand), name)
+    return first
+
+
+def strand_pairs(bam_path: str) -> list[tuple[str, str]]:
+    """(top read name, bottom read name) for fragments with identical start and end."""
+    first = fragments(bam_path)
+    return [
+        (name, first[(start, end, "OB")])
+        for (start, end, strand), name in first.items()
+        if strand == "OT" and (start, end, "OB") in first
+    ]
+
+
+def near_pairs(bam_path: str) -> list[tuple[str, str]]:
+    """(top, bottom) where one end matches and the other differs by one base."""
+    first = fragments(bam_path)
+    out = []
+    for (start, end, strand), name in first.items():
+        if strand != "OT":
+            continue
+        for key in ((start, end + 1), (start, end - 1), (start + 1, end), (start - 1, end)):
+            bottom = first.get((*key, "OB"))
+            if bottom is not None:
+                out.append((name, bottom))
+    return out
+
+
+def split(pairs, seed: int = SEED) -> tuple[set[str], set[str]]:
+    """Put one read name of each pair in set A and the other in set B."""
+    rng = random.Random(seed)
+    a: set[str] = set()
+    b: set[str] = set()
+    for top, bottom in pairs:
+        if rng.random() < 0.5:
+            a.add(top), b.add(bottom)
+        else:
+            a.add(bottom), b.add(top)
+    return a, b
+
+
+def write_without(bam_path: str, out_path: str, names: set[str]) -> None:
+    import pysam
+
+    with pysam.AlignmentFile(bam_path) as src, pysam.AlignmentFile(out_path, "wb", header=src.header) as out:
+        for read in src.fetch(until_eof=True):
+            if read.query_name not in names:
+                out.write(read)
+    pysam.index(out_path)
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    p.add_argument("--bam", required=True)
+    p.add_argument("--out-a", required=True, help="BAM without the reads of set A")
+    p.add_argument("--out-b", required=True, help="BAM without the reads of set B")
+    p.add_argument("--out-pairs", required=True)
+    p.add_argument("--seed", type=int, default=SEED)
+    a = p.parse_args(argv)
+    same, near = strand_pairs(a.bam), near_pairs(a.bam)
+    set_a, set_b = split(same, a.seed)
+    write_without(a.bam, a.out_a, set_a)
+    write_without(a.bam, a.out_b, set_b)
+    with open(a.out_pairs, "w") as fh:
+        fh.write("kind\ttop\tbottom\tremoved_in\n")
+        for top, bottom in same:
+            fh.write(f"same\t{top}\t{bottom}\t{'A' if top in set_a else 'B'}\n")
+        for top, bottom in near:
+            fh.write(f"near\t{top}\t{bottom}\t\n")
+    print(f"same {len(same)} near {len(near)}")
+
+
+if __name__ == "__main__":
+    main()
+#+end_src
+
+**** Run script
+
+#+begin_src bash :tangle ./scripts/emseq_jeepers_run.sh
+#!/usr/bin/env bash
+# Run the four steps of JEEPERS (Wang 2026, sibling mode), unmodified, on one
+# prepared BAM, and check that it returned every fragment it was given.
+#
+# Usage: emseq_jeepers_run.sh <in.bam> <regions.bed> <outdir> <0.9|default> [jeepers_dir]
+#
+#   in.bam       BAM from emseq_jeepers_input.py
+#   regions.bed  CpG region file from emseq_jeepers_regions.py
+#   0.9|default  0.9 passes -m 0.9 to the correction step (the value the
+#                JEEPERS README states); default passes no -m, which leaves
+#                the code's own default of 0.1
+#   jeepers_dir  folder holding the JEEPERS scripts
+#                (default /mnt/data/tools/jeepers/JEEPERS_code)
+#
+# Environment:
+#   JEEPERS_CORES       processes for each JEEPERS step (default 16)
+#   JEEPERS_PYTHON      interpreter for the JEEPERS scripts (default python)
+#   SAMTOOLS            samtools executable (default samtools)
+#   JEEPERS_STOP_AFTER  "merge" stops after the merge step, for a run that
+#                       needs only the table of fragments and their calls
+#
+# Leaves in <outdir>: t_Merge.txt (fragments given to the correction step),
+# t_JEEPERS_Sibling.txt (fragments after correction), one log per step,
+# run.tsv (step, seconds, rows), and blocks.tsv (rows per block in each
+# table).
+#
+# Exit 1 when a table is empty, when a log holds "Traceback" or "ERROR", or
+# when a block has a different number of rows after correction than before.
+# The JEEPERS scripts exit 0 with empty output when they cannot read their
+# input, so their exit codes are not the check.
+set -uo pipefail
+
+if [[ $# -lt 4 ]]; then
+    sed -n '2,6p' "$0" >&2
+    exit 2
+fi
+in_bam=$(realpath "$1")
+regions=$(realpath "$2")
+outdir=$3
+setting=$4
+jeepers=${5:-/mnt/data/tools/jeepers/JEEPERS_code}
+cores=${JEEPERS_CORES:-16}
+py=${JEEPERS_PYTHON:-python}
+samtools=${SAMTOOLS:-samtools}
+
+case "$setting" in
+    0.9) meth_args=(-m 0.9) ;;
+    default) meth_args=() ;;
+    *) echo "setting must be 0.9 or default, got: $setting" >&2; exit 2 ;;
+esac
+
+mkdir -p "$outdir"
+outdir=$(realpath "$outdir")
+jeepers=$(realpath "$jeepers")
+cd "$outdir" || exit 2
+printf 'step\tseconds\trows\n' > run.tsv
+
+# step <name> <file whose rows are counted> <command...>
+step() {
+    local name=$1 counted=$2
+    shift 2
+    local t0
+    t0=$(date +%s)
+    "$@" > "$name.log" 2>&1
+    local rows=0
+    [[ -f $counted ]] && rows=$(wc -l < "$counted")
+    printf '%s\t%s\t%s\n' "$name" "$(( $(date +%s) - t0 ))" "$rows" >> run.tsv
+    if [[ $rows -eq 0 ]]; then
+        echo "FAIL: step $name left an empty table ($counted)" >&2
+        exit 1
+    fi
+}
+
+# rows per block (column 4), skipping a header line if one is present
+block_rows() { awk -F'\t' '$4 != "Block" {n[$4]++} END {for (b in n) print b "\t" n[b]}' "$1" | sort -k1,1g; }
+
+step format tagged.bam "$py" "$jeepers/FormatChange/bamFormatChange.py" --ibam "$in_bam" --obam "$outdir/tagged.bam" --cpu_num 1
+"$samtools" index tagged.bam
+step bam2txt t.B2T.txt "$py" "$jeepers/Bam2Txt.py" --ibam "$outdir/tagged.bam" --ibed "$regions" --ofile "$outdir/t.B2T.txt" -c "$cores" -d T
+step merge t_Merge.txt "$py" "$jeepers/MergeR1R2.py" -i "$outdir/t.B2T.txt" -o "$outdir/t_Merge.txt" -c "$cores"
+
+status=0
+logs=(format.log bam2txt.log merge.log)
+if [[ ${JEEPERS_STOP_AFTER:-} != merge ]]; then
+    step correct t_JEEPERS_Sibling.txt "$py" "$jeepers/JEEPERS_correction.py" -i "$outdir/t_Merge.txt" -o "$outdir/t_JEEPERS.txt" -c "$cores" -n 4 "${meth_args[@]}"
+    logs+=(correct.log)
+    join -t $'\t' -a 1 -a 2 -e 0 -o 0,1.2,2.2 <(block_rows t_Merge.txt | sort -k1,1) <(block_rows t_JEEPERS_Sibling.txt | sort -k1,1) \
+        | sort -k1,1g | { printf 'block\tmerge_rows\tsibling_rows\n'; cat; } > blocks.tsv
+    if awk -F'\t' 'NR > 1 && $2 != $3 {bad = 1} END {exit !bad}' blocks.tsv; then
+        echo "FAIL: rows after correction differ from rows before in at least one block (blocks.tsv)" >&2
+        status=1
+    fi
+fi
+if grep -l -e Traceback -e ERROR "${logs[@]}" >&2; then
+    echo "FAIL: Traceback or ERROR in the logs named above" >&2
+    status=1
+fi
+exit $status
+#+end_src
+
+**** Control depth script
+
+#+begin_src python :tangle ./scripts/emseq_jeepers_control_depth.py
+#!/usr/bin/env python3
+"""Fraction of a control's fragments to draw so its depth per CpG matches a target table.
+
+Depth per CpG is the number of rows of a JEEPERS merge table whose column 11
+lists the CpG. The depth of a table is the median of that number over the
+CpGs that at least one fragment covers. The fraction is the target table's
+depth divided by the control table's depth.
+
+Prints one tab-separated line: target depth, control depth, fraction.
+"""
+from __future__ import annotations
+
+import argparse
+import collections
+import statistics
+
+
+def cpg_depths(lines) -> collections.Counter:
+    """{CpG position: number of rows listing it} from merge-table lines."""
+    depth: collections.Counter = collections.Counter()
+    for line in lines:
+        f = line.rstrip("\n").split("\t")
+        if len(f) > 10 and f[10] not in ("-", ""):
+            depth.update(f[10].split(","))
+    return depth
+
+
+def median_depth(path: str) -> float:
+    with open(path) as fh:
+        depth = cpg_depths(fh)
+    return statistics.median(depth.values())
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    p.add_argument("--target-merge", required=True)
+    p.add_argument("--control-merge", required=True)
+    a = p.parse_args(argv)
+    target, control = median_depth(a.target_merge), median_depth(a.control_merge)
+    print(f"{target:g}\t{control:g}\t{target / control:.8f}")
+
+
+if __name__ == "__main__":
+    main()
+#+end_src
+
+**** Scoring script
+
+#+begin_src python :tangle ./scripts/emseq_jeepers_score.py
+#!/usr/bin/env python3
+"""Score JEEPERS's sibling-mode output against five bars fixed before the run.
+
+Reads the run folders written by emseq_jeepers_run.sh, laid out as
+<runs>/<setting>/<run>/ (several <runs> folders are pooled), where setting is "0.9" or "default" and run is
+plasma_all, plasma_without_a, plasma_without_b, puc19_draw<N>, or
+lambda_draw<N>, and the pairs table of emseq_jeepers_holdout.py. Writes
+gap.tsv, opposite_strand.tsv, controls.tsv, and values.json.
+
+Table layout. <out>_Sibling.txt has 35 tab-separated columns and no header:
+1 contig, 2 and 3 fragment start and end (1-based, inclusive), 4 block,
+5 strand (OT or OB), 6 read name, 11 CpG positions (1-based position of the
+C), 12 calls before correction, 25 calls after, 26 CpGs marked for
+correction or "-", 27 methylated:total reference counts for the marked CpGs,
+35 correction type. The merge table has the same first 24 columns.
+
+Calls. M and m count as methylated, U and u as unmethylated; q and N are
+left out of numerator and denominator.
+
+Strand ends. On an OT fragment the 3' end is the fragment end. On an OB
+fragment the called base is the G at position + 1 and the 3' end is the
+fragment start.
+
+Methods scored on the same fragments:
+  uncorrected  calls before correction
+  jeepers      calls after correction
+  majority     calls before correction, with each CpG JEEPERS marked replaced
+               by the call most other fragments hold at that CpG outside
+               their own marked CpGs; a tie keeps the fragment's own call
+  excl30/52    calls before correction more than 30 (52) bases from the 3' end
+  drop_marked  calls before correction without the CpGs JEEPERS marked
+
+Bars (each bin judged on a 95% interval, Wilson for a share and Newcombe for
+a difference; a bin whose interval reaches more than 5 points to either side
+of its estimate, or that has no calls, is unresolved; a bar is met when all
+its bins are met, failed when any bin fails, unresolved otherwise):
+  1  rows after correction equal rows before, block by block, and no
+     Traceback or ERROR in the logs
+  2  plasma, fragments of 160 bp or longer, all fragments: 5' minus 3'
+     methylation per bin has an interval that contains 5 points or lies
+     below; unresolved for JEEPERS if the uncorrected calls already meet it
+  3  pUC19, each draw: mid-fragment minus bin (1-10, 11-20, 21-30 from the
+     3' end) contains 5 points or lies below
+  4  agreement with the opposite strand, JEEPERS minus uncorrected: above 0
+     in bins 1-10 and 11-20, contains 0 or above in 21-30 and 31-50
+  5  agreement with the opposite strand, JEEPERS minus the locus majority
+     call over marked CpGs, and JEEPERS on all calls within 80 bases of the
+     3' end minus each exclusion on the calls it keeps there: contains 0 or
+     lies above
+"""
+from __future__ import annotations
+
+import argparse
+import collections
+import dataclasses
+import glob
+import json
+import os
+import re
+
+Z = 1.959963984540054
+BINS = [(1, 10), (11, 20), (21, 30), (31, 50), (51, 80)]
+MIN_GAP_LENGTH = 160
+MID_MARGIN = 30
+RESOLUTION = 5.0  # points an interval may reach to either side of its estimate
+SETTINGS = ("0.9", "default")
+EXCLUSIONS = {"excl30": 30, "excl52": 52}
+METHODS = ("uncorrected", "jeepers", "majority", "excl30", "excl52", "drop_marked")
+
+
+@dataclasses.dataclass
+class Fragment:
+    contig: str
+    start: int
+    end: int
+    strand: str
+    name: str
+    pos: list
+    before: list
+    after: list
+    marked: list
+    support: dict
+    kind: str
+    block: str = ""
+
+
+def _split(field: str) -> list:
+    return [] if field in ("-", "") else field.split(",")
+
+
+def parse_row(line: str) -> Fragment:
+    """A Fragment from one row of a sibling table (35 columns) or a merge table (24)."""
+    f = line.rstrip("\n").split("\t")
+    pos = [int(p) for p in _split(f[10])]
+    before = _split(f[11])
+    if len(f) < 35:
+        return Fragment(f[0], int(f[1]), int(f[2]), f[4], f[5], pos, before, list(before), [], {}, "", f[3])
+    marked = [int(p) for p in _split(f[25])]
+    counts = _split(f[26])
+    support: dict = {}
+    for i, p in enumerate(marked):
+        entry = counts[i] if i < len(counts) else "-"
+        support[p] = int(entry.split(":")[1]) if ":" in entry and entry.split(":")[1].isdigit() else None
+    return Fragment(f[0], int(f[1]), int(f[2]), f[4], f[5], pos, before, _split(f[24]), marked, support, f[34], f[3])
+
+
+def read_table(path: str, blocks=None):
+    """Fragments of a sibling or merge table; with blocks, only those of the block numbers given."""
+    with open(path) as fh:
+        for line in fh:
+            if line.strip() and not line.startswith("Chr\t") and "\tBlock\t" not in line[:60]:
+                frag = parse_row(line)
+                if blocks is None or float(frag.block) in blocks:
+                    yield frag
+
+
+def complete_blocks(run_dir: str):
+    """(block numbers whose rows after correction equal the rows before, all block numbers).
+
+    A block that JEEPERS did not finish holds only the fragments it wrote
+    before stopping, which are those it left unchanged, so scoring is kept to
+    the blocks it returned whole.
+    """
+    done, every = set(), set()
+    with open(os.path.join(run_dir, "blocks.tsv")) as fh:
+        next(fh)
+        for line in fh:
+            block, merge_rows, sibling_rows = line.split("\t")
+            every.add(float(block))
+            if int(merge_rows) == int(sibling_rows):
+                done.add(float(block))
+    return done, every
+
+
+def distances(frag: Fragment, pos: int) -> tuple[int, int]:
+    """(bases from the 3' end, bases from the 5' end) of the called base, counting the end base as 1."""
+    if frag.strand == "OT":
+        return frag.end - pos + 1, pos - frag.start + 1
+    return pos + 2 - frag.start, frag.end - pos
+
+
+def bin_of(d: int):
+    for lo, hi in BINS:
+        if lo <= d <= hi:
+            return f"{lo}-{hi}"
+    return None
+
+
+def binary(symbol: str):
+    if symbol in ("M", "m"):
+        return 1
+    if symbol in ("U", "u"):
+        return 0
+    return None
+
+
+# ---- comparators ----------------------------------------------------------
+
+
+def tally_unmarked(fragments, tally=None) -> dict:
+    """{position: [unmethylated, methylated]} over before-correction calls at unmarked CpGs."""
+    tally = collections.defaultdict(lambda: [0, 0]) if tally is None else tally
+    for frag in fragments:
+        marked = set(frag.marked)
+        for p, s in zip(frag.pos, frag.before):
+            b = binary(s)
+            if b is not None and p not in marked:
+                tally[p][b] += 1
+    return tally
+
+
+def majority_for(frag: Fragment, tally) -> dict:
+    """{marked position: call} for one fragment: M or U by majority, own call on a tie or no other fragment."""
+    own = dict(zip(frag.pos, frag.before))
+    out = {}
+    for p in frag.marked:
+        u, m = tally.get(p, (0, 0))
+        out[p] = "M" if m > u else "U" if u > m else own.get(p, "N")
+    return out
+
+
+def majority_calls(fragments) -> dict:
+    """{read name: {marked position: call}} for each fragment with marked CpGs."""
+    fragments = list(fragments)
+    tally = tally_unmarked(fragments)
+    return {f.name: majority_for(f, tally) for f in fragments if f.marked}
+
+
+def drop_marked(frag: Fragment) -> Fragment:
+    """The fragment without the calls at its marked CpGs."""
+    marked = set(frag.marked)
+    keep = [i for i, p in enumerate(frag.pos) if p not in marked]
+    return dataclasses.replace(
+        frag,
+        pos=[frag.pos[i] for i in keep],
+        before=[frag.before[i] for i in keep],
+        after=[frag.after[i] for i in keep if i < len(frag.after)],
+        marked=[],
+        support={},
+    )
+
+
+def method_calls(frag: Fragment, method: str, tally=None) -> dict:
+    """{position: 0 or 1} of the fragment's calls under one method; q and N are left out."""
+    if method == "jeepers":
+        symbols = dict(zip(frag.pos, frag.after))
+    elif method == "drop_marked":
+        dropped = drop_marked(frag)
+        symbols = dict(zip(dropped.pos, dropped.before))
+    else:
+        symbols = dict(zip(frag.pos, frag.before))
+        if method == "majority" and frag.marked:
+            symbols.update(majority_for(frag, tally or {}))
+        elif method in EXCLUSIONS:
+            symbols = {p: s for p, s in symbols.items() if distances(frag, p)[0] > EXCLUSIONS[method]}
+    return {p: b for p, b in ((p, binary(s)) for p, s in symbols.items()) if b is not None}
+
+
+# ---- intervals and verdicts -----------------------------------------------
+
+
+def _wilson_fraction(k, n):
+    p = k / n
+    mid = p + Z * Z / (2 * n)
+    half = Z * ((p * (1 - p) / n + Z * Z / (4 * n * n)) ** 0.5)
+    denom = 1 + Z * Z / n
+    return p, max(0.0, (mid - half) / denom), min(1.0, (mid + half) / denom)
+
+
+def wilson(k, n):
+    """(estimate, lower, upper) in points for k of n by the Wilson score interval; None when n is 0."""
+    if n == 0:
+        return None
+    return tuple(100 * x for x in _wilson_fraction(k, n))
+
+
+def newcombe(k1, n1, k2, n2):
+    """(estimate, lower, upper) in points for k1/n1 minus k2/n2 by Newcombe's hybrid score interval."""
+    if n1 == 0 or n2 == 0:
+        return None
+    p1, l1, u1 = _wilson_fraction(k1, n1)
+    p2, l2, u2 = _wilson_fraction(k2, n2)
+    d = p1 - p2
+    lo = d - ((p1 - l1) ** 2 + (u2 - p2) ** 2) ** 0.5
+    hi = d + ((u1 - p1) ** 2 + (p2 - l2) ** 2) ** 0.5
+    return 100 * d, 100 * lo, 100 * hi
+
+
+def judge(interval, limit: float, mode: str) -> str:
+    """met, failed, or unresolved for one interval.
+
+    at_most: the interval contains the limit or lies below it.
+    above: the interval lies above the limit.
+    at_least: the interval contains the limit or lies above it.
+    """
+    if interval is None:
+        return "unresolved"
+    est, lo, hi = interval
+    if hi - est > RESOLUTION or est - lo > RESOLUTION:
+        return "unresolved"
+    if mode == "at_most":
+        ok = lo <= limit
+    elif mode == "above":
+        ok = lo > limit
+    elif mode == "at_least":
+        ok = hi >= limit
+    else:
+        raise ValueError(mode)
+    return "met" if ok else "failed"
+
+
+def bar_verdict(verdicts) -> str:
+    verdicts = list(verdicts)
+    if any(v == "failed" for v in verdicts):
+        return "failed"
+    if verdicts and all(v == "met" for v in verdicts):
+        return "met"
+    return "unresolved"
+
+
+# ---- tallies --------------------------------------------------------------
+
+
+def new_acc():
+    return collections.defaultdict(lambda: [0, 0])
+
+
+def add_gap(acc, frag: Fragment, tally=None, methods=("uncorrected", "jeepers", "majority", "drop_marked")):
+    """Add one fragment's calls to acc[(method, "3p" or "5p", bin)] = [calls, methylated].
+
+    Only fragments of MIN_GAP_LENGTH or longer count, so that a call within 80
+    bases of one end is not within 80 of the other.
+    """
+    if frag.end - frag.start + 1 < MIN_GAP_LENGTH:
+        return
+    for method in methods:
+        labels = [method] + ([f"{method}_sf"] if frag.kind == "Sf" and method in ("uncorrected", "jeepers") else [])
+        for p, b in method_calls(frag, method, tally).items():
+            d3, d5 = distances(frag, p)
+            for end, d in (("3p", d3), ("5p", d5)):
+                label = bin_of(d)
+                if label:
+                    for name in labels:
+                        cell = acc[(name, end, label)]
+                        cell[0] += 1
+                        cell[1] += b
+
+
+def gap_rows(acc, methods):
+    """One dict per method and bin with the 5' minus 3' interval and its bin verdict."""
+    rows = []
+    for method in methods:
+        for lo, hi in BINS:
+            label = f"{lo}-{hi}"
+            n3, m3 = acc.get((method, "3p", label), (0, 0))
+            n5, m5 = acc.get((method, "5p", label), (0, 0))
+            diff = newcombe(m5, n5, m3, n3)
+            rows.append(
+                dict(method=method, bin=label, n_3p=n3, meth_3p=m3, n_5p=n5, meth_5p=m5,
+                     interval=diff, verdict=judge(diff, 5.0, "at_most"))
+            )
+    return rows
+
+
+def mid_value(fragments):
+    """(methylated, calls) per method over calls more than MID_MARGIN bases from both strand ends."""
+    out = {"uncorrected": [0, 0], "jeepers": [0, 0]}
+    for frag in fragments:
+        for method in out:
+            for p, b in method_calls(frag, method).items():
+                d3, d5 = distances(frag, p)
+                if d3 > MID_MARGIN and d5 > MID_MARGIN:
+                    out[method][0] += b
+                    out[method][1] += 1
+    return {k: tuple(v) for k, v in out.items()}
+
+
+def control_rows(fragments):
+    """Per method: the mid-fragment value and, for the three bins nearest the 3' end, mid minus bin."""
+    fragments = list(fragments)
+    mid = mid_value(fragments)
+    acc = new_acc()
+    for frag in fragments:
+        for method in mid:
+            for p, b in method_calls(frag, method).items():
+                label = bin_of(distances(frag, p)[0])
+                if label:
+                    acc[(method, label)][0] += 1
+                    acc[(method, label)][1] += b
+    rows = []
+    for method, (mid_m, mid_n) in mid.items():
+        rows.append(dict(method=method, bin="mid", n=mid_n, meth=mid_m, interval=None, verdict=""))
+        for lo, hi in BINS[:3]:
+            label = f"{lo}-{hi}"
+            n, m = acc.get((method, label), (0, 0))
+            diff = newcombe(mid_m, mid_n, m, n)
+            rows.append(dict(method=method, bin=label, n=n, meth=m, interval=diff, verdict=judge(diff, 5.0, "at_most")))
+    return rows
+
+
+def support_class(n):
+    if n is None:
+        return "fallback"
+    return "1" if n == 1 else "2" if n == 2 else "3+" if n >= 3 else "0"
+
+
+def score_strand(acc, frag: Fragment, partner: dict, tally=None):
+    """Add one strand's agreement with its partner strand to acc.
+
+    partner is {position: 0 or 1}, the partner strand's calls before
+    correction. A call counts only when it is methylated or unmethylated on
+    both strands. Keys of acc:
+      (method, scope) = [calls, calls equal to the partner's], with scope a
+        bin from the 3' end, "1-80", "all", or "marked" (the CpGs JEEPERS
+        marked on this strand)
+      ("changed_to_methylated", support class) = [calls, partner unmethylated]
+      ("dropped_marked", bin) = [calls, partner unmethylated]
+    """
+    marked = set(frag.marked)
+    for method in METHODS:
+        labels = [method] + ([f"{method}_sf"] if frag.kind == "Sf" and method in ("uncorrected", "jeepers") else [])
+        for p, b in method_calls(frag, method, tally).items():
+            pb = partner.get(p)
+            if pb is None:
+                continue
+            d3 = distances(frag, p)[0]
+            scopes = ["all"]
+            label = bin_of(d3)
+            if label:
+                scopes += [label, "1-80"]
+            if p in marked:
+                scopes.append("marked")
+            for name in labels:
+                for scope in scopes:
+                    cell = acc[(name, scope)]
+                    cell[0] += 1
+                    cell[1] += int(b == pb)
+    before = {p: binary(s) for p, s in zip(frag.pos, frag.before)}
+    after = {p: binary(s) for p, s in zip(frag.pos, frag.after)}
+    for p in frag.pos:
+        pb = partner.get(p)
+        if pb is None:
+            continue
+        if before.get(p) == 0 and after.get(p) == 1:
+            cell = acc[("changed_to_methylated", support_class(frag.support.get(p)))]
+            cell[0] += 1
+            cell[1] += int(pb == 0)
+        if p in marked and before.get(p) is not None:
+            d3 = distances(frag, p)[0]
+            for scope in filter(None, ("all", bin_of(d3), "1-80" if d3 <= 80 else None)):
+                cell = acc[("dropped_marked", scope)]
+                cell[0] += 1
+                cell[1] += int(pb == 0)
+
+
+def difference_row(acc, bar, scope, method, comparator, mode, comparator_scope=None):
+    n1, k1 = acc.get((method, scope), (0, 0))
+    n2, k2 = acc.get((comparator, comparator_scope or scope), (0, 0))
+    diff = newcombe(k1, n1, k2, n2)
+    return dict(bar=bar, scope=scope, method=method, comparator=comparator, n=n1, agree=k1,
+                comparator_n=n2, comparator_agree=k2, interval=diff, verdict=judge(diff, 0.0, mode))
+
+
+def bar4_rows(acc):
+    modes = {"1-10": "above", "11-20": "above", "21-30": "at_least", "31-50": "at_least"}
+    return [difference_row(acc, 4, scope, "jeepers", "uncorrected", mode) for scope, mode in modes.items()]
+
+
+def bar5_rows(acc):
+    return [
+        difference_row(acc, 5, "marked", "jeepers", "majority", "at_least"),
+        difference_row(acc, 5, "1-80", "jeepers", "excl30", "at_least"),
+        difference_row(acc, 5, "1-80", "jeepers", "excl52", "at_least"),
+    ]
+
+
+# ---- run folders ----------------------------------------------------------
+
+
+def completeness(run_dir: str) -> dict:
+    """Bar 1 for one run folder: block row counts, error text in logs, the runner's exit code."""
+    out = dict(run=os.path.basename(run_dir), blocks=0, blocks_differing=None, merge_rows=0, sibling_rows=0,
+               log_errors=[], exit_code=None, seconds={})
+    blocks = os.path.join(run_dir, "blocks.tsv")
+    if os.path.exists(blocks):
+        out["blocks_differing"] = 0
+        with open(blocks) as fh:
+            next(fh)
+            for line in fh:
+                _, a, b = line.split("\t")
+                out["blocks"] += 1
+                out["merge_rows"] += int(a)
+                out["sibling_rows"] += int(b)
+                out["blocks_differing"] += int(int(a) != int(b))
+    for log in sorted(glob.glob(os.path.join(run_dir, "*.log"))):
+        with open(log, errors="replace") as fh:
+            if re.search("Traceback|ERROR", fh.read()):
+                out["log_errors"].append(os.path.basename(log))
+    code = os.path.join(run_dir, "exit_code")
+    if os.path.exists(code):
+        out["exit_code"] = int(open(code).read().strip())
+    run_tsv = os.path.join(run_dir, "run.tsv")
+    if os.path.exists(run_tsv):
+        with open(run_tsv) as fh:
+            next(fh)
+            for line in fh:
+                step, seconds, _ = line.split("\t")
+                out["seconds"][step] = int(seconds)
+    ok = out["blocks_differing"] == 0 and out["blocks"] > 0 and not out["log_errors"] and out["exit_code"] in (0, None)
+    out["verdict"] = "met" if ok else "failed"
+    return out
+
+
+def read_pairs(path: str):
+    same, near = [], []
+    with open(path) as fh:
+        next(fh)
+        for line in fh:
+            kind, top, bottom, removed_in = line.rstrip("\n").split("\t")
+            (same if kind == "same" else near).append((top, bottom, removed_in))
+    return same, near
+
+
+def scan(path: str, names=frozenset(), gap_acc=None, blocks=None):
+    """One pass over a sibling table.
+
+    Returns the unmarked-call tally, the fragments named in `names`, and
+    counts of correction types and call symbols. With gap_acc, unmarked
+    fragments are added to it at once and marked fragments are returned to be
+    added once the tally is complete (their majority calls need it).
+    """
+    tally = collections.defaultdict(lambda: [0, 0])
+    kept, deferred = {}, []
+    counts = dict(kinds=collections.Counter(), after_symbols=collections.Counter(),
+                  before_symbols=collections.Counter(), marked_fragments=0, marked_cpgs=0, fragments=0,
+                  call_count_differs=0)
+    for frag in read_table(path, blocks):
+        tally_unmarked([frag], tally)
+        counts["fragments"] += 1
+        counts["kinds"][frag.kind] += 1
+        counts["after_symbols"].update(frag.after)
+        counts["before_symbols"].update(frag.before)
+        # calls after correction are matched to positions by order, so a row with
+        # a different number of calls than positions would be misread
+        counts["call_count_differs"] += int(not len(frag.pos) == len(frag.before) == len(frag.after))
+        if frag.marked:
+            counts["marked_fragments"] += 1
+            counts["marked_cpgs"] += len(frag.marked)
+        if frag.name in names:
+            # a fragment that covers CpGs of two blocks has one row in each
+            kept.setdefault(frag.name, []).append(frag)
+        if gap_acc is not None:
+            if frag.marked:
+                deferred.append(frag)
+            else:
+                add_gap(gap_acc, frag)
+    if gap_acc is not None:
+        for frag in deferred:
+            add_gap(gap_acc, frag, tally)
+    return tally, kept, counts
+
+
+def interval_cols(interval):
+    if interval is None:
+        return ["", "", ""]
+    return [f"{x:.2f}" for x in interval]
+
+
+def pct(k, n):
+    return "" if n == 0 else f"{100 * k / n:.2f}"
+
+
+def add_counts(total: dict, counts: dict) -> None:
+    """Add the counts of one scan to a running total."""
+    for key, value in counts.items():
+        if isinstance(value, collections.Counter):
+            total.setdefault(key, collections.Counter()).update(value)
+        else:
+            total[key] = total.get(key, 0) + value
+
+
+def score_setting(runs, setting: str, same, near, returned_only=()):
+    """Score one setting over one or more runs folders, pooling their fragments.
+
+    A runs folder holds <setting>/<run>/. In a plasma run only the blocks
+    returned whole are scored. A folder named in returned_only is a run
+    already judged incomplete whose returned blocks are pooled with a later
+    run of the rest: bar 1 counts its plasma runs as met when the blocks
+    kept from them are whole and their logs are clean.
+    """
+    runs = [runs] if isinstance(runs, str) else list(runs)
+    bases = [os.path.join(r, setting) for r in runs]
+    lenient = {os.path.join(r, setting) for r in returned_only}
+    out = dict(setting=setting, partial=[], runs=runs)
+    names = {n for top, bottom, _ in same + near for n in (top, bottom)}
+
+    # bar 1
+    out["completeness"] = []
+    for base in bases:
+        for d in sorted(d for d in glob.glob(os.path.join(base, "*")) if os.path.isdir(d)):
+            c = completeness(d)
+            c["runs_folder"] = base
+            if base in lenient and c["run"].startswith("plasma_"):
+                done, _ = complete_blocks(d)
+                c["judged_on"] = f"returned blocks {sorted(done)}"
+                c["verdict"] = "met" if done and not c["log_errors"] else "failed"
+            out["completeness"].append(c)
+    out["bar1"] = bar_verdict(c["verdict"] for c in out["completeness"])
+
+    # partner calls: before-correction calls from the tables of all fragments
+    partner: dict = {}
+    for base in bases:
+        merge = os.path.join(base, "plasma_all", "t_Merge.txt")
+        if os.path.exists(merge):
+            for frag in read_table(merge):
+                if frag.name in names:
+                    partner.setdefault(frag.name, {}).update(method_calls(frag, "uncorrected"))
+
+    # bar 2 and the one-base-off pairs, from the runs on all fragments
+    gap_acc, near_acc = new_acc(), new_acc()
+    totals: dict = {}
+    for base in bases:
+        sib = os.path.join(base, "plasma_all", "t_JEEPERS_Sibling.txt")
+        if not os.path.exists(sib):
+            out["partial"].append(f"{base}/plasma_all missing")
+            continue
+        done, every = complete_blocks(os.path.dirname(sib))
+        if done != every:
+            out["partial"].append(f"{base}/plasma_all scored on blocks {sorted(done)} of {sorted(every)}")
+        tally, kept, counts = scan(sib, names, gap_acc, done)
+        add_counts(totals, counts)
+        for top, bottom, _ in near:
+            for own, other in ((top, bottom), (bottom, top)):
+                if other in partner:
+                    for frag in kept.get(own, ()):
+                        score_strand(near_acc, frag, partner[other], tally)
+    out["plasma_all_counts"] = {k: (dict(v) if isinstance(v, collections.Counter) else v) for k, v in totals.items()}
+    gap_methods = ("uncorrected", "jeepers", "majority", "drop_marked", "uncorrected_sf", "jeepers_sf")
+    out["gap"] = gap_rows(gap_acc, gap_methods)
+    uncorrected = bar_verdict(r["verdict"] for r in out["gap"] if r["method"] == "uncorrected")
+    jeepers = bar_verdict(r["verdict"] for r in out["gap"] if r["method"] == "jeepers")
+    out["bar2_uncorrected"] = uncorrected
+    out["bar2_jeepers_as_scored"] = jeepers
+    out["bar2"] = "unresolved" if uncorrected == "met" else jeepers
+
+    # bars 4 and 5: a strand is scored from the run in which its partner was removed
+    same_acc = new_acc()
+    scored = set()
+    for base in bases:
+        for removed in ("A", "B"):
+            sib = os.path.join(base, f"plasma_without_{removed.lower()}", "t_JEEPERS_Sibling.txt")
+            if not os.path.exists(sib):
+                out["partial"].append(f"{base}/plasma_without_{removed.lower()} missing")
+                continue
+            done, every = complete_blocks(os.path.dirname(sib))
+            if done != every:
+                out["partial"].append(
+                    f"{base}/plasma_without_{removed.lower()} scored on blocks {sorted(done)} of {sorted(every)}")
+            tally, kept, _ = scan(sib, names, blocks=done)
+            for top, bottom, top_removed_in in same:
+                own, other = (bottom, top) if top_removed_in == removed else (top, bottom)
+                if other in partner:
+                    for frag in kept.get(own, ()):
+                        score_strand(same_acc, frag, partner[other], tally)
+                        scored.add(own)
+    out["strands_scored"] = len(scored)
+    out["same_acc"] = {"|".join(k): v for k, v in same_acc.items()}
+    out["near_acc"] = {"|".join(k): v for k, v in near_acc.items()}
+    out["bar4_rows"] = bar4_rows(same_acc)
+    out["bar5_rows"] = bar5_rows(same_acc)
+    out["bar4"] = bar_verdict(r["verdict"] for r in out["bar4_rows"])
+    out["bar5"] = bar_verdict(r["verdict"] for r in out["bar5_rows"])
+    out["near_bar4_rows"] = bar4_rows(near_acc)
+    out["near_bar5_rows"] = bar5_rows(near_acc)
+
+    # bar 3 and lambda
+    out["controls"] = []
+    for base in bases:
+        for control in ("puc19", "lambda"):
+            for d in sorted(glob.glob(os.path.join(base, f"{control}_*"))):
+                sib = os.path.join(d, "t_JEEPERS_Sibling.txt")
+                if not os.path.exists(sib):
+                    out["partial"].append(f"{os.path.basename(d)} missing")
+                    continue
+                fragments = list(read_table(sib))
+                kinds = collections.Counter(f.kind for f in fragments)
+                for row in control_rows(fragments):
+                    out["controls"].append(dict(control=control, draw=os.path.basename(d), fragments=len(fragments),
+                                                kinds=dict(kinds), **row))
+    puc = [r["verdict"] for r in out["controls"] if r["control"] == "puc19" and r["method"] == "jeepers" and r["bin"] != "mid"]
+    out["bar3"] = bar_verdict(puc) if puc else "not run"
+    out["bar3_uncorrected"] = bar_verdict(
+        r["verdict"] for r in out["controls"] if r["control"] == "puc19" and r["method"] == "uncorrected" and r["bin"] != "mid"
+    )
+    out["verdicts"] = {f"bar{i}": out[f"bar{i}"] for i in range(1, 6)}
+    out["suitable"] = all(v == "met" for v in out["verdicts"].values())
+    return out
+
+
+def write_tables(results, out_dir):
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, "gap.tsv"), "w") as fh:
+        fh.write("setting\tmethod\tbin\tn_3p\tmeth_3p\tpct_3p\tn_5p\tmeth_5p\tpct_5p\t"
+                 "diff_5p_minus_3p\tlower\tupper\tbin_verdict\n")
+        for res in results:
+            for r in res["gap"]:
+                fh.write("\t".join(map(str, [
+                    res["setting"], r["method"], r["bin"], r["n_3p"], r["meth_3p"], pct(r["meth_3p"], r["n_3p"]),
+                    r["n_5p"], r["meth_5p"], pct(r["meth_5p"], r["n_5p"]), *interval_cols(r["interval"]), r["verdict"],
+                ])) + "\n")
+    with open(os.path.join(out_dir, "opposite_strand.tsv"), "w") as fh:
+        fh.write("setting\tpairs\trow\tmethod\tscope\tn\tcount\tpct\tlower\tupper\t"
+                 "bar\tcomparator\tcomparator_n\tcomparator_count\tdiff\tdiff_lower\tdiff_upper\tbin_verdict\n")
+        for res in results:
+            for pairs, acc_key, bars in (("same", "same_acc", ("bar4_rows", "bar5_rows")),
+                                         ("near", "near_acc", ("near_bar4_rows", "near_bar5_rows"))):
+                for key, (n, k) in sorted(res[acc_key].items()):
+                    method, scope = key.split("|")
+                    # count is calls equal to the partner's for agreement rows, and calls
+                    # the partner reads unmethylated for the two partner_unmethylated rows
+                    row = "partner_unmethylated" if method in ("changed_to_methylated", "dropped_marked") else "agreement"
+                    fh.write("\t".join(map(str, [res["setting"], pairs, row, method, scope, n, k, pct(k, n),
+                                                 *interval_cols(wilson(k, n))[1:], "", "", "", "", "", "", "", ""])) + "\n")
+                for bar_rows in bars:
+                    for r in res[bar_rows]:
+                        fh.write("\t".join(map(str, [
+                            res["setting"], pairs, "difference", r["method"], r["scope"], r["n"], r["agree"],
+                            pct(r["agree"], r["n"]), "", "", r["bar"] if pairs == "same" else "", r["comparator"],
+                            r["comparator_n"], r["comparator_agree"], *interval_cols(r["interval"]),
+                            r["verdict"] if pairs == "same" else "",
+                        ])) + "\n")
+    with open(os.path.join(out_dir, "controls.tsv"), "w") as fh:
+        fh.write("setting\tcontrol\tdraw\tfragments\tmethod\tbin\tn\tmeth\tpct\tmid_minus_bin\tlower\tupper\tbin_verdict\n")
+        for res in results:
+            for r in res["controls"]:
+                verdict = r["verdict"] if r["control"] == "puc19" else ""
+                fh.write("\t".join(map(str, [
+                    res["setting"], r["control"], r["draw"], r["fragments"], r["method"], r["bin"], r["n"], r["meth"],
+                    pct(r["meth"], r["n"]), *interval_cols(r["interval"]), verdict,
+                ])) + "\n")
+    with open(os.path.join(out_dir, "values.json"), "w") as fh:
+        json.dump({"bins": BINS, "settings": {r["setting"]: r for r in results}}, fh, indent=1)
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    p.add_argument("--runs", required=True, nargs="+", help="one or more folders holding <setting>/<run>/, pooled")
+    p.add_argument("--returned-only", nargs="*", default=[],
+                   help="runs folders already judged incomplete, of which only the blocks returned whole are pooled")
+    p.add_argument("--pairs", required=True, help="pairs table from emseq_jeepers_holdout.py")
+    p.add_argument("--out-dir", required=True)
+    p.add_argument("--settings", nargs="+", default=list(SETTINGS))
+    a = p.parse_args(argv)
+    same, near = read_pairs(a.pairs)
+    results = [score_setting(a.runs, s, same, near, a.returned_only) for s in a.settings]
+    write_tables(results, a.out_dir)
+    for res in results:
+        print(res["setting"], json.dumps(res["verdicts"]), "partial:", res["partial"])
+
+
+if __name__ == "__main__":
+    main()
+#+end_src
+
+**** Control pooling script
+
+#+begin_src python :tangle ./scripts/emseq_jeepers_pool_controls.py
+#!/usr/bin/env python3
+"""Pool the draws of each spike-in control and compare mid-fragment methylation with the 3' bins.
+
+A control subsampled to plasma depth holds too few fragments in one draw to
+resolve a 5-point difference, so the fragments of all draws are pooled per
+control and setting before the mid-fragment minus bin difference is taken.
+
+Usage: emseq_jeepers_pool_controls.py <runs_dir>
+
+<runs_dir> holds <setting>/<control>_draw<N>/t_JEEPERS_Sibling.txt for the
+settings 0.9 and default and the controls puc19 and lambda. Prints one
+tab-separated row per setting, control, method, and bin. The verdict column
+is filled for pUC19 only: lambda has no bar.
+"""
+from __future__ import annotations
+
+import glob
+import os
+import sys
+
+import emseq_jeepers_score as score
+
+HEADER = "setting\tcontrol\tdraws\tfragments\tmethod\tbin\tn\tmeth\tpct\tmid_minus_bin\tlower\tupper\tbin_verdict"
+
+
+def pooled_rows(runs_dir: str):
+    """Yield one output line per setting, control, method, and bin."""
+    for setting in ("0.9", "default"):
+        for control in ("puc19", "lambda"):
+            dirs = sorted(glob.glob(os.path.join(runs_dir, setting, f"{control}_draw*")))
+            fragments = []
+            for d in dirs:
+                fragments.extend(score.read_table(os.path.join(d, "t_JEEPERS_Sibling.txt")))
+            if not fragments:
+                continue
+            for r in score.control_rows(fragments):
+                pct = 100 * r["meth"] / r["n"] if r["n"] else float("nan")
+                if r["interval"] is None:
+                    tail = "\t\t\t"
+                else:
+                    verdict = r["verdict"] if control == "puc19" else ""
+                    tail = "%.2f\t%.2f\t%.2f\t%s" % (*r["interval"], verdict)
+                yield (f"{setting}\t{control}\t{len(dirs)}\t{len(fragments)}\t{r['method']}\t{r['bin']}"
+                       f"\t{r['n']}\t{r['meth']}\t{pct:.2f}\t{tail}")
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if len(argv) != 1:
+        print(__doc__, file=sys.stderr)
+        return 2
+    print(HEADER)
+    for line in pooled_rows(argv[0]):
+        print(line)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+#+end_src
+
+**** Scoring figure script
+
+#+begin_src R :tangle ./scripts/emseq_jeepers_score_plot.R
+#!/usr/bin/env Rscript
+# Figure of the JEEPERS test on one plasma library.
+#
+# Usage: emseq_jeepers_score_plot.R <results_dir> <out.png> [figure_schema.R]
+#
+# Reads gap.tsv and opposite_strand.tsv written by emseq_jeepers_score.py.
+# Left: CpG methylation by distance from the 3' end and from the 5' end of the
+# strand, on fragments of 160 bp or longer. Right: the share of a strand's
+# calls that equal the call of the opposite strand of the same molecule, by
+# distance from the strand's 3' end. Points are shares with 95% Wilson
+# intervals. Uncorrected calls and the locus majority call are drawn from the
+# rows of the code-default setting. The image carries no caption; the report
+# supplies it.
+
+suppressPackageStartupMessages({
+  library(ggplot2)
+  library(grid)
+})
+
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) < 2) stop("usage: emseq_jeepers_score_plot.R <results_dir> <out.png> [figure_schema.R]")
+schema <- if (length(args) >= 3) args[3] else "~/repos/science/R/figure_schema.R"
+source(schema)
+
+bins <- c("1-10", "11-20", "21-30", "31-50", "51-80")
+series <- c(
+  uncorrected = "Uncorrected",
+  jeepers_0.9 = "JEEPERS, -m 0.9",
+  jeepers_default = "JEEPERS, code default",
+  majority = "Locus majority call",
+  excl30 = "Exclude 30 bases",
+  excl52 = "Exclude 52 bases"
+)
+palette <- setNames(c("#4D4D4D", "#D55E00", "#E69F00", "#0072B2", "#009E73", "#CC79A7"), series)
+
+# one series label per row: JEEPERS from both settings, the rest from the code-default setting
+label_rows <- function(d) {
+  d$key <- ifelse(d$method == "jeepers", paste0("jeepers_", d$setting), d$method)
+  d <- d[d$method == "jeepers" | d$setting == "default", ]
+  d <- d[d$key %in% names(series), ]
+  d$series <- factor(series[d$key], levels = series)
+  d
+}
+
+wilson <- function(k, n) {
+  z <- qnorm(0.975)
+  p <- k / n
+  mid <- (p + z^2 / (2 * n)) / (1 + z^2 / n)
+  half <- z * sqrt(p * (1 - p) / n + z^2 / (4 * n^2)) / (1 + z^2 / n)
+  data.frame(pct = 100 * p, lower = 100 * (mid - half), upper = 100 * (mid + half))
+}
+
+gap <- read.delim(file.path(args[1], "gap.tsv"), stringsAsFactors = FALSE, colClasses = c(setting = "character"))
+gap <- label_rows(gap)
+ends <- c("3p" = "3' end of strand", "5p" = "5' end of strand")
+meth <- do.call(rbind, lapply(names(ends), function(e) {
+  n <- gap[[paste0("n_", e)]]
+  cbind(gap[, c("series", "bin")], end = ends[[e]], n = n, wilson(gap[[paste0("meth_", e)]], n))
+}))
+meth <- meth[meth$n > 0, ]
+meth$end <- factor(meth$end, levels = ends)
+meth$bin <- factor(meth$bin, levels = bins)
+
+opp <- read.delim(file.path(args[1], "opposite_strand.tsv"), stringsAsFactors = FALSE,
+                  colClasses = c(setting = "character"))
+opp <- opp[opp$pairs == "same" & opp$row == "agreement" & opp$scope %in% bins, ]
+opp <- label_rows(opp)
+agree <- cbind(opp[, c("series", "scope", "n")], wilson(opp$count, opp$n))
+agree <- agree[agree$n > 0, ]
+agree$bin <- factor(agree$scope, levels = bins)
+
+dodge <- position_dodge(width = 0.6)
+layers <- list(
+  geom_line(aes(group = series), position = dodge, linewidth = 0.4),
+  geom_errorbar(aes(ymin = lower, ymax = upper), position = dodge, width = 0, linewidth = 0.4),
+  geom_point(position = dodge, size = 1.4),
+  scale_color_manual(values = palette, name = NULL, drop = FALSE),
+  scale_x_discrete(drop = FALSE),
+  theme_scifig(base_size = 11),
+  theme(axis.text = element_text(color = "black"), strip.text = element_text(hjust = 0))
+)
+
+p_meth <- ggplot(meth, aes(bin, pct, color = series)) + layers +
+  facet_wrap(~end, nrow = 1) +
+  labs(x = "Distance from strand end (bases)", y = "CpG methylation (%)", tag = "A") +
+  theme(legend.position = "none")
+
+p_agree <- ggplot(agree, aes(bin, pct, color = series)) + layers +
+  labs(x = "Distance from 3' end of strand (bases)", y = "Agreement with opposite strand (%)", tag = "B") +
+  theme(legend.position = "right", legend.key.height = unit(0.5, "cm"))
+
+png(args[2], width = 12.5, height = 3.8, units = "in", res = 300, bg = "white")
+pushViewport(viewport(layout = grid.layout(1, 2, widths = unit(c(1.1, 1), "null"))))
+print(p_meth, vp = viewport(layout.pos.row = 1, layout.pos.col = 1))
+print(p_agree, vp = viewport(layout.pos.row = 1, layout.pos.col = 2))
+invisible(dev.off())
+cat("Saved:", args[2], "\n")
 #+end_src
 
 ** Reference
@@ -6204,6 +8329,8 @@ Integration plan. JEEPERS is called as an external tool from a new =emseq_jeeper
 3. Merge read 1 and read 2 calls with =MergeR1R2.py=.
 4. Correct with =JEEPERS_correction.py -n 4 -m 0.9=. The =-m= value is passed explicitly because the script defaults =--Meth= to 0.1 while its help text says 0.9 (=JEEPERS_correction.py:28=).
 5. Write the converters (our code) from =out_JEEPERS.txt= to per-CpG methylKit counts and to wgbstools =.pat=, so the DMR, UXM deconvolution, and methylation haplotype rules read corrected calls. The output columns are not yet known (the script describes them only as "methylation signal before and after correction"), so run the toy dataset first and design the converters from its output.
+
+Test result [2026-11-21 Sat]. JEEPERS in sibling mode was run unmodified on chr22 of one deep plasma library (emseq_09, 828,778 fragments in and out, blocks capped at 30,000 CpGs), scored against the opposite strand of the same molecule held out of its input. In the 10 bases nearest the 3′ end, 5′ minus 3′ methylation fell from 39.1 points to 1.8 (=-m 0.9=), and agreement with the opposite strand rose from 61.5% of 872 calls to 84.4% of 865 (difference 22.9 points, 95% interval 18.8 to 26.9). At the CpGs JEEPERS marks, its calls agreed with the opposite strand in 71.4% of 1,137, against 74.3% of 1,157 for a majority call over the other fragments at the locus (difference −2.9, −6.5 to 0.7), so a gain from its anchor matching over the majority call was not detected at this n. On the pUC19 control, 50 draws pooled to 3,474 fragments, methylation at bases 1–10 was 90.3% uncorrected and 99.8% after correction against 97.0% and 99.1% mid-fragment; on lambda it stayed at 0.9–1.0% of 50,125 calls. Four bars were met in the second run and the pUC19 bar under the pooled rule, both declared changes to the design. Whole-genome run time and the effect of the block cap on the calls were not measured. Report: [[file:docs/reports/2026-11-20-jeepers-test.md]]; tables in =results/jeepers-test-plasma-spiked/=.
 
 ** Ideas
 - Standardized bench protocol

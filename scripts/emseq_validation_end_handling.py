@@ -62,6 +62,33 @@ def parse_args():
     )
     p.add_argument("--methyldackel-version", required=True)
     p.add_argument("--pipeline-commit", required=True)
+    p.add_argument(
+        "--fragment-dir",
+        type=Path,
+        help="directory of {library}.{source}.ends.tsv files from the fragment-end tally",
+    )
+    p.add_argument(
+        "--fragment-sources",
+        nargs="*",
+        default=[],
+        help="sources tallied by distance from the strand ends",
+    )
+    p.add_argument(
+        "--check-index",
+        type=int,
+        help="index of the library that checks the measures and is left out of the judged tallies",
+    )
+    p.add_argument(
+        "--extract-dir",
+        type=Path,
+        help="directory of {library}.{setting}_CpG.bedGraph files from the calling settings",
+    )
+    p.add_argument(
+        "--extract-settings",
+        nargs="*",
+        default=[],
+        help="calling settings compared, with 'none' as the reference",
+    )
     return p.parse_args()
 
 
@@ -80,6 +107,22 @@ def main():
         counts, bounds, len(index), args.methyldackel_version, args.pipeline_commit
     )
     values.update(control_values(args.control_dir, index, values["read_length"]))
+    if args.fragment_sources:
+        values.update(
+            fragment_values(
+                args.fragment_dir,
+                args.fragment_sources,
+                index,
+                args.check_index,
+                args.out_dir / "fragment_end.tsv",
+            )
+        )
+    if args.extract_settings:
+        values.update(
+            extract_values(
+                args.extract_dir, args.extract_settings, index, args.check_index
+            )
+        )
     (args.out_dir / "values.json").write_text(
         json.dumps(values, indent=2, sort_keys=True) + "\n"
     )
@@ -432,6 +475,290 @@ def build_values(counts, bounds, n_libraries, methyldackel_version, pipeline_com
             round(100 * meth / total, 2) if total else None
         )
         values[f"{source}_max_position_pct"] = round(largest, 2)
+    return values
+
+
+# ==============================================================================
+# Plasma measures
+# ==============================================================================
+
+# Two-sided 95% critical values of Student's t by degrees of freedom
+T_975 = {
+    1: 12.706,
+    2: 4.303,
+    3: 3.182,
+    4: 2.776,
+    5: 2.571,
+    6: 2.447,
+    7: 2.365,
+    8: 2.306,
+    9: 2.262,
+    10: 2.228,
+    11: 2.201,
+    12: 2.179,
+    13: 2.160,
+    14: 2.145,
+    15: 2.131,
+    20: 2.086,
+    30: 2.042,
+}
+LOSS_DISTANCES = (1, 5, 10, 20, 30, 40, 50, 80)
+LONG_MAX_DISTANCE = (
+    80  # a base this near one end of a long fragment is nearer it than the other end
+)
+CHECK_DISTANCES = range(71, 81)
+
+
+def proportion_difference(a, b):
+    """a minus b as proportions of (methylated, unmethylated) counts, with a 95% interval."""
+    na, nb = a[0] + a[1], b[0] + b[1]
+    if na == 0 or nb == 0:
+        return None
+    pa, pb = a[0] / na, b[0] / nb
+    half = Z * (pa * (1 - pa) / na + pb * (1 - pb) / nb) ** 0.5
+    return pa - pb, pa - pb - half, pa - pb + half
+
+
+def end_loss(five_prime, three_prime):
+    """Per distance, 5' methylation minus 3' methylation with its 95% interval."""
+    return [proportion_difference(a, b) for a, b in zip(five_prime, three_prime)]
+
+
+def loss_run(losses, threshold=THRESHOLD):
+    """Count of consecutive distances from the first whose whole interval exceeds the threshold."""
+    run = 0
+    for loss in losses:
+        if loss is None or loss[1] <= threshold:
+            break
+        run += 1
+    return run
+
+
+def pool(counts):
+    return sum(m for m, _ in counts), sum(u for _, u in counts)
+
+
+def mate_difference(read1, read2):
+    """Read 1 minus read 2 methylation, pooled over positions, with a 95% interval."""
+    return proportion_difference(pool(read1), pool(read2))
+
+
+def paired_interval(differences):
+    """Mean of per-library differences with a 95% t interval."""
+    n = len(differences)
+    mean = sum(differences) / n
+    if n < 2:
+        return mean, None, None
+    sd = (sum((d - mean) ** 2 for d in differences) / (n - 1)) ** 0.5
+    t = T_975.get(n - 1, Z)
+    half = t * sd / n**0.5
+    return mean, mean - half, mean + half
+
+
+def read_ends(path):
+    """{fragments: {(end, mate, distance): (methylated, unmethylated, kept_neb, kept_all10)}}."""
+    tallies = {}
+    for line in Path(path).read_text().splitlines()[1:]:
+        fragments, end, mate, distance, meth, unmeth, kept_neb, kept_all10 = line.split(
+            "\t"
+        )
+        tallies.setdefault(fragments, {})[(end, int(mate), int(distance))] = (
+            int(meth),
+            int(unmeth),
+            int(kept_neb),
+            int(kept_all10),
+        )
+    return tallies
+
+
+def summed(libraries, fragments, end, mate, distances):
+    """Per distance, counts summed over libraries."""
+    rows = []
+    for distance in distances:
+        cells = [
+            t.get(fragments, {}).get((end, mate, distance), (0, 0, 0, 0))
+            for t in libraries
+        ]
+        rows.append(tuple(sum(c[i] for c in cells) for i in range(4)))
+    return rows
+
+
+def fragment_values(fragment_dir, sources, index, check_index, table_path):
+    """Loss by distance from the strand ends, judged on the libraries other than the check library."""
+    values, table = {}, []
+    long_distances = range(1, LONG_MAX_DISTANCE + 1)
+    for source in sources:
+        tallies = {
+            idx: read_ends(fragment_dir / f"{library}.{source}.ends.tsv")
+            for library, idx in index.items()
+        }
+        judged = [t for idx, t in tallies.items() if idx != check_index]
+        five = summed(judged, "long", "5p", 0, long_distances)
+        three = summed(judged, "long", "3p", 0, long_distances)
+        losses = end_loss([c[:2] for c in five], [c[:2] for c in three])
+        run = loss_run(losses)
+        values[f"{source}_n_libraries_judged"] = len(judged)
+        values[f"{source}_loss_run"] = run
+        for distance in LOSS_DISTANCES:
+            loss = losses[distance - 1]
+            values[f"{source}_loss_points_d{distance}"] = (
+                None if loss is None else round(100 * loss[0], 1)
+            )
+            for name, counts in (("p5", five), ("p3", three)):
+                meth, unmeth = counts[distance - 1][:2]
+                values[f"{source}_{name}_pct_d{distance}"] = (
+                    round(100 * meth / (meth + unmeth), 1) if meth + unmeth else None
+                )
+        per_library = []
+        for t in judged:
+            loss = proportion_difference(
+                summed([t], "long", "5p", 0, [10])[0][:2],
+                summed([t], "long", "3p", 0, [10])[0][:2],
+            )
+            if loss is not None:
+                per_library.append(round(100 * loss[0], 1))
+        values[f"{source}_loss_points_d10_min"] = (
+            min(per_library) if per_library else None
+        )
+        values[f"{source}_loss_points_d10_max"] = (
+            max(per_library) if per_library else None
+        )
+        if check_index in tallies:
+            check = [tallies[check_index]]
+            far = proportion_difference(
+                pool([c[:2] for c in summed(check, "long", "5p", 0, CHECK_DISTANCES)]),
+                pool([c[:2] for c in summed(check, "long", "3p", 0, CHECK_DISTANCES)]),
+            )
+            values[f"{source}_check_difference_points"] = (
+                None if far is None else round(100 * far[0], 1)
+            )
+            values[f"{source}_check_passes"] = (
+                far is not None and abs(far[0]) <= THRESHOLD
+            )
+        if run:
+            within = range(1, run + 1)
+            mates = mate_difference(
+                [c[:2] for c in summed(judged, "all", "3p", 1, within)],
+                [c[:2] for c in summed(judged, "all", "3p", 2, within)],
+            )
+            if mates is not None:
+                values[f"{source}_mate_difference_points"] = round(100 * mates[0], 1)
+                values[f"{source}_mate_difference_lower_points"] = round(
+                    100 * mates[1], 1
+                )
+                values[f"{source}_mate_difference_upper_points"] = round(
+                    100 * mates[2], 1
+                )
+                values[f"{source}_P5_holds"] = (
+                    -THRESHOLD <= mates[1] and mates[2] <= THRESHOLD
+                )
+            once = summed(judged, "all", "3p", 0, within)
+            total = sum(c[0] + c[1] for c in once)
+            values[f"{source}_kept_neb_pct"] = (
+                round(100 * sum(c[2] for c in once) / total, 1) if total else None
+            )
+            values[f"{source}_kept_all10_pct"] = (
+                round(100 * sum(c[3] for c in once) / total, 1) if total else None
+            )
+        pooled = {}
+        for t in judged:
+            for fragments, cells in t.items():
+                for key, cell in cells.items():
+                    old = pooled.setdefault((fragments,) + key, (0, 0, 0, 0))
+                    pooled[(fragments,) + key] = tuple(a + b for a, b in zip(old, cell))
+        for key, cell in sorted(pooled.items()):
+            table.append((source,) + key + (0,) + cell)
+        for idx, t in sorted(tallies.items()):
+            for fragments, cells in t.items():
+                for key, cell in sorted(cells.items()):
+                    table.append((source, fragments) + key + (idx,) + cell)
+    with open(table_path, "w") as out:
+        out.write(
+            "source\tfragments\tend\tmate\tdistance\tlibrary_index\tn_methylated\tn_unmethylated"
+            "\tn_kept_neb\tn_kept_all10\n"
+        )
+        for row in table:
+            out.write("\t".join(str(x) for x in row) + "\n")
+    return values
+
+
+def global_cpg(bedgraphs):
+    """Per setting, percent methylated over CpGs called under every setting and over all its calls."""
+    calls = {}
+    for setting, path in bedgraphs.items():
+        cells = {}
+        for line in Path(path).read_text().splitlines():
+            if line.startswith("track"):
+                continue
+            contig, start, _, _, meth, unmeth = line.split("\t")
+            cells[(contig, start)] = (int(meth), int(unmeth))
+        calls[setting] = cells
+    shared = set.intersection(*(set(c) for c in calls.values()))
+    result = {}
+    for setting, cells in calls.items():
+        meth_all, total_all = sum(m for m, _ in cells.values()), sum(
+            m + u for m, u in cells.values()
+        )
+        meth_shared = sum(cells[k][0] for k in shared)
+        total_shared = sum(cells[k][0] + cells[k][1] for k in shared)
+        result[setting] = {
+            "shared_pct": (
+                round(100 * meth_shared / total_shared, 2) if total_shared else None
+            ),
+            "all_pct": round(100 * meth_all / total_all, 2) if total_all else None,
+            "calls": total_all,
+        }
+    return result
+
+
+def extract_values(extract_dir, settings, index, check_index):
+    """Global CpG methylation under each calling setting, compared with 'none' per library."""
+    per_library = {}
+    for library, idx in index.items():
+        if idx == check_index:
+            continue
+        per_library[idx] = global_cpg(
+            {s: extract_dir / f"{library}.{s}_CpG.bedGraph" for s in settings}
+        )
+    values = {}
+    for setting in settings:
+        shared = [r[setting]["shared_pct"] for r in per_library.values()]
+        values[f"host_global_{setting}_pct"] = round(sum(shared) / len(shared), 2)
+        every = [r[setting]["all_pct"] for r in per_library.values()]
+        values[f"host_global_{setting}_all_calls_pct"] = round(
+            sum(every) / len(every), 2
+        )
+        if setting == "none":
+            continue
+        mean, lower, upper = paired_interval(
+            [r[setting]["all_pct"] - r["none"]["all_pct"] for r in per_library.values()]
+        )
+        values[f"host_global_all_calls_diff_{setting}_points"] = round(mean, 2)
+        values[f"host_global_all_calls_diff_{setting}_lower_points"] = (
+            None if lower is None else round(lower, 2)
+        )
+        values[f"host_global_all_calls_diff_{setting}_upper_points"] = (
+            None if upper is None else round(upper, 2)
+        )
+        differences = [
+            r[setting]["shared_pct"] - r["none"]["shared_pct"]
+            for r in per_library.values()
+        ]
+        mean, lower, upper = paired_interval(differences)
+        values[f"host_global_diff_{setting}_points"] = round(mean, 2)
+        values[f"host_global_diff_{setting}_lower_points"] = (
+            None if lower is None else round(lower, 2)
+        )
+        values[f"host_global_diff_{setting}_upper_points"] = (
+            None if upper is None else round(upper, 2)
+        )
+        dropped = [
+            100 * (1 - r[setting]["calls"] / r["none"]["calls"])
+            for r in per_library.values()
+        ]
+        values[f"host_calls_dropped_{setting}_pct"] = round(
+            sum(dropped) / len(dropped), 2
+        )
     return values
 
 

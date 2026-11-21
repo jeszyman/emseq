@@ -13,6 +13,7 @@ dependencies:
   - bwa
   - bwameth
   - methyldackel=0.6.1
+  - pysam
   - mosdepth
   - multiqc
   - pandas

@@ -213,3 +213,92 @@ def test_script_stops_and_names_the_library_when_the_bounds_line_is_absent(tmp_p
     proc, _ = run_script(tmp_path, bounds="")
     assert proc.returncode != 0
     assert "puc19.CpG.bounds.txt" in proc.stderr
+
+
+# ---- plasma measures: loss by distance from the strand ends, calling settings
+
+def test_end_loss_is_five_prime_minus_three_prime_with_its_interval():
+    (loss, lower, upper), = v.end_loss([(900, 100)], [(700, 300)])
+    assert loss == pytest.approx(0.20)
+    assert (lower, upper) == pytest.approx((0.16605, 0.23395), abs=1e-4)
+
+
+def test_end_loss_without_calls_at_one_end_is_none():
+    assert v.end_loss([(0, 0)], [(700, 300)]) == [None]
+
+
+def test_loss_run_counts_distances_whose_whole_interval_exceeds_the_threshold():
+    losses = [(0.2, 0.17, 0.23), (0.1, 0.06, 0.14), (0.06, 0.04, 0.08), (0.2, 0.1, 0.3)]
+    assert v.loss_run(losses) == 2
+
+
+def test_mate_difference_pools_positions():
+    difference, lower, upper = v.mate_difference([(450, 50), (450, 50)], [(880, 120)])
+    assert difference == pytest.approx(0.02)
+    assert (lower, upper) == pytest.approx((-0.00741, 0.04741), abs=1e-4)
+
+
+def test_global_cpg_compares_settings_on_shared_cpgs(tmp_path):
+    header = 'track type="bedGraph" description="x"\n'
+    none = tmp_path / "none.bedGraph"
+    neb = tmp_path / "neb.bedGraph"
+    # CpG at 100 is called under both settings, CpG at 200 under "none" only
+    none.write_text(header + "chr1\t100\t101\t50\t5\t5\nchr1\t200\t201\t0\t0\t10\n")
+    neb.write_text(header + "chr1\t100\t101\t75\t6\t2\n")
+    result = v.global_cpg({"none": none, "neb": neb})
+    assert result["none"] == {"shared_pct": 50.0, "all_pct": 25.0, "calls": 20}
+    assert result["neb"] == {"shared_pct": 75.0, "all_pct": 75.0, "calls": 8}
+
+
+def test_paired_interval_of_per_library_differences():
+    mean, lower, upper = v.paired_interval([1.0, 2.0, 3.0])
+    assert mean == pytest.approx(2.0)
+    # t(0.975, 2) = 4.303, standard error 1/sqrt(3)
+    assert (lower, upper) == pytest.approx((-0.484, 4.484), abs=1e-3)
+
+
+ENDS_HEADER = "fragments\tend\tmate\tdistance\tn_methylated\tn_unmethylated\tn_kept_neb\tn_kept_all10\n"
+
+
+def write_ends(path, low_distances):
+    rows = []
+    for fragments in ("all", "long"):
+        for end in ("5p", "3p"):
+            for mate in (0, 1, 2):
+                for distance in range(1, 81):
+                    meth = 200 if end == "3p" and distance <= low_distances else 800
+                    kept_neb = 500 if mate == 0 else 0
+                    kept_all10 = 100 if mate == 0 else 0
+                    rows.append(f"{fragments}\t{end}\t{mate}\t{distance}\t{meth}\t{1000 - meth}\t{kept_neb}\t{kept_all10}\n")
+    path.write_text(ENDS_HEADER + "".join(rows))
+
+
+def test_script_reports_the_plasma_loss_from_the_judged_libraries(tmp_path):
+    proc, out = run_script(tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    fragment_dir = tmp_path / "fragment"
+    fragment_dir.mkdir()
+    for lib in ("libA", "libB"):
+        write_ends(fragment_dir / f"{lib}.host.ends.tsv", low_distances=3)
+    cmd = [sys.executable, str(SCRIPT), "--mbias-dir", str(tmp_path / "mbias"), "--control-dir", str(tmp_path / "control"),
+           "--out-dir", str(out), "--library-index", "libA=2", "libB=1", "--methyldackel-version", "0.6.1",
+           "--pipeline-commit", "abc1234", "--fragment-dir", str(fragment_dir), "--fragment-sources", "host",
+           "--check-index", "2"]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr
+    values = json.loads((out / "values.json").read_text())
+    assert values["host_n_libraries_judged"] == 1
+    assert values["host_loss_run"] == 3
+    assert values["host_loss_points_d1"] == 60.0
+    assert values["host_loss_points_d10"] == 0.0
+    assert values["host_check_passes"] is True
+    assert values["host_check_difference_points"] == 0.0
+    # read 1 and read 2 report the same methylation at the 3' end
+    assert values["host_mate_difference_points"] == 0.0
+    assert values["host_P5_holds"] is True
+    # 500 of 1,000 once-per-fragment calls are kept under the NEB mask, 100 under the 10-base mask
+    assert values["host_kept_neb_pct"] == 50.0
+    assert values["host_kept_all10_pct"] == 10.0
+    table = (out / "fragment_end.tsv").read_text().splitlines()
+    assert table[0].split("\t")[:6] == ["source", "fragments", "end", "mate", "distance", "library_index"]
+    assert {line.split("\t")[5] for line in table[1:]} == {"0", "1", "2"}

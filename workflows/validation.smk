@@ -53,6 +53,16 @@ meth_map = config.get("meth-map", {})
 # --- Validation ---
 VALIDATION_DATASET = config["validation-dataset"]
 VALIDATION_INDEX = config["validation-library-index"]
+VALIDATION_HOST_REF = config["validation-host-ref"]
+VALIDATION_FRAGMENT_SOURCES = config.get("validation-fragment-end-sources", [])
+VALIDATION_CHECK_INDEX = config.get("validation-check-index")
+# Read-end settings compared at calling, with flags that
+# tests/unit/test_methyldackel_bounds.py pins for MethylDackel 0.6.1
+VALIDATION_END_SETTINGS = {
+    "none": "",
+    "neb": "--nOT 0,0,0,5 --nOB 0,0,5,0",
+    "all10": "--nOT 10,11,10,11 --nOB 10,11,10,11",
+} if config.get("validation-compare-settings", False) else {}
 # pUC19 is methylated at CpG only; lambda is unmethylated in all three contexts
 VALIDATION_CONTROL_CONTEXTS = {"puc19": ["CpG"], "unmeth_lambda": ["CpG", "CHG", "CHH"]}
 
@@ -60,11 +70,19 @@ _unindexed = [lib for lib in emseq_library_ids if lib not in VALIDATION_INDEX]
 if _unindexed:
     raise ValueError(f"validation-library-index has no entry for: {', '.join(_unindexed)}")
 
+# Panels of the strand-end figure: this data set's sources, then panels read
+# from the committed tables of other data sets
+VALIDATION_FRAGMENT_PANELS = [
+    (panel.get("dataset", VALIDATION_DATASET), panel["source"], panel["label"], panel.get("exclude-index", 0))
+    for panel in config.get("validation-fragment-figure", [])
+]
+
 # --- Rule all ---
 rule all:
     input:
         f"{R_EMSEQ}/results/end-handling-{VALIDATION_DATASET}/values.json",
         f"{R_EMSEQ}/resources/figures/validation_end_handling_{VALIDATION_DATASET}.png",
+        [f"{R_EMSEQ}/resources/figures/validation_fragment_end_{VALIDATION_DATASET}.png"] if VALIDATION_FRAGMENT_PANELS else [],
 
 # -----------------------------
 # Include modules

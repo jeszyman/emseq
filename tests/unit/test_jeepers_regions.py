@@ -37,3 +37,32 @@ def test_lowercase_sequence_is_read():
 def test_parse_region():
     assert parse_region("chr22") == ("chr22", None, None)
     assert parse_region("chr21:20,000,001-25000000") == ("chr21", 20_000_000, 25_000_000)
+
+
+def spaced(gaps):
+    """A sequence with a CG, then one more CG after each gap of that many bases between C and C."""
+    return "CG" + "".join("A" * (g - 2) + "CG" for g in gaps)
+
+
+def test_max_block_caps_block_size_and_cuts_at_the_widest_gap_near_the_cap():
+    # 10 CpGs; gaps between consecutive CpGs: 5 5 5 9 5 5 5 5 5
+    seq = spaced([5, 5, 5, 9, 5, 5, 5, 5, 5])
+    rows = list(cpg_rows(seq, "c", max_block=6, cut_window=4))
+    # the first block would take a 7th CpG; of the gaps before CpGs 4 to 7 the widest (9) is before CpG 5
+    assert [r[5] for r in rows] == [1, 1, 1, 1, 2, 2, 2, 2, 2, 2]
+    assert [r[4] for r in rows] == list(range(1, 11))
+    # with the wide gap outside the window, the cut falls on the latest of the equal gaps, at the cap
+    rows = list(cpg_rows(seq, "c", max_block=6, cut_window=2))
+    assert [r[5] for r in rows] == [1, 1, 1, 1, 1, 1, 2, 2, 2, 2]
+
+
+def test_max_block_is_never_exceeded_and_default_is_unchanged():
+    seq = spaced([3] * 99)
+    blocks = [r[5] for r in cpg_rows(seq, "c", max_block=7, cut_window=3)]
+    sizes = [blocks.count(b) for b in sorted(set(blocks))]
+    assert max(sizes) <= 7 and sum(sizes) == 100
+    assert blocks == sorted(blocks)
+    assert {r[5] for r in cpg_rows(seq, "c")} == {1}
+    # the gap rule still opens a block before the cap is reached
+    seq = spaced([3, 3, 20, 3, 3, 3])
+    assert [r[5] for r in cpg_rows(seq, "c", gap=10, min_block=2, max_block=5)] == [1, 1, 1, 2, 2, 2, 2]

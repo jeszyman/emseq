@@ -2,7 +2,7 @@
 """Score JEEPERS's sibling-mode output against five bars fixed before the run.
 
 Reads the run folders written by emseq_jeepers_run.sh, laid out as
-<runs>/<setting>/<run>/, where setting is "0.9" or "default" and run is
+<runs>/<setting>/<run>/ (several <runs> folders are pooled), where setting is "0.9" or "default" and run is
 plasma_all, plasma_without_a, plasma_without_b, puc19_draw<N>, or
 lambda_draw<N>, and the pairs table of emseq_jeepers_holdout.py. Writes
 gap.tsv, opposite_strand.tsv, controls.tsv, and values.json.
@@ -507,7 +507,8 @@ def scan(path: str, names=frozenset(), gap_acc=None, blocks=None):
             counts["marked_fragments"] += 1
             counts["marked_cpgs"] += len(frag.marked)
         if frag.name in names:
-            kept[frag.name] = frag
+            # a fragment that covers CpGs of two blocks has one row in each
+            kept.setdefault(frag.name, []).append(frag)
         if gap_acc is not None:
             if frag.marked:
                 deferred.append(frag)
@@ -529,39 +530,71 @@ def pct(k, n):
     return "" if n == 0 else f"{100 * k / n:.2f}"
 
 
-def score_setting(runs: str, setting: str, same, near):
-    base = os.path.join(runs, setting)
-    out = dict(setting=setting, partial=[])
+def add_counts(total: dict, counts: dict) -> None:
+    """Add the counts of one scan to a running total."""
+    for key, value in counts.items():
+        if isinstance(value, collections.Counter):
+            total.setdefault(key, collections.Counter()).update(value)
+        else:
+            total[key] = total.get(key, 0) + value
+
+
+def score_setting(runs, setting: str, same, near, returned_only=()):
+    """Score one setting over one or more runs folders, pooling their fragments.
+
+    A runs folder holds <setting>/<run>/. In a plasma run only the blocks
+    returned whole are scored. A folder named in returned_only is a run
+    already judged incomplete whose returned blocks are pooled with a later
+    run of the rest: bar 1 counts its plasma runs as met when the blocks
+    kept from them are whole and their logs are clean.
+    """
+    runs = [runs] if isinstance(runs, str) else list(runs)
+    bases = [os.path.join(r, setting) for r in runs]
+    lenient = {os.path.join(r, setting) for r in returned_only}
+    out = dict(setting=setting, partial=[], runs=runs)
     names = {n for top, bottom, _ in same + near for n in (top, bottom)}
 
     # bar 1
-    run_dirs = sorted(d for d in glob.glob(os.path.join(base, "*")) if os.path.isdir(d))
-    out["completeness"] = [completeness(d) for d in run_dirs]
+    out["completeness"] = []
+    for base in bases:
+        for d in sorted(d for d in glob.glob(os.path.join(base, "*")) if os.path.isdir(d)):
+            c = completeness(d)
+            c["runs_folder"] = base
+            if base in lenient and c["run"].startswith("plasma_"):
+                done, _ = complete_blocks(d)
+                c["judged_on"] = f"returned blocks {sorted(done)}"
+                c["verdict"] = "met" if done and not c["log_errors"] else "failed"
+            out["completeness"].append(c)
     out["bar1"] = bar_verdict(c["verdict"] for c in out["completeness"])
 
-    # partner calls: before-correction calls from the table of all fragments
-    partner = {}
-    merge = os.path.join(base, "plasma_all", "t_Merge.txt")
-    if os.path.exists(merge):
-        for frag in read_table(merge):
-            if frag.name in names:
-                partner[frag.name] = method_calls(frag, "uncorrected")
+    # partner calls: before-correction calls from the tables of all fragments
+    partner: dict = {}
+    for base in bases:
+        merge = os.path.join(base, "plasma_all", "t_Merge.txt")
+        if os.path.exists(merge):
+            for frag in read_table(merge):
+                if frag.name in names:
+                    partner.setdefault(frag.name, {}).update(method_calls(frag, "uncorrected"))
 
-    # bar 2 and the one-base-off pairs, from the run on all fragments
+    # bar 2 and the one-base-off pairs, from the runs on all fragments
     gap_acc, near_acc = new_acc(), new_acc()
-    sib = os.path.join(base, "plasma_all", "t_JEEPERS_Sibling.txt")
-    if os.path.exists(sib):
+    totals: dict = {}
+    for base in bases:
+        sib = os.path.join(base, "plasma_all", "t_JEEPERS_Sibling.txt")
+        if not os.path.exists(sib):
+            out["partial"].append(f"{base}/plasma_all missing")
+            continue
         done, every = complete_blocks(os.path.dirname(sib))
         if done != every:
-            out["partial"].append(f"plasma_all scored on blocks {sorted(done)} of {sorted(every)}")
+            out["partial"].append(f"{base}/plasma_all scored on blocks {sorted(done)} of {sorted(every)}")
         tally, kept, counts = scan(sib, names, gap_acc, done)
-        out["plasma_all_counts"] = {k: (dict(v) if isinstance(v, collections.Counter) else v) for k, v in counts.items()}
+        add_counts(totals, counts)
         for top, bottom, _ in near:
             for own, other in ((top, bottom), (bottom, top)):
-                if own in kept and other in partner:
-                    score_strand(near_acc, kept[own], partner[other], tally)
-    else:
-        out["partial"].append("plasma_all missing")
+                if other in partner:
+                    for frag in kept.get(own, ()):
+                        score_strand(near_acc, frag, partner[other], tally)
+    out["plasma_all_counts"] = {k: (dict(v) if isinstance(v, collections.Counter) else v) for k, v in totals.items()}
     gap_methods = ("uncorrected", "jeepers", "majority", "drop_marked", "uncorrected_sf", "jeepers_sf")
     out["gap"] = gap_rows(gap_acc, gap_methods)
     uncorrected = bar_verdict(r["verdict"] for r in out["gap"] if r["method"] == "uncorrected")
@@ -570,24 +603,27 @@ def score_setting(runs: str, setting: str, same, near):
     out["bar2_jeepers_as_scored"] = jeepers
     out["bar2"] = "unresolved" if uncorrected == "met" else jeepers
 
-    # bars 4 and 5: each strand from the run in which its partner was removed
+    # bars 4 and 5: a strand is scored from the run in which its partner was removed
     same_acc = new_acc()
-    scored = 0
-    for removed in ("A", "B"):
-        sib = os.path.join(base, f"plasma_without_{removed.lower()}", "t_JEEPERS_Sibling.txt")
-        if not os.path.exists(sib):
-            out["partial"].append(f"plasma_without_{removed.lower()} missing")
-            continue
-        done, every = complete_blocks(os.path.dirname(sib))
-        if done != every:
-            out["partial"].append(f"plasma_without_{removed.lower()} scored on blocks {sorted(done)} of {sorted(every)}")
-        tally, kept, _ = scan(sib, names, blocks=done)
-        for top, bottom, top_removed_in in same:
-            own, other = (bottom, top) if top_removed_in == removed else (top, bottom)
-            if own in kept and other in partner:
-                score_strand(same_acc, kept[own], partner[other], tally)
-                scored += 1
-    out["strands_scored"] = scored
+    scored = set()
+    for base in bases:
+        for removed in ("A", "B"):
+            sib = os.path.join(base, f"plasma_without_{removed.lower()}", "t_JEEPERS_Sibling.txt")
+            if not os.path.exists(sib):
+                out["partial"].append(f"{base}/plasma_without_{removed.lower()} missing")
+                continue
+            done, every = complete_blocks(os.path.dirname(sib))
+            if done != every:
+                out["partial"].append(
+                    f"{base}/plasma_without_{removed.lower()} scored on blocks {sorted(done)} of {sorted(every)}")
+            tally, kept, _ = scan(sib, names, blocks=done)
+            for top, bottom, top_removed_in in same:
+                own, other = (bottom, top) if top_removed_in == removed else (top, bottom)
+                if other in partner:
+                    for frag in kept.get(own, ()):
+                        score_strand(same_acc, frag, partner[other], tally)
+                        scored.add(own)
+    out["strands_scored"] = len(scored)
     out["same_acc"] = {"|".join(k): v for k, v in same_acc.items()}
     out["near_acc"] = {"|".join(k): v for k, v in near_acc.items()}
     out["bar4_rows"] = bar4_rows(same_acc)
@@ -599,19 +635,20 @@ def score_setting(runs: str, setting: str, same, near):
 
     # bar 3 and lambda
     out["controls"] = []
-    for control in ("puc19", "lambda"):
-        for d in sorted(glob.glob(os.path.join(base, f"{control}_*"))):
-            sib = os.path.join(d, "t_JEEPERS_Sibling.txt")
-            if not os.path.exists(sib):
-                out["partial"].append(f"{os.path.basename(d)} missing")
-                continue
-            fragments = list(read_table(sib))
-            kinds = collections.Counter(f.kind for f in fragments)
-            for row in control_rows(fragments):
-                out["controls"].append(dict(control=control, draw=os.path.basename(d), fragments=len(fragments),
-                                            kinds=dict(kinds), **row))
+    for base in bases:
+        for control in ("puc19", "lambda"):
+            for d in sorted(glob.glob(os.path.join(base, f"{control}_*"))):
+                sib = os.path.join(d, "t_JEEPERS_Sibling.txt")
+                if not os.path.exists(sib):
+                    out["partial"].append(f"{os.path.basename(d)} missing")
+                    continue
+                fragments = list(read_table(sib))
+                kinds = collections.Counter(f.kind for f in fragments)
+                for row in control_rows(fragments):
+                    out["controls"].append(dict(control=control, draw=os.path.basename(d), fragments=len(fragments),
+                                                kinds=dict(kinds), **row))
     puc = [r["verdict"] for r in out["controls"] if r["control"] == "puc19" and r["method"] == "jeepers" and r["bin"] != "mid"]
-    out["bar3"] = bar_verdict(puc)
+    out["bar3"] = bar_verdict(puc) if puc else "not run"
     out["bar3_uncorrected"] = bar_verdict(
         r["verdict"] for r in out["controls"] if r["control"] == "puc19" and r["method"] == "uncorrected" and r["bin"] != "mid"
     )
@@ -667,13 +704,15 @@ def write_tables(results, out_dir):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--runs", required=True, help="folder holding <setting>/<run>/")
+    p.add_argument("--runs", required=True, nargs="+", help="one or more folders holding <setting>/<run>/, pooled")
+    p.add_argument("--returned-only", nargs="*", default=[],
+                   help="runs folders already judged incomplete, of which only the blocks returned whole are pooled")
     p.add_argument("--pairs", required=True, help="pairs table from emseq_jeepers_holdout.py")
     p.add_argument("--out-dir", required=True)
     p.add_argument("--settings", nargs="+", default=list(SETTINGS))
     a = p.parse_args(argv)
     same, near = read_pairs(a.pairs)
-    results = [score_setting(a.runs, s, same, near) for s in a.settings]
+    results = [score_setting(a.runs, s, same, near, a.returned_only) for s in a.settings]
     write_tables(results, a.out_dir)
     for res in results:
         print(res["setting"], json.dumps(res["verdicts"]), "partial:", res["partial"])

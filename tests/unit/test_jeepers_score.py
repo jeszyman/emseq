@@ -268,4 +268,42 @@ def test_scoring_keeps_to_blocks_returned_whole(tmp_path):
     assert [f.name for f in sc.read_table(str(table))] == ["a", "b", "c"]
     assert [f.name for f in sc.read_table(str(table), done)] == ["a", "b"]
     _, kept, counts = sc.scan(str(table), {"a", "c"}, blocks=done)
-    assert set(kept) == {"a"} and counts["fragments"] == 2
+    assert set(kept) == {"a"} and len(kept["a"]) == 1 and counts["fragments"] == 2
+
+
+def run_folder(base, name, rows, blocks, exit_code=0):
+    d = base / name
+    d.mkdir(parents=True)
+    (d / "t_JEEPERS_Sibling.txt").write_text("".join(rows))
+    (d / "t_Merge.txt").write_text("".join("\t".join(r.rstrip("\n").split("\t")[:24]) + "\n" for r in rows))
+    (d / "blocks.tsv").write_text("block\tmerge_rows\tsibling_rows\n" + "".join(f"{b}\t{m}\t{s}\n" for b, m, s in blocks))
+    (d / "exit_code").write_text(f"{exit_code}\n")
+    (d / "correct.log").write_text("ok\n")
+
+
+def in_block(line, block):
+    return line.replace("\t1\tO", f"\t{block}\tO", 1)
+
+
+def test_two_runs_pool_and_an_earlier_incomplete_run_gives_only_its_whole_blocks(tmp_path):
+    # first run: block 1 whole, block 2 unfinished; second run: the span of block 2, whole
+    top1, bot1 = row(1001, 1200, "OT", "t1", "1195", "U", "M", "1195", "2:2", "S"), row(1001, 1200, "OB", "b1", "1195", "M")
+    top2, bot2 = row(5001, 5200, "OT", "t2", "5195", "U", "M", "5195", "2:2", "S"), row(5001, 5200, "OB", "b2", "5195", "M")
+    stale2 = in_block(row(5001, 5200, "OT", "t2", "5195", "U"), 2)
+    first, second = tmp_path / "first" / "default", tmp_path / "second" / "default"
+    for name, rows in (("plasma_all", [top1, bot1]), ("plasma_without_a", [bot1]), ("plasma_without_b", [top1])):
+        run_folder(first, name, rows + [stale2], [(1, len(rows), len(rows)), (2, 5, 1)], exit_code=1)
+    for name, rows in (("plasma_all", [top2, bot2]), ("plasma_without_a", [bot2]), ("plasma_without_b", [top2])):
+        run_folder(second, name, rows, [(1, len(rows), len(rows))])
+    same = [("t1", "b1", "A"), ("t2", "b2", "A")]
+    alone = sc.score_setting(str(tmp_path / "second"), "default", same, [])
+    assert alone["bar1"] == "met" and alone["strands_scored"] == 2 and alone["bar3"] == "not run"
+    assert alone["same_acc"]["jeepers|1-10"] == [1, 1] and alone["same_acc"]["uncorrected|1-10"] == [1, 0]
+    first_only = sc.score_setting(str(tmp_path / "first"), "default", same, [])
+    assert first_only["bar1"] == "failed" and first_only["strands_scored"] == 2
+    pooled = sc.score_setting([str(tmp_path / "first"), str(tmp_path / "second")], "default", same, [],
+                              returned_only=[str(tmp_path / "first")])
+    assert pooled["bar1"] == "met"
+    assert pooled["strands_scored"] == 4
+    assert pooled["same_acc"]["jeepers|1-10"] == [2, 2] and pooled["same_acc"]["uncorrected|1-10"] == [2, 0]
+    assert pooled["plasma_all_counts"]["fragments"] == 4

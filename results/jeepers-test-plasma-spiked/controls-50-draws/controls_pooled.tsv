@@ -1,0 +1,33 @@
+setting	control	draws	fragments	method	bin	n	meth	pct	mid_minus_bin	lower	upper	bin_verdict
+0.9	puc19	50	3474	uncorrected	mid	24911	24153	96.96				
+0.9	puc19	50	3474	uncorrected	1-10	2242	2025	90.32	6.64	5.46	7.95	failed
+0.9	puc19	50	3474	uncorrected	11-20	2215	2105	95.03	1.92	1.07	2.93	met
+0.9	puc19	50	3474	uncorrected	21-30	2229	2126	95.38	1.58	0.75	2.55	met
+0.9	puc19	50	3474	jeepers	mid	24904	24687	99.13				
+0.9	puc19	50	3474	jeepers	1-10	2241	2236	99.78	-0.65	-0.83	-0.33	met
+0.9	puc19	50	3474	jeepers	11-20	2215	2203	99.46	-0.33	-0.59	0.09	met
+0.9	puc19	50	3474	jeepers	21-30	2229	2211	99.19	-0.06	-0.38	0.41	met
+0.9	lambda	50	75840	uncorrected	mid	476651	3683	0.77				
+0.9	lambda	50	75840	uncorrected	1-10	50135	457	0.91	-0.14	-0.23	-0.06	
+0.9	lambda	50	75840	uncorrected	11-20	49054	505	1.03	-0.26	-0.35	-0.17	
+0.9	lambda	50	75840	uncorrected	21-30	48495	447	0.92	-0.15	-0.24	-0.06	
+0.9	lambda	50	75840	jeepers	mid	476623	3720	0.78				
+0.9	lambda	50	75840	jeepers	1-10	50125	475	0.95	-0.17	-0.26	-0.08	
+0.9	lambda	50	75840	jeepers	11-20	49042	516	1.05	-0.27	-0.37	-0.18	
+0.9	lambda	50	75840	jeepers	21-30	48480	457	0.94	-0.16	-0.26	-0.08	
+default	puc19	50	3474	uncorrected	mid	24911	24153	96.96				
+default	puc19	50	3474	uncorrected	1-10	2242	2025	90.32	6.64	5.46	7.95	failed
+default	puc19	50	3474	uncorrected	11-20	2215	2105	95.03	1.92	1.07	2.93	met
+default	puc19	50	3474	uncorrected	21-30	2229	2126	95.38	1.58	0.75	2.55	met
+default	puc19	50	3474	jeepers	mid	24904	24687	99.13				
+default	puc19	50	3474	jeepers	1-10	2241	2236	99.78	-0.65	-0.83	-0.33	met
+default	puc19	50	3474	jeepers	11-20	2215	2203	99.46	-0.33	-0.59	0.09	met
+default	puc19	50	3474	jeepers	21-30	2229	2211	99.19	-0.06	-0.38	0.41	met
+default	lambda	50	75840	uncorrected	mid	476651	3683	0.77				
+default	lambda	50	75840	uncorrected	1-10	50135	457	0.91	-0.14	-0.23	-0.06	
+default	lambda	50	75840	uncorrected	11-20	49054	505	1.03	-0.26	-0.35	-0.17	
+default	lambda	50	75840	uncorrected	21-30	48495	447	0.92	-0.15	-0.24	-0.06	
+default	lambda	50	75840	jeepers	mid	476623	3789	0.79				
+default	lambda	50	75840	jeepers	1-10	50125	486	0.97	-0.17	-0.27	-0.09	
+default	lambda	50	75840	jeepers	11-20	49042	529	1.08	-0.28	-0.38	-0.19	
+default	lambda	50	75840	jeepers	21-30	48480	464	0.96	-0.16	-0.26	-0.08	

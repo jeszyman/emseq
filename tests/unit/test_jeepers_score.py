@@ -255,3 +255,17 @@ def test_control_rows_compare_mid_fragment_with_bins_near_the_3p_end():
     assert r["interval"][0] == pytest.approx(5.0)
     assert r["verdict"] == "met"
     assert rows[("uncorrected", "11-20")]["verdict"] == "unresolved"
+
+
+def test_scoring_keeps_to_blocks_returned_whole(tmp_path):
+    (tmp_path / "blocks.tsv").write_text("block\tmerge_rows\tsibling_rows\n1\t2\t2\n2.0\t3\t1\n")
+    done, every = sc.complete_blocks(str(tmp_path))
+    assert done == {1.0} and every == {1.0, 2.0}
+    table = tmp_path / "t_JEEPERS_Sibling.txt"
+    lines = [row(1001, 1200, "OT", "a", "1010", "M"), row(1001, 1200, "OT", "b", "1010", "M"),
+             row(5001, 5200, "OT", "c", "5010", "M").replace("\t1\tOT", "\t2.0\tOT")]
+    table.write_text("".join(lines))
+    assert [f.name for f in sc.read_table(str(table))] == ["a", "b", "c"]
+    assert [f.name for f in sc.read_table(str(table), done)] == ["a", "b"]
+    _, kept, counts = sc.scan(str(table), {"a", "c"}, blocks=done)
+    assert set(kept) == {"a"} and counts["fragments"] == 2

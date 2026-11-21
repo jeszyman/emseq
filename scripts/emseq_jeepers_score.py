@@ -81,6 +81,7 @@ class Fragment:
     marked: list
     support: dict
     kind: str
+    block: str = ""
 
 
 def _split(field: str) -> list:
@@ -93,21 +94,42 @@ def parse_row(line: str) -> Fragment:
     pos = [int(p) for p in _split(f[10])]
     before = _split(f[11])
     if len(f) < 35:
-        return Fragment(f[0], int(f[1]), int(f[2]), f[4], f[5], pos, before, list(before), [], {}, "")
+        return Fragment(f[0], int(f[1]), int(f[2]), f[4], f[5], pos, before, list(before), [], {}, "", f[3])
     marked = [int(p) for p in _split(f[25])]
     counts = _split(f[26])
     support: dict = {}
     for i, p in enumerate(marked):
         entry = counts[i] if i < len(counts) else "-"
         support[p] = int(entry.split(":")[1]) if ":" in entry and entry.split(":")[1].isdigit() else None
-    return Fragment(f[0], int(f[1]), int(f[2]), f[4], f[5], pos, before, _split(f[24]), marked, support, f[34])
+    return Fragment(f[0], int(f[1]), int(f[2]), f[4], f[5], pos, before, _split(f[24]), marked, support, f[34], f[3])
 
 
-def read_table(path: str):
+def read_table(path: str, blocks=None):
+    """Fragments of a sibling or merge table; with blocks, only those of the block numbers given."""
     with open(path) as fh:
         for line in fh:
             if line.strip() and not line.startswith("Chr\t") and "\tBlock\t" not in line[:60]:
-                yield parse_row(line)
+                frag = parse_row(line)
+                if blocks is None or float(frag.block) in blocks:
+                    yield frag
+
+
+def complete_blocks(run_dir: str):
+    """(block numbers whose rows after correction equal the rows before, all block numbers).
+
+    A block that JEEPERS did not finish holds only the fragments it wrote
+    before stopping, which are those it left unchanged, so scoring is kept to
+    the blocks it returned whole.
+    """
+    done, every = set(), set()
+    with open(os.path.join(run_dir, "blocks.tsv")) as fh:
+        next(fh)
+        for line in fh:
+            block, merge_rows, sibling_rows = line.split("\t")
+            every.add(float(block))
+            if int(merge_rows) == int(sibling_rows):
+                done.add(float(block))
+    return done, every
 
 
 def distances(frag: Fragment, pos: int) -> tuple[int, int]:
@@ -459,7 +481,7 @@ def read_pairs(path: str):
     return same, near
 
 
-def scan(path: str, names=frozenset(), gap_acc=None):
+def scan(path: str, names=frozenset(), gap_acc=None, blocks=None):
     """One pass over a sibling table.
 
     Returns the unmarked-call tally, the fragments named in `names`, and
@@ -470,13 +492,17 @@ def scan(path: str, names=frozenset(), gap_acc=None):
     tally = collections.defaultdict(lambda: [0, 0])
     kept, deferred = {}, []
     counts = dict(kinds=collections.Counter(), after_symbols=collections.Counter(),
-                  before_symbols=collections.Counter(), marked_fragments=0, marked_cpgs=0, fragments=0)
-    for frag in read_table(path):
+                  before_symbols=collections.Counter(), marked_fragments=0, marked_cpgs=0, fragments=0,
+                  call_count_differs=0)
+    for frag in read_table(path, blocks):
         tally_unmarked([frag], tally)
         counts["fragments"] += 1
         counts["kinds"][frag.kind] += 1
         counts["after_symbols"].update(frag.after)
         counts["before_symbols"].update(frag.before)
+        # calls after correction are matched to positions by order, so a row with
+        # a different number of calls than positions would be misread
+        counts["call_count_differs"] += int(not len(frag.pos) == len(frag.before) == len(frag.after))
         if frag.marked:
             counts["marked_fragments"] += 1
             counts["marked_cpgs"] += len(frag.marked)
@@ -525,7 +551,10 @@ def score_setting(runs: str, setting: str, same, near):
     gap_acc, near_acc = new_acc(), new_acc()
     sib = os.path.join(base, "plasma_all", "t_JEEPERS_Sibling.txt")
     if os.path.exists(sib):
-        tally, kept, counts = scan(sib, names, gap_acc)
+        done, every = complete_blocks(os.path.dirname(sib))
+        if done != every:
+            out["partial"].append(f"plasma_all scored on blocks {sorted(done)} of {sorted(every)}")
+        tally, kept, counts = scan(sib, names, gap_acc, done)
         out["plasma_all_counts"] = {k: (dict(v) if isinstance(v, collections.Counter) else v) for k, v in counts.items()}
         for top, bottom, _ in near:
             for own, other in ((top, bottom), (bottom, top)):
@@ -549,7 +578,10 @@ def score_setting(runs: str, setting: str, same, near):
         if not os.path.exists(sib):
             out["partial"].append(f"plasma_without_{removed.lower()} missing")
             continue
-        tally, kept, _ = scan(sib, names)
+        done, every = complete_blocks(os.path.dirname(sib))
+        if done != every:
+            out["partial"].append(f"plasma_without_{removed.lower()} scored on blocks {sorted(done)} of {sorted(every)}")
+        tally, kept, _ = scan(sib, names, blocks=done)
         for top, bottom, top_removed_in in same:
             own, other = (bottom, top) if top_removed_in == removed else (top, bottom)
             if own in kept and other in partner:

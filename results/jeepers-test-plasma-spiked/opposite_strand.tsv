@@ -1,0 +1,296 @@
+setting	pairs	row	method	scope	n	count	pct	lower	upper	bar	comparator	comparator_n	comparator_count	diff	diff_lower	diff_upper	bin_verdict
+0.9	same	partner_unmethylated	changed_to_methylated	0	5	1	20.00	3.62	62.45								
+0.9	same	partner_unmethylated	changed_to_methylated	1	31	4	12.90	5.13	28.85								
+0.9	same	partner_unmethylated	changed_to_methylated	2	23	6	26.09	12.55	46.47								
+0.9	same	partner_unmethylated	changed_to_methylated	3+	67	29	43.28	32.10	55.19								
+0.9	same	partner_unmethylated	changed_to_methylated	fallback	4	0	0.00	0.00	48.99								
+0.9	same	agreement	drop_marked	1-10	70	60	85.71	75.66	92.05								
+0.9	same	agreement	drop_marked	1-80	754	680	90.19	87.85	92.11								
+0.9	same	agreement	drop_marked	11-20	99	92	92.93	86.12	96.53								
+0.9	same	agreement	drop_marked	21-30	79	68	86.08	76.76	92.04								
+0.9	same	agreement	drop_marked	31-50	199	181	90.95	86.16	94.20								
+0.9	same	agreement	drop_marked	51-80	307	279	90.88	87.13	93.61								
+0.9	same	agreement	drop_marked	all	1771	1515	85.54	83.83	87.11								
+0.9	same	partner_unmethylated	dropped_marked	1-10	39	11	28.21	16.54	43.78								
+0.9	same	partner_unmethylated	dropped_marked	1-80	144	53	36.81	29.37	44.93								
+0.9	same	partner_unmethylated	dropped_marked	11-20	33	10	30.30	17.38	47.34								
+0.9	same	partner_unmethylated	dropped_marked	21-30	23	7	30.43	15.60	50.87								
+0.9	same	partner_unmethylated	dropped_marked	31-50	26	12	46.15	28.76	64.54								
+0.9	same	partner_unmethylated	dropped_marked	51-80	23	13	56.52	36.81	74.37								
+0.9	same	partner_unmethylated	dropped_marked	all	163	65	39.88	32.68	47.54								
+0.9	same	agreement	excl30	1-80	555	485	87.39	84.37	89.89								
+0.9	same	agreement	excl30	31-50	225	193	85.78	80.61	89.74								
+0.9	same	agreement	excl30	51-80	330	292	88.48	84.59	91.49								
+0.9	same	agreement	excl30	all	1591	1332	83.72	81.83	85.45								
+0.9	same	agreement	excl30	marked	68	37	54.41	42.66	65.70								
+0.9	same	agreement	excl52	1-80	305	268	87.87	83.73	91.07								
+0.9	same	agreement	excl52	51-80	305	268	87.87	83.73	91.07								
+0.9	same	agreement	excl52	all	1341	1115	83.15	81.05	85.06								
+0.9	same	agreement	excl52	marked	40	24	60.00	44.60	73.65								
+0.9	same	agreement	jeepers_sf	1-10	3	3	100.00	43.85	100.00								
+0.9	same	agreement	jeepers_sf	1-80	14	13	92.86	68.53	98.73								
+0.9	same	agreement	jeepers_sf	11-20	3	2	66.67	20.77	93.85								
+0.9	same	agreement	jeepers_sf	21-30	1	1	100.00	20.65	100.00								
+0.9	same	agreement	jeepers_sf	31-50	2	2	100.00	34.24	100.00								
+0.9	same	agreement	jeepers_sf	51-80	5	5	100.00	56.55	100.00								
+0.9	same	agreement	jeepers_sf	all	27	21	77.78	59.24	89.39								
+0.9	same	agreement	jeepers_sf	marked	11	10	90.91	62.26	98.38								
+0.9	same	agreement	jeepers	1-10	109	91	83.49	75.40	89.29								
+0.9	same	agreement	jeepers	1-80	897	785	87.51	85.19	89.52								
+0.9	same	agreement	jeepers	11-20	132	118	89.39	82.98	93.58								
+0.9	same	agreement	jeepers	21-30	101	83	82.18	73.58	88.42								
+0.9	same	agreement	jeepers	31-50	225	201	89.33	84.62	92.73								
+0.9	same	agreement	jeepers	51-80	330	292	88.48	84.59	91.49								
+0.9	same	agreement	jeepers	all	1932	1629	84.32	82.63	85.87								
+0.9	same	agreement	jeepers	marked	161	114	70.81	63.37	77.28								
+0.9	same	agreement	majority	1-10	109	91	83.49	75.40	89.29								
+0.9	same	agreement	majority	1-80	898	795	88.53	86.28	90.45								
+0.9	same	agreement	majority	11-20	132	121	91.67	85.69	95.28								
+0.9	same	agreement	majority	21-30	102	87	85.29	77.15	90.88								
+0.9	same	agreement	majority	31-50	225	201	89.33	84.62	92.73								
+0.9	same	agreement	majority	51-80	330	295	89.39	85.61	92.27								
+0.9	same	agreement	majority	all	1934	1638	84.69	83.02	86.23								
+0.9	same	agreement	majority	marked	163	123	75.46	68.32	81.43								
+0.9	same	agreement	uncorrected_sf	1-10	3	1	33.33	6.15	79.23								
+0.9	same	agreement	uncorrected_sf	1-80	15	9	60.00	35.75	80.18								
+0.9	same	agreement	uncorrected_sf	11-20	3	2	66.67	20.77	93.85								
+0.9	same	agreement	uncorrected_sf	21-30	2	1	50.00	9.45	90.55								
+0.9	same	agreement	uncorrected_sf	31-50	2	2	100.00	34.24	100.00								
+0.9	same	agreement	uncorrected_sf	51-80	5	3	60.00	23.07	88.24								
+0.9	same	agreement	uncorrected_sf	all	29	18	62.07	44.00	77.31								
+0.9	same	agreement	uncorrected_sf	marked	13	7	53.85	29.14	76.79								
+0.9	same	agreement	uncorrected	1-10	109	71	65.14	55.81	73.43								
+0.9	same	agreement	uncorrected	1-80	898	733	81.63	78.96	84.02								
+0.9	same	agreement	uncorrected	11-20	132	102	77.27	69.41	83.59								
+0.9	same	agreement	uncorrected	21-30	102	75	73.53	64.23	81.12								
+0.9	same	agreement	uncorrected	31-50	225	193	85.78	80.61	89.74								
+0.9	same	agreement	uncorrected	51-80	330	292	88.48	84.59	91.49								
+0.9	same	agreement	uncorrected	all	1934	1580	81.70	79.91	83.36								
+0.9	same	agreement	uncorrected	marked	163	65	39.88	32.68	47.54								
+0.9	same	difference	jeepers	1-10	109	91	83.49			4	uncorrected	109	71	18.35	6.77	29.33	unresolved
+0.9	same	difference	jeepers	11-20	132	118	89.39			4	uncorrected	132	102	12.12	3.12	21.03	unresolved
+0.9	same	difference	jeepers	21-30	101	83	82.18			4	uncorrected	102	75	8.65	-2.82	19.85	unresolved
+0.9	same	difference	jeepers	31-50	225	201	89.33			4	uncorrected	225	193	3.56	-2.60	9.74	unresolved
+0.9	same	difference	jeepers	marked	161	114	70.81			5	majority	163	123	-4.65	-14.19	4.99	unresolved
+0.9	same	difference	jeepers	1-80	897	785	87.51			5	excl30	555	485	0.13	-3.29	3.75	met
+0.9	same	difference	jeepers	1-80	897	785	87.51			5	excl52	305	268	-0.35	-4.31	4.25	met
+0.9	near	partner_unmethylated	changed_to_methylated	0	1	1	100.00	20.65	100.00								
+0.9	near	partner_unmethylated	changed_to_methylated	1	18	2	11.11	3.10	32.80								
+0.9	near	partner_unmethylated	changed_to_methylated	2	11	1	9.09	1.62	37.74								
+0.9	near	partner_unmethylated	changed_to_methylated	3+	65	17	26.15	17.02	37.95								
+0.9	near	agreement	drop_marked	1-10	49	39	79.59	66.36	88.52								
+0.9	near	agreement	drop_marked	1-80	581	440	75.73	72.08	79.04								
+0.9	near	agreement	drop_marked	11-20	84	67	79.76	69.96	86.96								
+0.9	near	agreement	drop_marked	21-30	78	66	84.62	75.01	90.97								
+0.9	near	agreement	drop_marked	31-50	149	106	71.14	63.41	77.81								
+0.9	near	agreement	drop_marked	51-80	221	162	73.30	67.11	78.70								
+0.9	near	agreement	drop_marked	all	1339	979	73.11	70.68	75.42								
+0.9	near	partner_unmethylated	dropped_marked	1-10	27	5	18.52	8.18	36.70								
+0.9	near	partner_unmethylated	dropped_marked	1-80	101	33	32.67	24.31	42.31								
+0.9	near	partner_unmethylated	dropped_marked	11-20	19	6	31.58	15.36	53.99								
+0.9	near	partner_unmethylated	dropped_marked	21-30	17	5	29.41	13.28	53.13								
+0.9	near	partner_unmethylated	dropped_marked	31-50	14	6	42.86	21.38	67.41								
+0.9	near	partner_unmethylated	dropped_marked	51-80	24	11	45.83	27.89	64.93								
+0.9	near	partner_unmethylated	dropped_marked	all	117	41	35.04	27.00	44.04								
+0.9	near	agreement	excl30	1-80	408	285	69.85	65.23	74.10								
+0.9	near	agreement	excl30	31-50	163	112	68.71	61.23	75.33								
+0.9	near	agreement	excl30	51-80	245	173	70.61	64.63	75.96								
+0.9	near	agreement	excl30	all	1182	832	70.39	67.72	72.92								
+0.9	near	agreement	excl30	marked	54	25	46.30	33.69	59.39								
+0.9	near	agreement	excl52	1-80	235	164	69.79	63.64	75.30								
+0.9	near	agreement	excl52	51-80	235	164	69.79	63.64	75.30								
+0.9	near	agreement	excl52	all	1009	711	70.47	67.58	73.20								
+0.9	near	agreement	excl52	marked	38	17	44.74	30.15	60.29								
+0.9	near	agreement	jeepers_sf	1-10	1	1	100.00	20.65	100.00								
+0.9	near	agreement	jeepers_sf	1-80	7	6	85.71	48.69	97.43								
+0.9	near	agreement	jeepers_sf	11-20	2	2	100.00	34.24	100.00								
+0.9	near	agreement	jeepers_sf	21-30	2	2	100.00	34.24	100.00								
+0.9	near	agreement	jeepers_sf	31-50	2	1	50.00	9.45	90.55								
+0.9	near	agreement	jeepers_sf	all	8	7	87.50	52.91	97.76								
+0.9	near	agreement	jeepers_sf	marked	6	6	100.00	60.97	100.00								
+0.9	near	agreement	jeepers	1-10	77	62	80.52	70.31	87.82								
+0.9	near	agreement	jeepers	1-80	686	523	76.24	72.91	79.27								
+0.9	near	agreement	jeepers	11-20	104	84	80.77	72.15	87.19								
+0.9	near	agreement	jeepers	21-30	95	81	85.26	76.77	91.01								
+0.9	near	agreement	jeepers	31-50	164	117	71.34	63.99	77.71								
+0.9	near	agreement	jeepers	51-80	246	179	72.76	66.88	77.95								
+0.9	near	agreement	jeepers	all	1460	1075	73.63	71.31	75.83								
+0.9	near	agreement	jeepers	marked	121	96	79.34	71.28	85.60								
+0.9	near	agreement	majority	1-10	77	61	79.22	68.88	86.78								
+0.9	near	agreement	majority	1-80	686	529	77.11	73.82	80.10								
+0.9	near	agreement	majority	11-20	104	86	82.69	74.29	88.76								
+0.9	near	agreement	majority	21-30	95	80	84.21	75.57	90.19								
+0.9	near	agreement	majority	31-50	164	120	73.17	65.92	79.36								
+0.9	near	agreement	majority	51-80	246	182	73.98	68.16	79.07								
+0.9	near	agreement	majority	all	1460	1079	73.90	71.59	76.09								
+0.9	near	agreement	majority	marked	121	100	82.64	74.92	88.36								
+0.9	near	agreement	uncorrected_sf	1-10	1	1	100.00	20.65	100.00								
+0.9	near	agreement	uncorrected_sf	1-80	7	6	85.71	48.69	97.43								
+0.9	near	agreement	uncorrected_sf	11-20	2	2	100.00	34.24	100.00								
+0.9	near	agreement	uncorrected_sf	21-30	2	2	100.00	34.24	100.00								
+0.9	near	agreement	uncorrected_sf	31-50	2	1	50.00	9.45	90.55								
+0.9	near	agreement	uncorrected_sf	all	8	7	87.50	52.91	97.76								
+0.9	near	agreement	uncorrected_sf	marked	6	6	100.00	60.97	100.00								
+0.9	near	agreement	uncorrected	1-10	76	44	57.89	46.68	68.35								
+0.9	near	agreement	uncorrected	1-80	682	473	69.35	65.79	72.70								
+0.9	near	agreement	uncorrected	11-20	103	73	70.87	61.48	78.77								
+0.9	near	agreement	uncorrected	21-30	95	71	74.74	65.16	82.40								
+0.9	near	agreement	uncorrected	31-50	163	112	68.71	61.23	75.33								
+0.9	near	agreement	uncorrected	51-80	245	173	70.61	64.63	75.96								
+0.9	near	agreement	uncorrected	all	1456	1020	70.05	67.65	72.35								
+0.9	near	agreement	uncorrected	marked	117	41	35.04	27.00	44.04								
+0.9	near	difference	jeepers	1-10	77	62	80.52				uncorrected	76	44	22.62	8.01	36.01	
+0.9	near	difference	jeepers	11-20	104	84	80.77				uncorrected	103	73	9.90	-1.79	21.28	
+0.9	near	difference	jeepers	21-30	95	81	85.26				uncorrected	95	71	10.53	-0.91	21.70	
+0.9	near	difference	jeepers	31-50	164	117	71.34				uncorrected	163	112	2.63	-7.26	12.45	
+0.9	near	difference	jeepers	marked	121	96	79.34				majority	121	100	-3.31	-13.19	6.63	
+0.9	near	difference	jeepers	1-80	686	523	76.24				excl30	408	285	6.39	0.99	11.91	
+0.9	near	difference	jeepers	1-80	686	523	76.24				excl52	235	164	6.45	0.01	13.31	
+default	same	partner_unmethylated	changed_to_methylated	0	5	1	20.00	3.62	62.45								
+default	same	partner_unmethylated	changed_to_methylated	1	31	4	12.90	5.13	28.85								
+default	same	partner_unmethylated	changed_to_methylated	2	23	6	26.09	12.55	46.47								
+default	same	partner_unmethylated	changed_to_methylated	3+	78	38	48.72	37.95	59.61								
+default	same	partner_unmethylated	changed_to_methylated	fallback	6	1	16.67	3.01	56.35								
+default	same	agreement	drop_marked	1-10	70	60	85.71	75.66	92.05								
+default	same	agreement	drop_marked	1-80	754	680	90.19	87.85	92.11								
+default	same	agreement	drop_marked	11-20	99	92	92.93	86.12	96.53								
+default	same	agreement	drop_marked	21-30	79	68	86.08	76.76	92.04								
+default	same	agreement	drop_marked	31-50	199	181	90.95	86.16	94.20								
+default	same	agreement	drop_marked	51-80	307	279	90.88	87.13	93.61								
+default	same	agreement	drop_marked	all	1771	1515	85.54	83.83	87.11								
+default	same	partner_unmethylated	dropped_marked	1-10	39	11	28.21	16.54	43.78								
+default	same	partner_unmethylated	dropped_marked	1-80	144	53	36.81	29.37	44.93								
+default	same	partner_unmethylated	dropped_marked	11-20	33	10	30.30	17.38	47.34								
+default	same	partner_unmethylated	dropped_marked	21-30	23	7	30.43	15.60	50.87								
+default	same	partner_unmethylated	dropped_marked	31-50	26	12	46.15	28.76	64.54								
+default	same	partner_unmethylated	dropped_marked	51-80	23	13	56.52	36.81	74.37								
+default	same	partner_unmethylated	dropped_marked	all	163	65	39.88	32.68	47.54								
+default	same	agreement	excl30	1-80	555	485	87.39	84.37	89.89								
+default	same	agreement	excl30	31-50	225	193	85.78	80.61	89.74								
+default	same	agreement	excl30	51-80	330	292	88.48	84.59	91.49								
+default	same	agreement	excl30	all	1591	1332	83.72	81.83	85.45								
+default	same	agreement	excl30	marked	68	37	54.41	42.66	65.70								
+default	same	agreement	excl52	1-80	305	268	87.87	83.73	91.07								
+default	same	agreement	excl52	51-80	305	268	87.87	83.73	91.07								
+default	same	agreement	excl52	all	1341	1115	83.15	81.05	85.06								
+default	same	agreement	excl52	marked	40	24	60.00	44.60	73.65								
+default	same	agreement	jeepers_sf	1-10	3	3	100.00	43.85	100.00								
+default	same	agreement	jeepers_sf	1-80	14	13	92.86	68.53	98.73								
+default	same	agreement	jeepers_sf	11-20	3	3	100.00	43.85	100.00								
+default	same	agreement	jeepers_sf	21-30	1	1	100.00	20.65	100.00								
+default	same	agreement	jeepers_sf	31-50	2	2	100.00	34.24	100.00								
+default	same	agreement	jeepers_sf	51-80	5	4	80.00	37.55	96.38								
+default	same	agreement	jeepers_sf	all	27	21	77.78	59.24	89.39								
+default	same	agreement	jeepers_sf	marked	11	10	90.91	62.26	98.38								
+default	same	agreement	jeepers	1-10	109	91	83.49	75.40	89.29								
+default	same	agreement	jeepers	1-80	897	778	86.73	84.36	88.80								
+default	same	agreement	jeepers	11-20	132	115	87.12	80.34	91.80								
+default	same	agreement	jeepers	21-30	101	84	83.17	74.69	89.22								
+default	same	agreement	jeepers	31-50	225	198	88.00	83.10	91.62								
+default	same	agreement	jeepers	51-80	330	290	87.88	83.91	90.97								
+default	same	agreement	jeepers	all	1932	1622	83.95	82.25	85.52								
+default	same	agreement	jeepers	marked	161	107	66.46	58.86	73.29								
+default	same	agreement	majority	1-10	109	91	83.49	75.40	89.29								
+default	same	agreement	majority	1-80	898	795	88.53	86.28	90.45								
+default	same	agreement	majority	11-20	132	121	91.67	85.69	95.28								
+default	same	agreement	majority	21-30	102	87	85.29	77.15	90.88								
+default	same	agreement	majority	31-50	225	201	89.33	84.62	92.73								
+default	same	agreement	majority	51-80	330	295	89.39	85.61	92.27								
+default	same	agreement	majority	all	1934	1638	84.69	83.02	86.23								
+default	same	agreement	majority	marked	163	123	75.46	68.32	81.43								
+default	same	agreement	uncorrected_sf	1-10	3	1	33.33	6.15	79.23								
+default	same	agreement	uncorrected_sf	1-80	15	9	60.00	35.75	80.18								
+default	same	agreement	uncorrected_sf	11-20	3	2	66.67	20.77	93.85								
+default	same	agreement	uncorrected_sf	21-30	2	1	50.00	9.45	90.55								
+default	same	agreement	uncorrected_sf	31-50	2	2	100.00	34.24	100.00								
+default	same	agreement	uncorrected_sf	51-80	5	3	60.00	23.07	88.24								
+default	same	agreement	uncorrected_sf	all	29	18	62.07	44.00	77.31								
+default	same	agreement	uncorrected_sf	marked	13	7	53.85	29.14	76.79								
+default	same	agreement	uncorrected	1-10	109	71	65.14	55.81	73.43								
+default	same	agreement	uncorrected	1-80	898	733	81.63	78.96	84.02								
+default	same	agreement	uncorrected	11-20	132	102	77.27	69.41	83.59								
+default	same	agreement	uncorrected	21-30	102	75	73.53	64.23	81.12								
+default	same	agreement	uncorrected	31-50	225	193	85.78	80.61	89.74								
+default	same	agreement	uncorrected	51-80	330	292	88.48	84.59	91.49								
+default	same	agreement	uncorrected	all	1934	1580	81.70	79.91	83.36								
+default	same	agreement	uncorrected	marked	163	65	39.88	32.68	47.54								
+default	same	difference	jeepers	1-10	109	91	83.49			4	uncorrected	109	71	18.35	6.77	29.33	unresolved
+default	same	difference	jeepers	11-20	132	115	87.12			4	uncorrected	132	102	9.85	0.58	19.00	unresolved
+default	same	difference	jeepers	21-30	101	84	83.17			4	uncorrected	102	75	9.64	-1.74	20.73	unresolved
+default	same	difference	jeepers	31-50	225	198	88.00			4	uncorrected	225	193	2.22	-4.08	8.53	unresolved
+default	same	difference	jeepers	marked	161	107	66.46			5	majority	163	123	-9.00	-18.67	0.88	unresolved
+default	same	difference	jeepers	1-80	897	778	86.73			5	excl30	555	485	-0.65	-4.11	3.01	met
+default	same	difference	jeepers	1-80	897	778	86.73			5	excl52	305	268	-1.14	-5.12	3.49	met
+default	near	partner_unmethylated	changed_to_methylated	0	1	1	100.00	20.65	100.00								
+default	near	partner_unmethylated	changed_to_methylated	1	18	2	11.11	3.10	32.80								
+default	near	partner_unmethylated	changed_to_methylated	2	11	1	9.09	1.62	37.74								
+default	near	partner_unmethylated	changed_to_methylated	3+	72	23	31.94	22.33	43.39								
+default	near	partner_unmethylated	changed_to_methylated	fallback	2	2	100.00	34.24	100.00								
+default	near	agreement	drop_marked	1-10	49	39	79.59	66.36	88.52								
+default	near	agreement	drop_marked	1-80	581	440	75.73	72.08	79.04								
+default	near	agreement	drop_marked	11-20	84	67	79.76	69.96	86.96								
+default	near	agreement	drop_marked	21-30	78	66	84.62	75.01	90.97								
+default	near	agreement	drop_marked	31-50	149	106	71.14	63.41	77.81								
+default	near	agreement	drop_marked	51-80	221	162	73.30	67.11	78.70								
+default	near	agreement	drop_marked	all	1339	979	73.11	70.68	75.42								
+default	near	partner_unmethylated	dropped_marked	1-10	27	5	18.52	8.18	36.70								
+default	near	partner_unmethylated	dropped_marked	1-80	101	33	32.67	24.31	42.31								
+default	near	partner_unmethylated	dropped_marked	11-20	19	6	31.58	15.36	53.99								
+default	near	partner_unmethylated	dropped_marked	21-30	17	5	29.41	13.28	53.13								
+default	near	partner_unmethylated	dropped_marked	31-50	14	6	42.86	21.38	67.41								
+default	near	partner_unmethylated	dropped_marked	51-80	24	11	45.83	27.89	64.93								
+default	near	partner_unmethylated	dropped_marked	all	117	41	35.04	27.00	44.04								
+default	near	agreement	excl30	1-80	408	285	69.85	65.23	74.10								
+default	near	agreement	excl30	31-50	163	112	68.71	61.23	75.33								
+default	near	agreement	excl30	51-80	245	173	70.61	64.63	75.96								
+default	near	agreement	excl30	all	1182	832	70.39	67.72	72.92								
+default	near	agreement	excl30	marked	54	25	46.30	33.69	59.39								
+default	near	agreement	excl52	1-80	235	164	69.79	63.64	75.30								
+default	near	agreement	excl52	51-80	235	164	69.79	63.64	75.30								
+default	near	agreement	excl52	all	1009	711	70.47	67.58	73.20								
+default	near	agreement	excl52	marked	38	17	44.74	30.15	60.29								
+default	near	agreement	jeepers_sf	1-10	1	0	0.00	0.00	79.35								
+default	near	agreement	jeepers_sf	1-80	7	4	57.14	25.05	84.18								
+default	near	agreement	jeepers_sf	11-20	2	1	50.00	9.45	90.55								
+default	near	agreement	jeepers_sf	21-30	2	2	100.00	34.24	100.00								
+default	near	agreement	jeepers_sf	31-50	2	1	50.00	9.45	90.55								
+default	near	agreement	jeepers_sf	all	8	5	62.50	30.57	86.32								
+default	near	agreement	jeepers_sf	marked	6	4	66.67	30.00	90.32								
+default	near	agreement	jeepers	1-10	77	62	80.52	70.31	87.82								
+default	near	agreement	jeepers	1-80	686	518	75.51	72.16	78.58								
+default	near	agreement	jeepers	11-20	104	82	78.85	70.04	85.59								
+default	near	agreement	jeepers	21-30	95	80	84.21	75.57	90.19								
+default	near	agreement	jeepers	31-50	164	116	70.73	63.36	77.16								
+default	near	agreement	jeepers	51-80	246	178	72.36	66.46	77.57								
+default	near	agreement	jeepers	all	1460	1068	73.15	70.82	75.36								
+default	near	agreement	jeepers	marked	121	89	73.55	65.06	80.60								
+default	near	agreement	majority	1-10	77	61	79.22	68.88	86.78								
+default	near	agreement	majority	1-80	686	529	77.11	73.82	80.10								
+default	near	agreement	majority	11-20	104	86	82.69	74.29	88.76								
+default	near	agreement	majority	21-30	95	80	84.21	75.57	90.19								
+default	near	agreement	majority	31-50	164	120	73.17	65.92	79.36								
+default	near	agreement	majority	51-80	246	182	73.98	68.16	79.07								
+default	near	agreement	majority	all	1460	1079	73.90	71.59	76.09								
+default	near	agreement	majority	marked	121	100	82.64	74.92	88.36								
+default	near	agreement	uncorrected_sf	1-10	1	1	100.00	20.65	100.00								
+default	near	agreement	uncorrected_sf	1-80	7	6	85.71	48.69	97.43								
+default	near	agreement	uncorrected_sf	11-20	2	2	100.00	34.24	100.00								
+default	near	agreement	uncorrected_sf	21-30	2	2	100.00	34.24	100.00								
+default	near	agreement	uncorrected_sf	31-50	2	1	50.00	9.45	90.55								
+default	near	agreement	uncorrected_sf	all	8	7	87.50	52.91	97.76								
+default	near	agreement	uncorrected_sf	marked	6	6	100.00	60.97	100.00								
+default	near	agreement	uncorrected	1-10	76	44	57.89	46.68	68.35								
+default	near	agreement	uncorrected	1-80	682	473	69.35	65.79	72.70								
+default	near	agreement	uncorrected	11-20	103	73	70.87	61.48	78.77								
+default	near	agreement	uncorrected	21-30	95	71	74.74	65.16	82.40								
+default	near	agreement	uncorrected	31-50	163	112	68.71	61.23	75.33								
+default	near	agreement	uncorrected	51-80	245	173	70.61	64.63	75.96								
+default	near	agreement	uncorrected	all	1456	1020	70.05	67.65	72.35								
+default	near	agreement	uncorrected	marked	117	41	35.04	27.00	44.04								
+default	near	difference	jeepers	1-10	77	62	80.52				uncorrected	76	44	22.62	8.01	36.01	
+default	near	difference	jeepers	11-20	104	82	78.85				uncorrected	103	73	7.97	-3.85	19.54	
+default	near	difference	jeepers	21-30	95	80	84.21				uncorrected	95	71	9.47	-2.07	20.77	
+default	near	difference	jeepers	31-50	164	116	70.73				uncorrected	163	112	2.02	-7.89	11.88	
+default	near	difference	jeepers	marked	121	89	73.55				majority	121	100	-9.09	-19.33	1.36	
+default	near	difference	jeepers	1-80	686	518	75.51				excl30	408	285	5.66	0.24	11.21	
+default	near	difference	jeepers	1-80	686	518	75.51				excl52	235	164	5.72	-0.73	12.60	

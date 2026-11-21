@@ -1,0 +1,2617 @@
+{
+ "bins": [
+  [
+   1,
+   10
+  ],
+  [
+   11,
+   20
+  ],
+  [
+   21,
+   30
+  ],
+  [
+   31,
+   50
+  ],
+  [
+   51,
+   80
+  ]
+ ],
+ "settings": {
+  "0.9": {
+   "setting": "0.9",
+   "partial": [],
+   "runs": [
+    "second/runs"
+   ],
+   "completeness": [
+    {
+     "run": "plasma_all",
+     "blocks": 19,
+     "blocks_differing": 0,
+     "merge_rows": 828778,
+     "sibling_rows": 828778,
+     "log_errors": [],
+     "exit_code": 0,
+     "seconds": {
+      "format": 31,
+      "bam2txt": 11,
+      "merge": 13,
+      "correct": 2961
+     },
+     "verdict": "met",
+     "runs_folder": "second/runs/0.9"
+    },
+    {
+     "run": "plasma_without_a",
+     "blocks": 19,
+     "blocks_differing": 0,
+     "merge_rows": 826464,
+     "sibling_rows": 826464,
+     "log_errors": [],
+     "exit_code": 0,
+     "seconds": {
+      "format": 29,
+      "bam2txt": 11,
+      "merge": 13,
+      "correct": 3066
+     },
+     "verdict": "met",
+     "runs_folder": "second/runs/0.9"
+    },
+    {
+     "run": "plasma_without_b",
+     "blocks": 19,
+     "blocks_differing": 0,
+     "merge_rows": 826464,
+     "sibling_rows": 826464,
+     "log_errors": [],
+     "exit_code": 0,
+     "seconds": {
+      "format": 28,
+      "bam2txt": 11,
+      "merge": 14,
+      "correct": 3115
+     },
+     "verdict": "met",
+     "runs_folder": "second/runs/0.9"
+    }
+   ],
+   "bar1": "met",
+   "plasma_all_counts": {
+    "kinds": {
+     "Rd": 696908,
+     "S": 115213,
+     "Sf": 16657
+    },
+    "after_symbols": {
+     "U": 385764,
+     "M": 2217776,
+     "N": 4774,
+     "m": 22890,
+     "u": 3417,
+     "q": 5511
+    },
+    "before_symbols": {
+     "U": 552900,
+     "M": 2080119,
+     "N": 7113
+    },
+    "marked_fragments": 131870,
+    "marked_cpgs": 194014,
+    "fragments": 828778,
+    "call_count_differs": 0
+   },
+   "gap": [
+    {
+     "method": "uncorrected",
+     "bin": "1-10",
+     "n_3p": 101132,
+     "meth_3p": 46742,
+     "n_5p": 113724,
+     "meth_5p": 97296,
+     "interval": [
+      39.33569722095463,
+      38.96591105090293,
+      39.70391425046423
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "uncorrected",
+     "bin": "11-20",
+     "n_3p": 115487,
+     "meth_3p": 75320,
+     "n_5p": 116430,
+     "meth_5p": 99185,
+     "interval": [
+      19.969063363388084,
+      19.626604026916244,
+      20.310950917430517
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "uncorrected",
+     "bin": "21-30",
+     "n_3p": 115753,
+     "meth_3p": 86403,
+     "n_5p": 115123,
+     "meth_5p": 98035,
+     "interval": [
+      10.51245971679572,
+      10.188328205482435,
+      10.83636930815849
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "uncorrected",
+     "bin": "31-50",
+     "n_3p": 221278,
+     "meth_3p": 174786,
+     "n_5p": 221891,
+     "meth_5p": 186425,
+     "interval": [
+      5.0271509136459835,
+      4.798964609073278,
+      5.255298918784985
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "uncorrected",
+     "bin": "51-80",
+     "n_3p": 330757,
+     "meth_3p": 266642,
+     "n_5p": 330369,
+     "meth_5p": 273584,
+     "interval": [
+      2.1959653699013537,
+      2.009678945192264,
+      2.382239115406441
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "jeepers",
+     "bin": "1-10",
+     "n_3p": 100348,
+     "meth_3p": 84079,
+     "n_5p": 113721,
+     "meth_5p": 97335,
+     "interval": [
+      1.803632005462319,
+      1.497747671766209,
+      2.1098402091827766
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "jeepers",
+     "bin": "11-20",
+     "n_3p": 115007,
+     "meth_3p": 99420,
+     "n_5p": 116421,
+     "meth_5p": 99385,
+     "interval": [
+      -1.080010766656525,
+      -1.3634680798818033,
+      -0.7965258784068088
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "jeepers",
+     "bin": "21-30",
+     "n_3p": 115520,
+     "meth_3p": 100896,
+     "n_5p": 115107,
+     "meth_5p": 98433,
+     "interval": [
+      -1.8263727014732112,
+      -2.1058663713912953,
+      -1.5468996661644305
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "jeepers",
+     "bin": "31-50",
+     "n_3p": 221046,
+     "meth_3p": 191804,
+     "n_5p": 221820,
+     "meth_5p": 188126,
+     "interval": [
+      -1.9608728491384397,
+      -2.166442294599579,
+      -1.7553013288212584
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "jeepers",
+     "bin": "51-80",
+     "n_3p": 330541,
+     "meth_3p": 282883,
+     "n_5p": 330199,
+     "meth_5p": 279987,
+     "interval": [
+      -0.7884064395629942,
+      -0.9597005992216763,
+      -0.6171129379129389
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "majority",
+     "bin": "1-10",
+     "n_3p": 101292,
+     "meth_3p": 83283,
+     "n_5p": 113726,
+     "meth_5p": 97330,
+     "interval": [
+      3.362183767754623,
+      3.050680407576112,
+      3.6739588399372205
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "majority",
+     "bin": "11-20",
+     "n_3p": 115643,
+     "meth_3p": 98697,
+     "n_5p": 116430,
+     "meth_5p": 99363,
+     "interval": [
+      -0.004874373667429488,
+      -0.2926531619221381,
+      0.28292124843863675
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "majority",
+     "bin": "21-30",
+     "n_3p": 115966,
+     "meth_3p": 100243,
+     "n_5p": 115128,
+     "meth_5p": 98383,
+     "interval": [
+      -0.9863963785014196,
+      -1.269777604275623,
+      -0.7030367969983011
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "majority",
+     "bin": "31-50",
+     "n_3p": 221690,
+     "meth_3p": 190702,
+     "n_5p": 221918,
+     "meth_5p": 187948,
+     "interval": [
+      -1.3293784115348983,
+      -1.5374111230596603,
+      -1.1213443943562282
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "majority",
+     "bin": "51-80",
+     "n_3p": 331137,
+     "meth_3p": 281647,
+     "n_5p": 330466,
+     "meth_5p": 279394,
+     "interval": [
+      -0.5090642130243572,
+      -0.6820837984544056,
+      -0.33604586150648
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "drop_marked",
+     "bin": "1-10",
+     "n_3p": 59382,
+     "meth_3p": 46742,
+     "n_5p": 113661,
+     "meth_5p": 97296,
+     "interval": [
+      6.887833059108328,
+      6.501420991919517,
+      7.276134465550682
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "drop_marked",
+     "bin": "11-20",
+     "n_3p": 87785,
+     "meth_3p": 75320,
+     "n_5p": 116146,
+     "meth_5p": 99185,
+     "interval": [
+      -0.40370726887405395,
+      -0.7108155923894272,
+      -0.09579274497520836
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "drop_marked",
+     "bin": "21-30",
+     "n_3p": 98518,
+     "meth_3p": 86403,
+     "n_5p": 114541,
+     "meth_5p": 98035,
+     "interval": [
+      -2.113315237211799,
+      -2.401942110507036,
+      -1.8242817800351874
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "drop_marked",
+     "bin": "31-50",
+     "n_3p": 200051,
+     "meth_3p": 174786,
+     "n_5p": 219518,
+     "meth_5p": 186425,
+     "interval": [
+      -2.446021808312271,
+      -2.654750185390147,
+      -2.2371691183874365
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "drop_marked",
+     "bin": "51-80",
+     "n_3p": 310248,
+     "meth_3p": 266642,
+     "n_5p": 322103,
+     "meth_5p": 273584,
+     "interval": [
+      -1.0079866245159441,
+      -1.181796939052286,
+      -0.8341422267385817
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "uncorrected_sf",
+     "bin": "1-10",
+     "n_3p": 5822,
+     "meth_3p": 42,
+     "n_5p": 4238,
+     "meth_5p": 3343,
+     "interval": [
+      78.16014631973982,
+      76.8803541836003,
+      79.37701822960655
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "uncorrected_sf",
+     "bin": "11-20",
+     "n_3p": 4366,
+     "meth_3p": 248,
+     "n_5p": 4126,
+     "meth_5p": 3217,
+     "interval": [
+      72.28872068993006,
+      70.80801049335724,
+      73.68650837620653
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "uncorrected_sf",
+     "bin": "21-30",
+     "n_3p": 3291,
+     "meth_3p": 477,
+     "n_5p": 3829,
+     "meth_5p": 2895,
+     "interval": [
+      61.11313339902528,
+      59.25101740144283,
+      62.881951782184
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "uncorrected_sf",
+     "bin": "31-50",
+     "n_3p": 5555,
+     "meth_3p": 1386,
+     "n_5p": 6775,
+     "meth_5p": 4900,
+     "interval": [
+      47.37422819772752,
+      45.7944978332413,
+      48.91139248326496
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "uncorrected_sf",
+     "bin": "51-80",
+     "n_3p": 7494,
+     "meth_3p": 3034,
+     "n_5p": 8570,
+     "meth_5p": 5511,
+     "interval": [
+      23.819995708741242,
+      22.307760482698576,
+      25.31638824744706
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "jeepers_sf",
+     "bin": "1-10",
+     "n_3p": 4886,
+     "meth_3p": 3555,
+     "n_5p": 4233,
+     "meth_5p": 3347,
+     "interval": [
+      6.310315060535898,
+      4.555432881683591,
+      8.053785641485407
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "jeepers_sf",
+     "bin": "11-20",
+     "n_3p": 3730,
+     "meth_3p": 2495,
+     "n_5p": 4117,
+     "meth_5p": 3226,
+     "interval": [
+      11.467947261111156,
+      9.499334559684405,
+      13.429422079302656
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "jeepers_sf",
+     "bin": "21-30",
+     "n_3p": 2855,
+     "meth_3p": 1754,
+     "n_5p": 3808,
+     "meth_5p": 2912,
+     "interval": [
+      15.034511177500764,
+      12.794924901349535,
+      17.266485187098056
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "jeepers_sf",
+     "bin": "31-50",
+     "n_3p": 4943,
+     "meth_3p": 2846,
+     "n_5p": 6675,
+     "meth_5p": 4977,
+     "interval": [
+      16.985427127682552,
+      15.252942459122682,
+      18.710213354846474
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "jeepers_sf",
+     "bin": "51-80",
+     "n_3p": 6921,
+     "meth_3p": 4212,
+     "n_5p": 8302,
+     "meth_5p": 5831,
+     "interval": [
+      9.377830212470151,
+      7.863531806159631,
+      10.889115732237508
+     ],
+     "verdict": "failed"
+    }
+   ],
+   "bar2_uncorrected": "failed",
+   "bar2_jeepers_as_scored": "met",
+   "bar2": "met",
+   "strands_scored": 4628,
+   "same_acc": {
+    "uncorrected|all": [
+     14520,
+     12250
+    ],
+    "jeepers|all": [
+     14507,
+     12600
+    ],
+    "majority|all": [
+     14525,
+     12639
+    ],
+    "excl30|all": [
+     11984,
+     10346
+    ],
+    "excl52|all": [
+     10099,
+     8659
+    ],
+    "drop_marked|all": [
+     13531,
+     11902
+    ],
+    "uncorrected|51-80": [
+     2573,
+     2294
+    ],
+    "uncorrected|1-80": [
+     6824,
+     5731
+    ],
+    "uncorrected|31-50": [
+     1715,
+     1533
+    ],
+    "uncorrected|11-20": [
+     894,
+     687
+    ],
+    "uncorrected|marked": [
+     989,
+     348
+    ],
+    "jeepers|51-80": [
+     2572,
+     2305
+    ],
+    "jeepers|1-80": [
+     6811,
+     6080
+    ],
+    "jeepers|31-50": [
+     1714,
+     1536
+    ],
+    "jeepers|11-20": [
+     891,
+     800
+    ],
+    "jeepers|marked": [
+     976,
+     698
+    ],
+    "majority|51-80": [
+     2574,
+     2313
+    ],
+    "majority|1-80": [
+     6829,
+     6111
+    ],
+    "majority|31-50": [
+     1717,
+     1542
+    ],
+    "majority|11-20": [
+     894,
+     800
+    ],
+    "majority|marked": [
+     994,
+     737
+    ],
+    "excl30|51-80": [
+     2573,
+     2294
+    ],
+    "excl30|1-80": [
+     4288,
+     3827
+    ],
+    "excl30|31-50": [
+     1715,
+     1533
+    ],
+    "excl52|51-80": [
+     2403,
+     2140
+    ],
+    "excl52|1-80": [
+     2403,
+     2140
+    ],
+    "drop_marked|51-80": [
+     2439,
+     2224
+    ],
+    "drop_marked|1-80": [
+     5944,
+     5440
+    ],
+    "drop_marked|31-50": [
+     1570,
+     1455
+    ],
+    "changed_to_methylated|1": [
+     241,
+     75
+    ],
+    "dropped_marked|all": [
+     989,
+     348
+    ],
+    "dropped_marked|11-20": [
+     199,
+     48
+    ],
+    "dropped_marked|1-80": [
+     880,
+     291
+    ],
+    "uncorrected|1-10": [
+     763,
+     465
+    ],
+    "uncorrected|21-30": [
+     879,
+     752
+    ],
+    "jeepers|1-10": [
+     756,
+     639
+    ],
+    "jeepers|21-30": [
+     878,
+     800
+    ],
+    "majority|1-10": [
+     763,
+     650
+    ],
+    "majority|21-30": [
+     881,
+     806
+    ],
+    "drop_marked|11-20": [
+     695,
+     639
+    ],
+    "drop_marked|21-30": [
+     761,
+     710
+    ],
+    "changed_to_methylated|3+": [
+     355,
+     101
+    ],
+    "dropped_marked|1-10": [
+     284,
+     53
+    ],
+    "drop_marked|1-10": [
+     479,
+     412
+    ],
+    "uncorrected_sf|all": [
+     291,
+     207
+    ],
+    "uncorrected_sf|51-80": [
+     39,
+     36
+    ],
+    "uncorrected_sf|1-80": [
+     132,
+     91
+    ],
+    "uncorrected_sf|marked": [
+     112,
+     71
+    ],
+    "jeepers_sf|all": [
+     275,
+     208
+    ],
+    "jeepers_sf|51-80": [
+     37,
+     31
+    ],
+    "jeepers_sf|1-80": [
+     116,
+     94
+    ],
+    "jeepers_sf|marked": [
+     96,
+     72
+    ],
+    "excl30|marked": [
+     388,
+     205
+    ],
+    "dropped_marked|51-80": [
+     134,
+     70
+    ],
+    "excl52|marked": [
+     229,
+     119
+    ],
+    "dropped_marked|31-50": [
+     145,
+     78
+    ],
+    "dropped_marked|21-30": [
+     118,
+     42
+    ],
+    "uncorrected_sf|1-10": [
+     28,
+     13
+    ],
+    "jeepers_sf|1-10": [
+     21,
+     14
+    ],
+    "changed_to_methylated|2": [
+     195,
+     53
+    ],
+    "uncorrected_sf|21-30": [
+     13,
+     10
+    ],
+    "uncorrected_sf|11-20": [
+     28,
+     10
+    ],
+    "jeepers_sf|21-30": [
+     11,
+     10
+    ],
+    "jeepers_sf|11-20": [
+     25,
+     24
+    ],
+    "changed_to_methylated|fallback": [
+     47,
+     18
+    ],
+    "changed_to_methylated|0": [
+     27,
+     7
+    ],
+    "uncorrected_sf|31-50": [
+     24,
+     22
+    ],
+    "jeepers_sf|31-50": [
+     22,
+     15
+    ]
+   },
+   "near_acc": {
+    "uncorrected|all": [
+     8770,
+     6764
+    ],
+    "jeepers|all": [
+     8775,
+     7148
+    ],
+    "majority|all": [
+     8775,
+     7145
+    ],
+    "excl30|all": [
+     7222,
+     5667
+    ],
+    "excl52|all": [
+     6102,
+     4768
+    ],
+    "drop_marked|all": [
+     8211,
+     6657
+    ],
+    "uncorrected|31-50": [
+     1038,
+     829
+    ],
+    "uncorrected|1-80": [
+     4093,
+     3136
+    ],
+    "uncorrected|marked": [
+     559,
+     107
+    ],
+    "uncorrected|51-80": [
+     1507,
+     1210
+    ],
+    "jeepers|31-50": [
+     1039,
+     878
+    ],
+    "jeepers|1-80": [
+     4096,
+     3484
+    ],
+    "jeepers|marked": [
+     564,
+     491
+    ],
+    "jeepers|51-80": [
+     1508,
+     1255
+    ],
+    "majority|31-50": [
+     1039,
+     881
+    ],
+    "majority|1-80": [
+     4096,
+     3482
+    ],
+    "majority|marked": [
+     564,
+     488
+    ],
+    "majority|51-80": [
+     1508,
+     1256
+    ],
+    "excl30|31-50": [
+     1038,
+     829
+    ],
+    "excl30|1-80": [
+     2545,
+     2039
+    ],
+    "excl30|marked": [
+     228,
+     61
+    ],
+    "excl30|51-80": [
+     1507,
+     1210
+    ],
+    "excl52|51-80": [
+     1425,
+     1140
+    ],
+    "excl52|1-80": [
+     1425,
+     1140
+    ],
+    "drop_marked|51-80": [
+     1432,
+     1191
+    ],
+    "drop_marked|1-80": [
+     3606,
+     3051
+    ],
+    "changed_to_methylated|2": [
+     110,
+     14
+    ],
+    "dropped_marked|all": [
+     559,
+     107
+    ],
+    "dropped_marked|31-50": [
+     81,
+     20
+    ],
+    "dropped_marked|1-80": [
+     487,
+     85
+    ],
+    "uncorrected|1-10": [
+     453,
+     263
+    ],
+    "jeepers|1-10": [
+     453,
+     394
+    ],
+    "majority|1-10": [
+     453,
+     389
+    ],
+    "drop_marked|1-10": [
+     295,
+     247
+    ],
+    "drop_marked|31-50": [
+     957,
+     809
+    ],
+    "uncorrected|21-30": [
+     577,
+     450
+    ],
+    "jeepers|21-30": [
+     577,
+     497
+    ],
+    "majority|21-30": [
+     577,
+     496
+    ],
+    "drop_marked|21-30": [
+     511,
+     440
+    ],
+    "uncorrected|11-20": [
+     518,
+     384
+    ],
+    "jeepers|11-20": [
+     519,
+     460
+    ],
+    "majority|11-20": [
+     519,
+     460
+    ],
+    "drop_marked|11-20": [
+     411,
+     364
+    ],
+    "excl52|marked": [
+     141,
+     38
+    ],
+    "changed_to_methylated|1": [
+     106,
+     9
+    ],
+    "dropped_marked|11-20": [
+     107,
+     20
+    ],
+    "changed_to_methylated|3+": [
+     279,
+     37
+    ],
+    "dropped_marked|1-10": [
+     158,
+     16
+    ],
+    "dropped_marked|21-30": [
+     66,
+     10
+    ],
+    "uncorrected_sf|all": [
+     37,
+     14
+    ],
+    "uncorrected_sf|21-30": [
+     6,
+     2
+    ],
+    "uncorrected_sf|1-80": [
+     18,
+     9
+    ],
+    "uncorrected_sf|marked": [
+     14,
+     9
+    ],
+    "jeepers_sf|all": [
+     37,
+     16
+    ],
+    "jeepers_sf|21-30": [
+     6,
+     4
+    ],
+    "jeepers_sf|1-80": [
+     18,
+     12
+    ],
+    "jeepers_sf|marked": [
+     14,
+     11
+    ],
+    "dropped_marked|51-80": [
+     75,
+     19
+    ],
+    "uncorrected_sf|1-10": [
+     3,
+     1
+    ],
+    "jeepers_sf|1-10": [
+     3,
+     3
+    ],
+    "changed_to_methylated|fallback": [
+     8,
+     3
+    ],
+    "uncorrected_sf|31-50": [
+     5,
+     4
+    ],
+    "jeepers_sf|31-50": [
+     5,
+     3
+    ],
+    "changed_to_methylated|0": [
+     10,
+     4
+    ],
+    "uncorrected_sf|51-80": [
+     4,
+     2
+    ],
+    "jeepers_sf|51-80": [
+     4,
+     2
+    ]
+   },
+   "bar4_rows": [
+    {
+     "bar": 4,
+     "scope": "1-10",
+     "method": "jeepers",
+     "comparator": "uncorrected",
+     "n": 756,
+     "agree": 639,
+     "comparator_n": 763,
+     "comparator_agree": 465,
+     "interval": [
+      23.58016601135867,
+      19.20695095274678,
+      27.832552684329293
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 4,
+     "scope": "11-20",
+     "method": "jeepers",
+     "comparator": "uncorrected",
+     "n": 891,
+     "agree": 800,
+     "comparator_n": 894,
+     "comparator_agree": 687,
+     "interval": [
+      12.94111886953051,
+      9.52349668861637,
+      16.345285902548763
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 4,
+     "scope": "21-30",
+     "method": "jeepers",
+     "comparator": "uncorrected",
+     "n": 878,
+     "agree": 800,
+     "comparator_n": 879,
+     "comparator_agree": 752,
+     "interval": [
+      5.564409753265897,
+      2.5688745165284614,
+      8.574396698249052
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 4,
+     "scope": "31-50",
+     "method": "jeepers",
+     "comparator": "uncorrected",
+     "n": 1714,
+     "agree": 1536,
+     "comparator_n": 1715,
+     "comparator_agree": 1533,
+     "interval": [
+      0.22718072059629835,
+      -1.8299172630231526,
+      2.2846363257837754
+     ],
+     "verdict": "met"
+    }
+   ],
+   "bar5_rows": [
+    {
+     "bar": 5,
+     "scope": "marked",
+     "method": "jeepers",
+     "comparator": "majority",
+     "n": 976,
+     "agree": 698,
+     "comparator_n": 994,
+     "comparator_agree": 737,
+     "interval": [
+      -2.6284757726688035,
+      -6.548869127567428,
+      1.299141268700145
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 5,
+     "scope": "1-80",
+     "method": "jeepers",
+     "comparator": "excl30",
+     "n": 6811,
+     "agree": 6080,
+     "comparator_n": 4288,
+     "comparator_agree": 3827,
+     "interval": [
+      0.018294456728251696,
+      -1.1520533977695453,
+      1.2161830348004878
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 5,
+     "scope": "1-80",
+     "method": "jeepers",
+     "comparator": "excl52",
+     "n": 6811,
+     "agree": 6080,
+     "comparator_n": 2403,
+     "comparator_agree": 2140,
+     "interval": [
+      0.21201413859358587,
+      -1.1955770523265443,
+      1.7045269749960261
+     ],
+     "verdict": "met"
+    }
+   ],
+   "bar4": "met",
+   "bar5": "met",
+   "near_bar4_rows": [
+    {
+     "bar": 4,
+     "scope": "1-10",
+     "method": "jeepers",
+     "comparator": "uncorrected",
+     "n": 453,
+     "agree": 394,
+     "comparator_n": 453,
+     "comparator_agree": 263,
+     "interval": [
+      28.918322295805744,
+      23.30409852499163,
+      34.29309319876113
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "bar": 4,
+     "scope": "11-20",
+     "method": "jeepers",
+     "comparator": "uncorrected",
+     "n": 519,
+     "agree": 460,
+     "comparator_n": 518,
+     "comparator_agree": 384,
+     "interval": [
+      14.50071045446768,
+      9.814512548365615,
+      19.140459479807152
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 4,
+     "scope": "21-30",
+     "method": "jeepers",
+     "comparator": "uncorrected",
+     "n": 577,
+     "agree": 497,
+     "comparator_n": 577,
+     "comparator_agree": 450,
+     "interval": [
+      8.145580589254763,
+      3.7260024481141616,
+      12.542744219904577
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 4,
+     "scope": "31-50",
+     "method": "jeepers",
+     "comparator": "uncorrected",
+     "n": 1039,
+     "agree": 878,
+     "comparator_n": 1038,
+     "comparator_agree": 829,
+     "interval": [
+      4.639205846736427,
+      1.3480382482643223,
+      7.923558551600318
+     ],
+     "verdict": "met"
+    }
+   ],
+   "near_bar5_rows": [
+    {
+     "bar": 5,
+     "scope": "marked",
+     "method": "jeepers",
+     "comparator": "majority",
+     "n": 564,
+     "agree": 491,
+     "comparator_n": 564,
+     "comparator_agree": 488,
+     "interval": [
+      0.5319148936170137,
+      -3.4373305859273504,
+      4.5019893090115
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 5,
+     "scope": "1-80",
+     "method": "jeepers",
+     "comparator": "excl30",
+     "n": 4096,
+     "agree": 3484,
+     "comparator_n": 2545,
+     "comparator_agree": 2039,
+     "interval": [
+      4.940715557465614,
+      3.062199549764067,
+      6.855609751808836
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 5,
+     "scope": "1-80",
+     "method": "jeepers",
+     "comparator": "excl52",
+     "n": 4096,
+     "agree": 3484,
+     "comparator_n": 1425,
+     "comparator_agree": 1140,
+     "interval": [
+      5.058593749999996,
+      2.768507029820969,
+      7.460818055424187
+     ],
+     "verdict": "met"
+    }
+   ],
+   "controls": [],
+   "bar3": "not run",
+   "bar3_uncorrected": "unresolved",
+   "verdicts": {
+    "bar1": "met",
+    "bar2": "met",
+    "bar3": "not run",
+    "bar4": "met",
+    "bar5": "met"
+   },
+   "suitable": false
+  },
+  "default": {
+   "setting": "default",
+   "partial": [],
+   "runs": [
+    "second/runs"
+   ],
+   "completeness": [
+    {
+     "run": "plasma_all",
+     "blocks": 19,
+     "blocks_differing": 0,
+     "merge_rows": 828778,
+     "sibling_rows": 828778,
+     "log_errors": [],
+     "exit_code": 0,
+     "seconds": {
+      "format": 31,
+      "bam2txt": 11,
+      "merge": 13,
+      "correct": 2987
+     },
+     "verdict": "met",
+     "runs_folder": "second/runs/default"
+    },
+    {
+     "run": "plasma_without_a",
+     "blocks": 19,
+     "blocks_differing": 0,
+     "merge_rows": 826464,
+     "sibling_rows": 826464,
+     "log_errors": [],
+     "exit_code": 0,
+     "seconds": {
+      "format": 31,
+      "bam2txt": 10,
+      "merge": 15,
+      "correct": 2982
+     },
+     "verdict": "met",
+     "runs_folder": "second/runs/default"
+    },
+    {
+     "run": "plasma_without_b",
+     "blocks": 19,
+     "blocks_differing": 0,
+     "merge_rows": 826464,
+     "sibling_rows": 826464,
+     "log_errors": [],
+     "exit_code": 0,
+     "seconds": {
+      "format": 28,
+      "bam2txt": 10,
+      "merge": 15,
+      "correct": 3088
+     },
+     "verdict": "met",
+     "runs_folder": "second/runs/default"
+    }
+   ],
+   "bar1": "met",
+   "plasma_all_counts": {
+    "kinds": {
+     "Rd": 696908,
+     "S": 115215,
+     "Sf": 16655
+    },
+    "after_symbols": {
+     "U": 385764,
+     "M": 2244081,
+     "N": 4774,
+     "q": 5509,
+     "u": 4
+    },
+    "before_symbols": {
+     "U": 552900,
+     "M": 2080119,
+     "N": 7113
+    },
+    "marked_fragments": 131870,
+    "marked_cpgs": 194014,
+    "fragments": 828778,
+    "call_count_differs": 0
+   },
+   "gap": [
+    {
+     "method": "uncorrected",
+     "bin": "1-10",
+     "n_3p": 101132,
+     "meth_3p": 46742,
+     "n_5p": 113724,
+     "meth_5p": 97296,
+     "interval": [
+      39.33569722095463,
+      38.96591105090293,
+      39.70391425046423
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "uncorrected",
+     "bin": "11-20",
+     "n_3p": 115487,
+     "meth_3p": 75320,
+     "n_5p": 116430,
+     "meth_5p": 99185,
+     "interval": [
+      19.969063363388084,
+      19.626604026916244,
+      20.310950917430517
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "uncorrected",
+     "bin": "21-30",
+     "n_3p": 115753,
+     "meth_3p": 86403,
+     "n_5p": 115123,
+     "meth_5p": 98035,
+     "interval": [
+      10.51245971679572,
+      10.188328205482435,
+      10.83636930815849
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "uncorrected",
+     "bin": "31-50",
+     "n_3p": 221278,
+     "meth_3p": 174786,
+     "n_5p": 221891,
+     "meth_5p": 186425,
+     "interval": [
+      5.0271509136459835,
+      4.798964609073278,
+      5.255298918784985
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "uncorrected",
+     "bin": "51-80",
+     "n_3p": 330757,
+     "meth_3p": 266642,
+     "n_5p": 330369,
+     "meth_5p": 273584,
+     "interval": [
+      2.1959653699013537,
+      2.009678945192264,
+      2.382239115406441
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "jeepers",
+     "bin": "1-10",
+     "n_3p": 100348,
+     "meth_3p": 84512,
+     "n_5p": 113721,
+     "meth_5p": 97336,
+     "interval": [
+      1.3730129649080602,
+      1.0689753984944368,
+      1.6773798037556984
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "jeepers",
+     "bin": "11-20",
+     "n_3p": 115007,
+     "meth_3p": 99769,
+     "n_5p": 116421,
+     "meth_5p": 99394,
+     "interval": [
+      -1.3757399919871571,
+      -1.6578547844442806,
+      -1.0935996730785336
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "jeepers",
+     "bin": "21-30",
+     "n_3p": 115520,
+     "meth_3p": 101172,
+     "n_5p": 115107,
+     "meth_5p": 98457,
+     "interval": [
+      -2.0444422035650556,
+      -2.322781819231387,
+      -1.7661263349960001
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "jeepers",
+     "bin": "31-50",
+     "n_3p": 221047,
+     "meth_3p": 192274,
+     "n_5p": 221820,
+     "meth_5p": 188224,
+     "interval": [
+      -2.1289248020452622,
+      -2.3337017820674606,
+      -1.9241467864637274
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "jeepers",
+     "bin": "51-80",
+     "n_3p": 330542,
+     "meth_3p": 283376,
+     "n_5p": 330199,
+     "meth_5p": 280230,
+     "interval": [
+      -0.8637045140288624,
+      -1.0344635344429924,
+      -0.6929463108252322
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "majority",
+     "bin": "1-10",
+     "n_3p": 101292,
+     "meth_3p": 83283,
+     "n_5p": 113726,
+     "meth_5p": 97330,
+     "interval": [
+      3.362183767754623,
+      3.050680407576112,
+      3.6739588399372205
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "majority",
+     "bin": "11-20",
+     "n_3p": 115643,
+     "meth_3p": 98697,
+     "n_5p": 116430,
+     "meth_5p": 99363,
+     "interval": [
+      -0.004874373667429488,
+      -0.2926531619221381,
+      0.28292124843863675
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "majority",
+     "bin": "21-30",
+     "n_3p": 115966,
+     "meth_3p": 100243,
+     "n_5p": 115128,
+     "meth_5p": 98383,
+     "interval": [
+      -0.9863963785014196,
+      -1.269777604275623,
+      -0.7030367969983011
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "majority",
+     "bin": "31-50",
+     "n_3p": 221690,
+     "meth_3p": 190702,
+     "n_5p": 221918,
+     "meth_5p": 187948,
+     "interval": [
+      -1.3293784115348983,
+      -1.5374111230596603,
+      -1.1213443943562282
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "majority",
+     "bin": "51-80",
+     "n_3p": 331137,
+     "meth_3p": 281647,
+     "n_5p": 330466,
+     "meth_5p": 279394,
+     "interval": [
+      -0.5090642130243572,
+      -0.6820837984544056,
+      -0.33604586150648
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "drop_marked",
+     "bin": "1-10",
+     "n_3p": 59382,
+     "meth_3p": 46742,
+     "n_5p": 113661,
+     "meth_5p": 97296,
+     "interval": [
+      6.887833059108328,
+      6.501420991919517,
+      7.276134465550682
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "drop_marked",
+     "bin": "11-20",
+     "n_3p": 87785,
+     "meth_3p": 75320,
+     "n_5p": 116146,
+     "meth_5p": 99185,
+     "interval": [
+      -0.40370726887405395,
+      -0.7108155923894272,
+      -0.09579274497520836
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "drop_marked",
+     "bin": "21-30",
+     "n_3p": 98518,
+     "meth_3p": 86403,
+     "n_5p": 114541,
+     "meth_5p": 98035,
+     "interval": [
+      -2.113315237211799,
+      -2.401942110507036,
+      -1.8242817800351874
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "drop_marked",
+     "bin": "31-50",
+     "n_3p": 200051,
+     "meth_3p": 174786,
+     "n_5p": 219518,
+     "meth_5p": 186425,
+     "interval": [
+      -2.446021808312271,
+      -2.654750185390147,
+      -2.2371691183874365
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "drop_marked",
+     "bin": "51-80",
+     "n_3p": 310248,
+     "meth_3p": 266642,
+     "n_5p": 322103,
+     "meth_5p": 273584,
+     "interval": [
+      -1.0079866245159441,
+      -1.181796939052286,
+      -0.8341422267385817
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "uncorrected_sf",
+     "bin": "1-10",
+     "n_3p": 5821,
+     "meth_3p": 42,
+     "n_5p": 4237,
+     "meth_5p": 3342,
+     "interval": [
+      78.15503809524466,
+      76.87498984798468,
+      79.37216124286375
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "uncorrected_sf",
+     "bin": "11-20",
+     "n_3p": 4365,
+     "meth_3p": 248,
+     "n_5p": 4125,
+     "meth_5p": 3216,
+     "interval": [
+      72.28207851713006,
+      70.80105933675547,
+      73.68016516616547
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "uncorrected_sf",
+     "bin": "21-30",
+     "n_3p": 3291,
+     "meth_3p": 477,
+     "n_5p": 3829,
+     "meth_5p": 2895,
+     "interval": [
+      61.11313339902528,
+      59.25101740144283,
+      62.881951782184
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "uncorrected_sf",
+     "bin": "31-50",
+     "n_3p": 5553,
+     "meth_3p": 1386,
+     "n_5p": 6775,
+     "meth_5p": 4900,
+     "interval": [
+      47.36524188580621,
+      45.785261887263474,
+      48.90265500230557
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "uncorrected_sf",
+     "bin": "51-80",
+     "n_3p": 7491,
+     "meth_3p": 3034,
+     "n_5p": 8569,
+     "meth_5p": 5511,
+     "interval": [
+      23.811286423468538,
+      22.298828679602078,
+      25.307905697754997
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "jeepers_sf",
+     "bin": "1-10",
+     "n_3p": 4885,
+     "meth_3p": 3788,
+     "n_5p": 4232,
+     "meth_5p": 3346,
+     "interval": [
+      1.520771699949508,
+      -0.17797203611597187,
+      3.2112759188945947
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "jeepers_sf",
+     "bin": "11-20",
+     "n_3p": 3729,
+     "meth_3p": 2690,
+     "n_5p": 4116,
+     "meth_5p": 3228,
+     "interval": [
+      6.288353750878583,
+      4.377966047047984,
+      8.19818612886172
+     ],
+     "verdict": "met"
+    },
+    {
+     "method": "jeepers_sf",
+     "bin": "21-30",
+     "n_3p": 2855,
+     "meth_3p": 1891,
+     "n_5p": 3808,
+     "meth_5p": 2923,
+     "interval": [
+      10.524777774507355,
+      8.33342763375268,
+      12.717636801439344
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "jeepers_sf",
+     "bin": "31-50",
+     "n_3p": 4942,
+     "meth_3p": 3088,
+     "n_5p": 6675,
+     "meth_5p": 5008,
+     "interval": [
+      12.541393270552648,
+      10.837660776999677,
+      14.242941449030862
+     ],
+     "verdict": "failed"
+    },
+    {
+     "method": "jeepers_sf",
+     "bin": "51-80",
+     "n_3p": 6919,
+     "meth_3p": 4416,
+     "n_5p": 8301,
+     "meth_5p": 5917,
+     "interval": [
+      7.456316546645847,
+      5.962926120869713,
+      8.94850638821538
+     ],
+     "verdict": "failed"
+    }
+   ],
+   "bar2_uncorrected": "failed",
+   "bar2_jeepers_as_scored": "met",
+   "bar2": "met",
+   "strands_scored": 4628,
+   "same_acc": {
+    "uncorrected|all": [
+     14520,
+     12250
+    ],
+    "jeepers|all": [
+     14507,
+     12599
+    ],
+    "majority|all": [
+     14525,
+     12639
+    ],
+    "excl30|all": [
+     11984,
+     10346
+    ],
+    "excl52|all": [
+     10099,
+     8659
+    ],
+    "drop_marked|all": [
+     13531,
+     11902
+    ],
+    "uncorrected|51-80": [
+     2573,
+     2294
+    ],
+    "uncorrected|1-80": [
+     6824,
+     5731
+    ],
+    "uncorrected|31-50": [
+     1715,
+     1533
+    ],
+    "uncorrected|11-20": [
+     894,
+     687
+    ],
+    "uncorrected|marked": [
+     989,
+     348
+    ],
+    "jeepers|51-80": [
+     2572,
+     2304
+    ],
+    "jeepers|1-80": [
+     6811,
+     6076
+    ],
+    "jeepers|31-50": [
+     1714,
+     1533
+    ],
+    "jeepers|11-20": [
+     891,
+     799
+    ],
+    "jeepers|marked": [
+     976,
+     697
+    ],
+    "majority|51-80": [
+     2574,
+     2313
+    ],
+    "majority|1-80": [
+     6829,
+     6111
+    ],
+    "majority|31-50": [
+     1717,
+     1542
+    ],
+    "majority|11-20": [
+     894,
+     800
+    ],
+    "majority|marked": [
+     994,
+     737
+    ],
+    "excl30|51-80": [
+     2573,
+     2294
+    ],
+    "excl30|1-80": [
+     4288,
+     3827
+    ],
+    "excl30|31-50": [
+     1715,
+     1533
+    ],
+    "excl52|51-80": [
+     2403,
+     2140
+    ],
+    "excl52|1-80": [
+     2403,
+     2140
+    ],
+    "drop_marked|51-80": [
+     2439,
+     2224
+    ],
+    "drop_marked|1-80": [
+     5944,
+     5440
+    ],
+    "drop_marked|31-50": [
+     1570,
+     1455
+    ],
+    "changed_to_methylated|1": [
+     241,
+     75
+    ],
+    "dropped_marked|all": [
+     989,
+     348
+    ],
+    "dropped_marked|11-20": [
+     199,
+     48
+    ],
+    "dropped_marked|1-80": [
+     880,
+     291
+    ],
+    "uncorrected|1-10": [
+     763,
+     465
+    ],
+    "uncorrected|21-30": [
+     879,
+     752
+    ],
+    "jeepers|1-10": [
+     756,
+     640
+    ],
+    "jeepers|21-30": [
+     878,
+     800
+    ],
+    "majority|1-10": [
+     763,
+     650
+    ],
+    "majority|21-30": [
+     881,
+     806
+    ],
+    "drop_marked|11-20": [
+     695,
+     639
+    ],
+    "drop_marked|21-30": [
+     761,
+     710
+    ],
+    "changed_to_methylated|3+": [
+     368,
+     107
+    ],
+    "dropped_marked|1-10": [
+     284,
+     53
+    ],
+    "drop_marked|1-10": [
+     479,
+     412
+    ],
+    "uncorrected_sf|all": [
+     291,
+     207
+    ],
+    "uncorrected_sf|51-80": [
+     39,
+     36
+    ],
+    "uncorrected_sf|1-80": [
+     132,
+     91
+    ],
+    "uncorrected_sf|marked": [
+     112,
+     71
+    ],
+    "jeepers_sf|all": [
+     275,
+     206
+    ],
+    "jeepers_sf|51-80": [
+     37,
+     30
+    ],
+    "jeepers_sf|1-80": [
+     116,
+     92
+    ],
+    "jeepers_sf|marked": [
+     96,
+     70
+    ],
+    "excl30|marked": [
+     388,
+     205
+    ],
+    "dropped_marked|51-80": [
+     134,
+     70
+    ],
+    "excl52|marked": [
+     229,
+     119
+    ],
+    "dropped_marked|31-50": [
+     145,
+     78
+    ],
+    "dropped_marked|21-30": [
+     118,
+     42
+    ],
+    "uncorrected_sf|1-10": [
+     28,
+     13
+    ],
+    "jeepers_sf|1-10": [
+     21,
+     14
+    ],
+    "changed_to_methylated|2": [
+     195,
+     53
+    ],
+    "uncorrected_sf|21-30": [
+     13,
+     10
+    ],
+    "uncorrected_sf|11-20": [
+     28,
+     10
+    ],
+    "jeepers_sf|21-30": [
+     11,
+     10
+    ],
+    "jeepers_sf|11-20": [
+     25,
+     23
+    ],
+    "changed_to_methylated|fallback": [
+     51,
+     21
+    ],
+    "changed_to_methylated|0": [
+     27,
+     7
+    ],
+    "uncorrected_sf|31-50": [
+     24,
+     22
+    ],
+    "jeepers_sf|31-50": [
+     22,
+     15
+    ]
+   },
+   "near_acc": {
+    "uncorrected|all": [
+     8770,
+     6764
+    ],
+    "jeepers|all": [
+     8775,
+     7144
+    ],
+    "majority|all": [
+     8775,
+     7145
+    ],
+    "excl30|all": [
+     7222,
+     5667
+    ],
+    "excl52|all": [
+     6102,
+     4768
+    ],
+    "drop_marked|all": [
+     8211,
+     6657
+    ],
+    "uncorrected|31-50": [
+     1038,
+     829
+    ],
+    "uncorrected|1-80": [
+     4093,
+     3136
+    ],
+    "uncorrected|marked": [
+     559,
+     107
+    ],
+    "uncorrected|51-80": [
+     1507,
+     1210
+    ],
+    "jeepers|31-50": [
+     1039,
+     877
+    ],
+    "jeepers|1-80": [
+     4096,
+     3480
+    ],
+    "jeepers|marked": [
+     564,
+     487
+    ],
+    "jeepers|51-80": [
+     1508,
+     1253
+    ],
+    "majority|31-50": [
+     1039,
+     881
+    ],
+    "majority|1-80": [
+     4096,
+     3482
+    ],
+    "majority|marked": [
+     564,
+     488
+    ],
+    "majority|51-80": [
+     1508,
+     1256
+    ],
+    "excl30|31-50": [
+     1038,
+     829
+    ],
+    "excl30|1-80": [
+     2545,
+     2039
+    ],
+    "excl30|marked": [
+     228,
+     61
+    ],
+    "excl30|51-80": [
+     1507,
+     1210
+    ],
+    "excl52|51-80": [
+     1425,
+     1140
+    ],
+    "excl52|1-80": [
+     1425,
+     1140
+    ],
+    "drop_marked|51-80": [
+     1432,
+     1191
+    ],
+    "drop_marked|1-80": [
+     3606,
+     3051
+    ],
+    "changed_to_methylated|2": [
+     110,
+     14
+    ],
+    "dropped_marked|all": [
+     559,
+     107
+    ],
+    "dropped_marked|31-50": [
+     81,
+     20
+    ],
+    "dropped_marked|1-80": [
+     487,
+     85
+    ],
+    "uncorrected|1-10": [
+     453,
+     263
+    ],
+    "jeepers|1-10": [
+     453,
+     393
+    ],
+    "majority|1-10": [
+     453,
+     389
+    ],
+    "drop_marked|1-10": [
+     295,
+     247
+    ],
+    "drop_marked|31-50": [
+     957,
+     809
+    ],
+    "uncorrected|21-30": [
+     577,
+     450
+    ],
+    "jeepers|21-30": [
+     577,
+     500
+    ],
+    "majority|21-30": [
+     577,
+     496
+    ],
+    "drop_marked|21-30": [
+     511,
+     440
+    ],
+    "uncorrected|11-20": [
+     518,
+     384
+    ],
+    "jeepers|11-20": [
+     519,
+     457
+    ],
+    "majority|11-20": [
+     519,
+     460
+    ],
+    "drop_marked|11-20": [
+     411,
+     364
+    ],
+    "excl52|marked": [
+     141,
+     38
+    ],
+    "changed_to_methylated|1": [
+     106,
+     9
+    ],
+    "dropped_marked|11-20": [
+     107,
+     20
+    ],
+    "changed_to_methylated|3+": [
+     288,
+     43
+    ],
+    "dropped_marked|1-10": [
+     158,
+     16
+    ],
+    "dropped_marked|21-30": [
+     66,
+     10
+    ],
+    "uncorrected_sf|all": [
+     37,
+     14
+    ],
+    "uncorrected_sf|21-30": [
+     6,
+     2
+    ],
+    "uncorrected_sf|1-80": [
+     18,
+     9
+    ],
+    "uncorrected_sf|marked": [
+     14,
+     9
+    ],
+    "jeepers_sf|all": [
+     37,
+     15
+    ],
+    "jeepers_sf|21-30": [
+     6,
+     4
+    ],
+    "jeepers_sf|1-80": [
+     18,
+     11
+    ],
+    "jeepers_sf|marked": [
+     14,
+     10
+    ],
+    "dropped_marked|51-80": [
+     75,
+     19
+    ],
+    "uncorrected_sf|1-10": [
+     3,
+     1
+    ],
+    "jeepers_sf|1-10": [
+     3,
+     3
+    ],
+    "changed_to_methylated|fallback": [
+     9,
+     4
+    ],
+    "uncorrected_sf|31-50": [
+     5,
+     4
+    ],
+    "jeepers_sf|31-50": [
+     5,
+     3
+    ],
+    "changed_to_methylated|0": [
+     10,
+     4
+    ],
+    "uncorrected_sf|51-80": [
+     4,
+     2
+    ],
+    "jeepers_sf|51-80": [
+     4,
+     1
+    ]
+   },
+   "bar4_rows": [
+    {
+     "bar": 4,
+     "scope": "1-10",
+     "method": "jeepers",
+     "comparator": "uncorrected",
+     "n": 756,
+     "agree": 640,
+     "comparator_n": 763,
+     "comparator_agree": 465,
+     "interval": [
+      23.7124411436338,
+      19.344429224614117,
+      27.959402918526127
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 4,
+     "scope": "11-20",
+     "method": "jeepers",
+     "comparator": "uncorrected",
+     "n": 891,
+     "agree": 799,
+     "comparator_n": 894,
+     "comparator_agree": 687,
+     "interval": [
+      12.828885423963731,
+      9.405519957954125,
+      16.238427315085886
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 4,
+     "scope": "21-30",
+     "method": "jeepers",
+     "comparator": "uncorrected",
+     "n": 878,
+     "agree": 800,
+     "comparator_n": 879,
+     "comparator_agree": 752,
+     "interval": [
+      5.564409753265897,
+      2.5688745165284614,
+      8.574396698249052
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 4,
+     "scope": "31-50",
+     "method": "jeepers",
+     "comparator": "uncorrected",
+     "n": 1714,
+     "agree": 1533,
+     "comparator_n": 1715,
+     "comparator_agree": 1533,
+     "interval": [
+      0.052151549067702696,
+      -2.012600632390678,
+      2.1168989560851728
+     ],
+     "verdict": "met"
+    }
+   ],
+   "bar5_rows": [
+    {
+     "bar": 5,
+     "scope": "marked",
+     "method": "jeepers",
+     "comparator": "majority",
+     "n": 976,
+     "agree": 697,
+     "comparator_n": 994,
+     "comparator_agree": 737,
+     "interval": [
+      -2.730934789062245,
+      -6.653285097469951,
+      1.199083867187614
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 5,
+     "scope": "1-80",
+     "method": "jeepers",
+     "comparator": "excl30",
+     "n": 6811,
+     "agree": 6076,
+     "comparator_n": 4288,
+     "comparator_agree": 3827,
+     "interval": [
+      -0.040434070653927456,
+      -1.2119025404972898,
+      1.1585249609880968
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 5,
+     "scope": "1-80",
+     "method": "jeepers",
+     "comparator": "excl52",
+     "n": 6811,
+     "agree": 6076,
+     "comparator_n": 2403,
+     "comparator_agree": 2140,
+     "interval": [
+      0.1532856112114067,
+      -1.255237457845505,
+      1.6466577285706787
+     ],
+     "verdict": "met"
+    }
+   ],
+   "bar4": "met",
+   "bar5": "met",
+   "near_bar4_rows": [
+    {
+     "bar": 4,
+     "scope": "1-10",
+     "method": "jeepers",
+     "comparator": "uncorrected",
+     "n": 453,
+     "agree": 393,
+     "comparator_n": 453,
+     "comparator_agree": 263,
+     "interval": [
+      28.697571743929362,
+      23.071202883924965,
+      34.08466405644141
+     ],
+     "verdict": "unresolved"
+    },
+    {
+     "bar": 4,
+     "scope": "11-20",
+     "method": "jeepers",
+     "comparator": "uncorrected",
+     "n": 519,
+     "agree": 457,
+     "comparator_n": 518,
+     "comparator_agree": 384,
+     "interval": [
+      13.92267577238676,
+      9.20136183032273,
+      18.595866543099728
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 4,
+     "scope": "21-30",
+     "method": "jeepers",
+     "comparator": "uncorrected",
+     "n": 577,
+     "agree": 500,
+     "comparator_n": 577,
+     "comparator_agree": 450,
+     "interval": [
+      8.66551126516465,
+      4.27420840425738,
+      13.03474500666615
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 4,
+     "scope": "31-50",
+     "method": "jeepers",
+     "comparator": "uncorrected",
+     "n": 1039,
+     "agree": 877,
+     "comparator_n": 1038,
+     "comparator_agree": 829,
+     "interval": [
+      4.5429594559760815,
+      1.2481336676431185,
+      7.831026360681209
+     ],
+     "verdict": "met"
+    }
+   ],
+   "near_bar5_rows": [
+    {
+     "bar": 5,
+     "scope": "marked",
+     "method": "jeepers",
+     "comparator": "majority",
+     "n": 564,
+     "agree": 487,
+     "comparator_n": 564,
+     "comparator_agree": 488,
+     "interval": [
+      -0.17730496453900457,
+      -4.190583965778331,
+      3.835777717244383
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 5,
+     "scope": "1-80",
+     "method": "jeepers",
+     "comparator": "excl30",
+     "n": 4096,
+     "agree": 3480,
+     "comparator_n": 2545,
+     "comparator_agree": 2039,
+     "interval": [
+      4.843059307465614,
+      2.9628440795166284,
+      6.759624637184462
+     ],
+     "verdict": "met"
+    },
+    {
+     "bar": 5,
+     "scope": "1-80",
+     "method": "jeepers",
+     "comparator": "excl52",
+     "n": 4096,
+     "agree": 3480,
+     "comparator_n": 1425,
+     "comparator_agree": 1140,
+     "interval": [
+      4.960937499999996,
+      2.6694567346081874,
+      7.3644941357216664
+     ],
+     "verdict": "met"
+    }
+   ],
+   "controls": [],
+   "bar3": "not run",
+   "bar3_uncorrected": "unresolved",
+   "verdicts": {
+    "bar1": "met",
+    "bar2": "met",
+    "bar3": "not run",
+    "bar4": "met",
+    "bar5": "met"
+   },
+   "suitable": false
+  }
+ }
+}

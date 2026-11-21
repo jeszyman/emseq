@@ -1,0 +1,161 @@
+setting	control	draw	fragments	method	bin	n	meth	pct	mid_minus_bin	lower	upper	bin_verdict
+0.9	puc19	puc19_draw1	61	uncorrected	mid	438	435	99.32				
+0.9	puc19	puc19_draw1	61	uncorrected	1-10	39	35	89.74	9.57	3.24	22.90	unresolved
+0.9	puc19	puc19_draw1	61	uncorrected	11-20	40	39	97.50	1.82	-0.62	12.21	unresolved
+0.9	puc19	puc19_draw1	61	uncorrected	21-30	37	37	100.00	-0.68	-1.99	8.73	unresolved
+0.9	puc19	puc19_draw1	61	jeepers	mid	438	435	99.32				
+0.9	puc19	puc19_draw1	61	jeepers	1-10	38	38	100.00	-0.68	-1.99	8.51	unresolved
+0.9	puc19	puc19_draw1	61	jeepers	11-20	40	40	100.00	-0.68	-1.99	8.09	unresolved
+0.9	puc19	puc19_draw1	61	jeepers	21-30	37	37	100.00	-0.68	-1.99	8.73	unresolved
+0.9	puc19	puc19_draw2	55	uncorrected	mid	394	375	95.18				
+0.9	puc19	puc19_draw2	55	uncorrected	1-10	35	24	68.57	26.61	13.47	43.25	unresolved
+0.9	puc19	puc19_draw2	55	uncorrected	11-20	33	29	87.88	7.30	-0.45	22.60	unresolved
+0.9	puc19	puc19_draw2	55	uncorrected	21-30	37	32	86.49	8.69	0.66	23.26	unresolved
+0.9	puc19	puc19_draw2	55	jeepers	mid	394	389	98.73				
+0.9	puc19	puc19_draw2	55	jeepers	1-10	35	35	100.00	-1.27	-2.94	8.65	unresolved
+0.9	puc19	puc19_draw2	55	jeepers	11-20	33	33	100.00	-1.27	-2.94	9.18	unresolved
+0.9	puc19	puc19_draw2	55	jeepers	21-30	37	37	100.00	-1.27	-2.94	8.16	unresolved
+0.9	puc19	puc19_draw3	61	uncorrected	mid	448	441	98.44				
+0.9	puc19	puc19_draw3	61	uncorrected	1-10	41	38	92.68	5.75	0.69	17.89	unresolved
+0.9	puc19	puc19_draw3	61	uncorrected	11-20	38	38	100.00	-1.56	-3.19	7.65	unresolved
+0.9	puc19	puc19_draw3	61	uncorrected	21-30	34	34	100.00	-1.56	-3.19	8.62	unresolved
+0.9	puc19	puc19_draw3	61	jeepers	mid	448	447	99.78				
+0.9	puc19	puc19_draw3	61	jeepers	1-10	41	41	100.00	-0.22	-1.25	8.35	unresolved
+0.9	puc19	puc19_draw3	61	jeepers	11-20	38	38	100.00	-0.22	-1.25	8.96	unresolved
+0.9	puc19	puc19_draw3	61	jeepers	21-30	34	34	100.00	-0.22	-1.25	9.93	unresolved
+0.9	puc19	puc19_draw4	76	uncorrected	mid	617	599	97.08				
+0.9	puc19	puc19_draw4	76	uncorrected	1-10	52	45	86.54	10.54	3.56	22.40	unresolved
+0.9	puc19	puc19_draw4	76	uncorrected	11-20	40	39	97.50	-0.42	-3.05	10.02	unresolved
+0.9	puc19	puc19_draw4	76	uncorrected	21-30	36	35	97.22	-0.14	-2.96	11.30	unresolved
+0.9	puc19	puc19_draw4	76	jeepers	mid	617	617	100.00				
+0.9	puc19	puc19_draw4	76	jeepers	1-10	52	51	98.08	1.92	0.22	10.12	unresolved
+0.9	puc19	puc19_draw4	76	jeepers	11-20	40	40	100.00	0.00	-0.62	8.76	unresolved
+0.9	puc19	puc19_draw4	76	jeepers	21-30	36	36	100.00	0.00	-0.62	9.64	unresolved
+0.9	puc19	puc19_draw5	59	uncorrected	mid	427	409	95.78				
+0.9	puc19	puc19_draw5	59	uncorrected	1-10	46	41	89.13	6.65	0.08	18.92	unresolved
+0.9	puc19	puc19_draw5	59	uncorrected	11-20	37	36	97.30	-1.51	-4.75	9.71	unresolved
+0.9	puc19	puc19_draw5	59	uncorrected	21-30	32	30	93.75	2.03	-3.06	16.02	unresolved
+0.9	puc19	puc19_draw5	59	jeepers	mid	427	427	100.00				
+0.9	puc19	puc19_draw5	59	jeepers	1-10	46	46	100.00	0.00	-0.89	7.71	unresolved
+0.9	puc19	puc19_draw5	59	jeepers	11-20	37	37	100.00	0.00	-0.89	9.41	unresolved
+0.9	puc19	puc19_draw5	59	jeepers	21-30	32	32	100.00	0.00	-0.89	10.72	unresolved
+0.9	lambda	lambda_draw1	1504	uncorrected	mid	9155	57	0.62				
+0.9	lambda	lambda_draw1	1504	uncorrected	1-10	1010	6	0.59	0.03	-0.68	0.40	
+0.9	lambda	lambda_draw1	1504	uncorrected	11-20	952	9	0.95	-0.32	-1.18	0.16	
+0.9	lambda	lambda_draw1	1504	uncorrected	21-30	939	4	0.43	0.20	-0.48	0.51	
+0.9	lambda	lambda_draw1	1504	jeepers	mid	9155	57	0.62				
+0.9	lambda	lambda_draw1	1504	jeepers	1-10	1010	6	0.59	0.03	-0.68	0.40	
+0.9	lambda	lambda_draw1	1504	jeepers	11-20	952	9	0.95	-0.32	-1.18	0.16	
+0.9	lambda	lambda_draw1	1504	jeepers	21-30	939	4	0.43	0.20	-0.48	0.51	
+0.9	lambda	lambda_draw2	1546	uncorrected	mid	9673	113	1.17				
+0.9	lambda	lambda_draw2	1546	uncorrected	1-10	1011	14	1.38	-0.22	-1.16	0.39	
+0.9	lambda	lambda_draw2	1546	uncorrected	11-20	1033	18	1.74	-0.57	-1.59	0.10	
+0.9	lambda	lambda_draw2	1546	uncorrected	21-30	1008	11	1.09	0.08	-0.80	0.61	
+0.9	lambda	lambda_draw2	1546	jeepers	mid	9673	113	1.17				
+0.9	lambda	lambda_draw2	1546	jeepers	1-10	1011	14	1.38	-0.22	-1.16	0.39	
+0.9	lambda	lambda_draw2	1546	jeepers	11-20	1033	18	1.74	-0.57	-1.59	0.10	
+0.9	lambda	lambda_draw2	1546	jeepers	21-30	1008	12	1.19	-0.02	-0.92	0.54	
+0.9	lambda	lambda_draw3	1521	uncorrected	mid	9383	79	0.84				
+0.9	lambda	lambda_draw3	1521	uncorrected	1-10	988	7	0.71	0.13	-0.63	0.55	
+0.9	lambda	lambda_draw3	1521	uncorrected	11-20	936	14	1.50	-0.65	-1.67	-0.02	
+0.9	lambda	lambda_draw3	1521	uncorrected	21-30	988	11	1.11	-0.27	-1.16	0.26	
+0.9	lambda	lambda_draw3	1521	jeepers	mid	9383	79	0.84				
+0.9	lambda	lambda_draw3	1521	jeepers	1-10	988	7	0.71	0.13	-0.63	0.55	
+0.9	lambda	lambda_draw3	1521	jeepers	11-20	936	14	1.50	-0.65	-1.67	-0.02	
+0.9	lambda	lambda_draw3	1521	jeepers	21-30	988	11	1.11	-0.27	-1.16	0.26	
+0.9	lambda	lambda_draw4	1550	uncorrected	mid	9865	81	0.82				
+0.9	lambda	lambda_draw4	1550	uncorrected	1-10	1041	12	1.15	-0.33	-1.20	0.20	
+0.9	lambda	lambda_draw4	1550	uncorrected	11-20	983	4	0.41	0.41	-0.24	0.73	
+0.9	lambda	lambda_draw4	1550	uncorrected	21-30	1007	8	0.79	0.03	-0.76	0.47	
+0.9	lambda	lambda_draw4	1550	jeepers	mid	9865	81	0.82				
+0.9	lambda	lambda_draw4	1550	jeepers	1-10	1040	12	1.15	-0.33	-1.20	0.20	
+0.9	lambda	lambda_draw4	1550	jeepers	11-20	982	4	0.41	0.41	-0.24	0.73	
+0.9	lambda	lambda_draw4	1550	jeepers	21-30	1007	8	0.79	0.03	-0.76	0.47	
+0.9	lambda	lambda_draw5	1494	uncorrected	mid	9301	44	0.47				
+0.9	lambda	lambda_draw5	1494	uncorrected	1-10	998	5	0.50	-0.03	-0.71	0.30	
+0.9	lambda	lambda_draw5	1494	uncorrected	11-20	991	11	1.11	-0.64	-1.51	-0.12	
+0.9	lambda	lambda_draw5	1494	uncorrected	21-30	952	8	0.84	-0.37	-1.19	0.08	
+0.9	lambda	lambda_draw5	1494	jeepers	mid	9302	50	0.54				
+0.9	lambda	lambda_draw5	1494	jeepers	1-10	996	5	0.50	0.04	-0.64	0.37	
+0.9	lambda	lambda_draw5	1494	jeepers	11-20	990	11	1.11	-0.57	-1.45	-0.06	
+0.9	lambda	lambda_draw5	1494	jeepers	21-30	952	9	0.95	-0.41	-1.26	0.07	
+default	puc19	puc19_draw1	61	uncorrected	mid	438	435	99.32				
+default	puc19	puc19_draw1	61	uncorrected	1-10	39	35	89.74	9.57	3.24	22.90	unresolved
+default	puc19	puc19_draw1	61	uncorrected	11-20	40	39	97.50	1.82	-0.62	12.21	unresolved
+default	puc19	puc19_draw1	61	uncorrected	21-30	37	37	100.00	-0.68	-1.99	8.73	unresolved
+default	puc19	puc19_draw1	61	jeepers	mid	438	435	99.32				
+default	puc19	puc19_draw1	61	jeepers	1-10	38	38	100.00	-0.68	-1.99	8.51	unresolved
+default	puc19	puc19_draw1	61	jeepers	11-20	40	40	100.00	-0.68	-1.99	8.09	unresolved
+default	puc19	puc19_draw1	61	jeepers	21-30	37	37	100.00	-0.68	-1.99	8.73	unresolved
+default	puc19	puc19_draw2	55	uncorrected	mid	394	375	95.18				
+default	puc19	puc19_draw2	55	uncorrected	1-10	35	24	68.57	26.61	13.47	43.25	unresolved
+default	puc19	puc19_draw2	55	uncorrected	11-20	33	29	87.88	7.30	-0.45	22.60	unresolved
+default	puc19	puc19_draw2	55	uncorrected	21-30	37	32	86.49	8.69	0.66	23.26	unresolved
+default	puc19	puc19_draw2	55	jeepers	mid	394	389	98.73				
+default	puc19	puc19_draw2	55	jeepers	1-10	35	35	100.00	-1.27	-2.94	8.65	unresolved
+default	puc19	puc19_draw2	55	jeepers	11-20	33	33	100.00	-1.27	-2.94	9.18	unresolved
+default	puc19	puc19_draw2	55	jeepers	21-30	37	37	100.00	-1.27	-2.94	8.16	unresolved
+default	puc19	puc19_draw3	61	uncorrected	mid	448	441	98.44				
+default	puc19	puc19_draw3	61	uncorrected	1-10	41	38	92.68	5.75	0.69	17.89	unresolved
+default	puc19	puc19_draw3	61	uncorrected	11-20	38	38	100.00	-1.56	-3.19	7.65	unresolved
+default	puc19	puc19_draw3	61	uncorrected	21-30	34	34	100.00	-1.56	-3.19	8.62	unresolved
+default	puc19	puc19_draw3	61	jeepers	mid	448	447	99.78				
+default	puc19	puc19_draw3	61	jeepers	1-10	41	41	100.00	-0.22	-1.25	8.35	unresolved
+default	puc19	puc19_draw3	61	jeepers	11-20	38	38	100.00	-0.22	-1.25	8.96	unresolved
+default	puc19	puc19_draw3	61	jeepers	21-30	34	34	100.00	-0.22	-1.25	9.93	unresolved
+default	puc19	puc19_draw4	76	uncorrected	mid	617	599	97.08				
+default	puc19	puc19_draw4	76	uncorrected	1-10	52	45	86.54	10.54	3.56	22.40	unresolved
+default	puc19	puc19_draw4	76	uncorrected	11-20	40	39	97.50	-0.42	-3.05	10.02	unresolved
+default	puc19	puc19_draw4	76	uncorrected	21-30	36	35	97.22	-0.14	-2.96	11.30	unresolved
+default	puc19	puc19_draw4	76	jeepers	mid	617	617	100.00				
+default	puc19	puc19_draw4	76	jeepers	1-10	52	51	98.08	1.92	0.22	10.12	unresolved
+default	puc19	puc19_draw4	76	jeepers	11-20	40	40	100.00	0.00	-0.62	8.76	unresolved
+default	puc19	puc19_draw4	76	jeepers	21-30	36	36	100.00	0.00	-0.62	9.64	unresolved
+default	puc19	puc19_draw5	59	uncorrected	mid	427	409	95.78				
+default	puc19	puc19_draw5	59	uncorrected	1-10	46	41	89.13	6.65	0.08	18.92	unresolved
+default	puc19	puc19_draw5	59	uncorrected	11-20	37	36	97.30	-1.51	-4.75	9.71	unresolved
+default	puc19	puc19_draw5	59	uncorrected	21-30	32	30	93.75	2.03	-3.06	16.02	unresolved
+default	puc19	puc19_draw5	59	jeepers	mid	427	427	100.00				
+default	puc19	puc19_draw5	59	jeepers	1-10	46	46	100.00	0.00	-0.89	7.71	unresolved
+default	puc19	puc19_draw5	59	jeepers	11-20	37	37	100.00	0.00	-0.89	9.41	unresolved
+default	puc19	puc19_draw5	59	jeepers	21-30	32	32	100.00	0.00	-0.89	10.72	unresolved
+default	lambda	lambda_draw1	1504	uncorrected	mid	9155	57	0.62				
+default	lambda	lambda_draw1	1504	uncorrected	1-10	1010	6	0.59	0.03	-0.68	0.40	
+default	lambda	lambda_draw1	1504	uncorrected	11-20	952	9	0.95	-0.32	-1.18	0.16	
+default	lambda	lambda_draw1	1504	uncorrected	21-30	939	4	0.43	0.20	-0.48	0.51	
+default	lambda	lambda_draw1	1504	jeepers	mid	9155	57	0.62				
+default	lambda	lambda_draw1	1504	jeepers	1-10	1010	6	0.59	0.03	-0.68	0.40	
+default	lambda	lambda_draw1	1504	jeepers	11-20	952	9	0.95	-0.32	-1.18	0.16	
+default	lambda	lambda_draw1	1504	jeepers	21-30	939	5	0.53	0.09	-0.63	0.45	
+default	lambda	lambda_draw2	1546	uncorrected	mid	9673	113	1.17				
+default	lambda	lambda_draw2	1546	uncorrected	1-10	1011	14	1.38	-0.22	-1.16	0.39	
+default	lambda	lambda_draw2	1546	uncorrected	11-20	1033	18	1.74	-0.57	-1.59	0.10	
+default	lambda	lambda_draw2	1546	uncorrected	21-30	1008	11	1.09	0.08	-0.80	0.61	
+default	lambda	lambda_draw2	1546	jeepers	mid	9673	114	1.18				
+default	lambda	lambda_draw2	1546	jeepers	1-10	1011	14	1.38	-0.21	-1.15	0.40	
+default	lambda	lambda_draw2	1546	jeepers	11-20	1033	19	1.84	-0.66	-1.70	0.04	
+default	lambda	lambda_draw2	1546	jeepers	21-30	1008	13	1.29	-0.11	-1.04	0.47	
+default	lambda	lambda_draw3	1521	uncorrected	mid	9383	79	0.84				
+default	lambda	lambda_draw3	1521	uncorrected	1-10	988	7	0.71	0.13	-0.63	0.55	
+default	lambda	lambda_draw3	1521	uncorrected	11-20	936	14	1.50	-0.65	-1.67	-0.02	
+default	lambda	lambda_draw3	1521	uncorrected	21-30	988	11	1.11	-0.27	-1.16	0.26	
+default	lambda	lambda_draw3	1521	jeepers	mid	9383	79	0.84				
+default	lambda	lambda_draw3	1521	jeepers	1-10	988	7	0.71	0.13	-0.63	0.55	
+default	lambda	lambda_draw3	1521	jeepers	11-20	936	14	1.50	-0.65	-1.67	-0.02	
+default	lambda	lambda_draw3	1521	jeepers	21-30	988	11	1.11	-0.27	-1.16	0.26	
+default	lambda	lambda_draw4	1550	uncorrected	mid	9865	81	0.82				
+default	lambda	lambda_draw4	1550	uncorrected	1-10	1041	12	1.15	-0.33	-1.20	0.20	
+default	lambda	lambda_draw4	1550	uncorrected	11-20	983	4	0.41	0.41	-0.24	0.73	
+default	lambda	lambda_draw4	1550	uncorrected	21-30	1007	8	0.79	0.03	-0.76	0.47	
+default	lambda	lambda_draw4	1550	jeepers	mid	9865	81	0.82				
+default	lambda	lambda_draw4	1550	jeepers	1-10	1040	12	1.15	-0.33	-1.20	0.20	
+default	lambda	lambda_draw4	1550	jeepers	11-20	982	4	0.41	0.41	-0.24	0.73	
+default	lambda	lambda_draw4	1550	jeepers	21-30	1007	8	0.79	0.03	-0.76	0.47	
+default	lambda	lambda_draw5	1494	uncorrected	mid	9301	44	0.47				
+default	lambda	lambda_draw5	1494	uncorrected	1-10	998	5	0.50	-0.03	-0.71	0.30	
+default	lambda	lambda_draw5	1494	uncorrected	11-20	991	11	1.11	-0.64	-1.51	-0.12	
+default	lambda	lambda_draw5	1494	uncorrected	21-30	952	8	0.84	-0.37	-1.19	0.08	
+default	lambda	lambda_draw5	1494	jeepers	mid	9302	54	0.58				
+default	lambda	lambda_draw5	1494	jeepers	1-10	996	5	0.50	0.08	-0.60	0.42	
+default	lambda	lambda_draw5	1494	jeepers	11-20	990	12	1.21	-0.63	-1.54	-0.09	
+default	lambda	lambda_draw5	1494	jeepers	21-30	952	9	0.95	-0.36	-1.22	0.12	

@@ -1342,6 +1342,13 @@ EMSEQ_PAIR_FILTER = (
     " && tlen >= -1000 && tlen <= 1000"
 )
 
+# Bases excluded from methylation calls (MethylDackel --nOT/--nOB): the first
+# five sequenced bases of read 2, which start at the 3' end of the original
+# strand that end repair fills in with unmethylated C. These are the NEB EM-seq
+# pipeline's options; tests/unit/test_methyldackel_bounds.py pins what they
+# exclude on constructed read pairs.
+EMSEQ_CALL_BOUNDS = "--nOT 0,0,0,5 --nOB 0,0,5,0"
+
 #+end_src
 
 *** Spike workflow
@@ -1418,7 +1425,8 @@ rule emseq_methyldackel_spike:
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_methyldackel_spike.tsv"
     params:
-        out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0]
+        out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0],
+        bounds     = EMSEQ_CALL_BOUNDS,
     threads: 8
     output:
         bed = f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
@@ -1427,12 +1435,13 @@ rule emseq_methyldackel_spike:
         exec &>> "{log.cmd}"
         echo "[methyldackel-spike] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
         mkdir -p "$(dirname "{params.out_prefix}")"
-        # --keepDiscordant: count pairs without the proper-pair flag, as the
-        # host calling does
+        # --keepDiscordant: count pairs without the proper-pair flag, and
+        # exclude the same read-2 bases, as the host calling does
         MethylDackel extract \
           -@ {threads} \
           --methylKit \
           --keepDiscordant \
+          {params.bounds} \
           "{input.fasta}" \
           "{input.bam}" \
           -o "{params.out_prefix}"
@@ -1960,7 +1969,8 @@ rule emseq_methyldackel:
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_methyldackel.tsv"
     params:
-        out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0]
+        out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0],
+        bounds     = EMSEQ_CALL_BOUNDS,
     threads: 8
     resources:
         concurrency = 25
@@ -1976,6 +1986,7 @@ rule emseq_methyldackel:
           -@ {threads} \
           --methylKit \
           --keepDiscordant \
+          {params.bounds} \
           "{input.fasta}" \
           "{input.bam}" \
           -o "{params.out_prefix}"
@@ -2506,7 +2517,7 @@ for (chrom in chroms) {
 - [[id:833f276f-f532-475e-8e0e-f4d528078a6b][cfDNA library preparation (science.org)]]
 - note that multicq inputs cannot promp new runs
 - *Estimate the natural-duplicate rate before dupsifter removes duplicates.* The EM-seq specific ways to measure it (transversion SNPs, CpG-state discordance within marked pairs) are in [[file:~/repos/frag/frag.org::Estimate the natural-duplicate rate before removing duplicates][frag Ideas]], with the general cfDNA argument.
-- *Let MethylDackel handle read-end bias, with no fixed read trim: apply its inclusion bounds from each library's M-bias.* =emseq_mbias= already writes a per-library M-bias profile, but =MethylDackel extract= runs without =--OT=/=--OB= bounds, so end-repair and adapter-read-through calls at read ends enter the per-CpG counts (see the M-bias section above). MethylDackel mbias prints suggested bounds per strand and read, and applying them at extraction, per library or as one cohort-wide bound from the pooled profile, is established practice: MethylDackel's help advises it, and the Pipeline Olympics benchmark applied sample-specific M-bias trimming for bwa-meth/MethylDackel ([[https://doi.org/10.1101/2024.09.16.609142][Lin 2024, bioRxiv]]). Fixed EM-seq clips in use for comparison: 5 bp at 5′ ends (NEB), 8 bp both ends (nf-core methylseq =--em_seq=), 10 bp both ends ([[https://doi.org/10.1101/2023.10.07.561361][Olova and Andrews 2023]]). The same profile can set rmeth's read-end trim ([[file:~/repos/rmeth/rmeth.org::*Ideas][rmeth Ideas]]).
+- *Let MethylDackel handle read-end bias, with no fixed read trim: apply its inclusion bounds from each library's M-bias.* =emseq_mbias= already writes a per-library M-bias profile, but =MethylDackel extract= runs with only the NEB bounds on the first five bases of read 2, so other end-repair and adapter-read-through calls at read ends enter the per-CpG counts (see the M-bias section above). MethylDackel mbias prints suggested bounds per strand and read, and applying them at extraction, per library or as one cohort-wide bound from the pooled profile, is established practice: MethylDackel's help advises it, and the Pipeline Olympics benchmark applied sample-specific M-bias trimming for bwa-meth/MethylDackel ([[https://doi.org/10.1101/2024.09.16.609142][Lin 2024, bioRxiv]]). Fixed EM-seq clips in use for comparison: 5 bp at 5′ ends (NEB), 8 bp both ends (nf-core methylseq =--em_seq=), 10 bp both ends ([[https://doi.org/10.1101/2023.10.07.561361][Olova and Andrews 2023]]). The same profile can set rmeth's read-end trim ([[file:~/repos/rmeth/rmeth.org::*Ideas][rmeth Ideas]]).
   - Jagged-end lengths vary across molecules, so a fixed read-position bound either leaves fill-in calls or discards informative bases. In cfDNA EM-seq, fixed 10–30 bp 3′ trimming left a strand-asymmetric bias that still differed significantly from SPLAT-seq, whereas per-fragment correction with JEEPERS brought the profile close to SPLAT-seq. Wang et al. place the fill-in loss at each strand's 3′ end, which is R2 and, on fragments shorter than the read pair, the end of R1, not at R1 positions 1–5 as in the M-bias section above [cite:@wang2026jeepers]
 - *Do NOT implement* — high-coverage percentile filtering (=filterByCoverage(hi.perc=…)=) on the genome-wide DMR path. The earlier rationale (top-0.1% PCR-jackpot CpGs inflate =calculateDiffMeth= leverage and manufacture false DMRs) does not survive the EM-seq methods literature: percentile-based ("vertical") high-coverage filtering "has shown a high risk for increasing WGBS coverage biases and should only be used where coverage depth is expected to be extremely high … targeted methods such as RRBS, and not with whole genome protocols." For WGBS/EM-seq the correct PCR-artifact control is deduplication (already done in =emseq_dedup=) plus *horizontal* (per-region CpG-count) filtering, not vertical coverage trimming. If ever needed for a targeted/amplicon experiment, gate it strictly opt-in (default off); methylKit's conventional threshold is =hi.perc=99.9= (drop top 0.1%). Source: "Whole Genome Methylation Sequencing via Enzymatic Conversion (EM-seq): Protocol, Data Processing and Analysis", bioRxiv 2023, doi:10.1101/2023.10.07.561361 — https://www.biorxiv.org/content/10.1101/2023.10.07.561361v1.full
 - *Already covered — do not build as a new feature* — the proposed =Mk= read-level statistic (fraction/count of reads with ≥k methylated CpGs) is essentially *CHALM* (Xu 2021), one of the eight read-level metrics =mhaptk stat= already computes (rule =emseq_analysis_mhaptk_stat=; also MM, PDR, MHL, MCR, MBS, Entropy, R2). It is simply not enabled: =config/test.yaml= sets =haplotype.metrics: [MHL, PDR, Entropy]=; adding =CHALM= (k set via =--K/--minK/--maxK=) yields it with no new code. Caveat: the haplotype path (mHapTools→mhaptk) is currently *excluded from CI as fragile* (C++/htslib build), so a robust *genome-wide* read-level metric would instead need a non-mHapTools route (e.g. =biscuit epiread=). Ref: mHapTk, Bioinformatics 2022 — https://academic.oup.com/bioinformatics/article/38/22/5141/6731920
@@ -5357,7 +5368,7 @@ Duplicates are flagged in one rule and removed in the next. The filtering rule k
 
 Methylation is counted with [[https://github.com/dpryan79/MethylDackel][MethylDackel]] (=extract --methylKit --keepDiscordant=, version 0.6.1) on the filtered alignment. A call is the base a read shows at a reference CpG: C for methylated and T for unmethylated on a read from the original top strand, and G and A on a read from the original bottom strand. MethylDackel counts a base when its quality is 5 or more and its alignment has a mapping quality of 10 or more, which the filter has already raised to 30. Where the two mates of a pair overlap, the position is counted once for the pair. The option =--keepDiscordant= makes MethylDackel count pairs whose proper-pair flag is unset, which it otherwise ignores.
 
-All read positions are counted. No bases are excluded at read ends, and the measurement behind that state of the pipeline is under [[*Read-end handling][Read-end handling]]. The per-CpG counts are then loaded into [[https://github.com/al2na/methylKit][methylKit]] [cite:@akalin2012methylkit] with a minimum coverage set in the configuration (=emseq-mincov=) and written as a tabix-indexed table, one per library.
+The first five sequenced bases of read 2, which lie at the filled-in 3' end of the original strand, are excluded from the counts with the options of the NEB EM-seq pipeline (=--nOT 0,0,0,5 --nOB 0,0,5,0=), and the same bases are excluded on the spike-in controls. The measurement behind that choice is under [[*Read-end handling][Read-end handling]]. The per-CpG counts are then loaded into [[https://github.com/al2na/methylKit][methylKit]] [cite:@akalin2012methylkit] with a minimum coverage set in the configuration (=emseq-mincov=) and written as a tabix-indexed table, one per library.
 *** Spike-in controls
 
 The EM-seq kit supplies two control DNAs that are added to each sample before library preparation: unmethylated lambda DNA, and pUC19 DNA methylated at CpG sites. Lambda measures conversion. A cytosine that reads as methylated in lambda escaped conversion, so lambda methylation is the non-conversion rate of the library, and it is expected to be below 1%. pUC19 measures protection. A CpG that reads as unmethylated in pUC19 was converted despite its methylation, and pUC19 CpG methylation is expected to be above 90% [cite:@vaisvila2021;@chauhan2024;@emseq2023manual].
@@ -5401,7 +5412,7 @@ The files a library or an experiment produces are listed in [[tab-outputs]]. Pat
 *** Design decisions
 **** Read-end handling
 
-Methylation is counted at all read positions. End repair fills recessed 3' ends with unmethylated cytosine before conversion, so the last bases of each original strand read as unmethylated whatever the template carried. Read 2 starts on that end, and read 1 reaches it on fragments no longer than the read. In one plasma cfDNA library carrying both spike-in controls ({{{val(end-handling-plasma-spiked,puc19_usable_reads_text)}}} usable pUC19 reads), pUC19 CpG methylation was {{{val(end-handling-plasma-spiked,puc19_r2_start_position1_pct,%.1f)}}}% at the base that begins read 2 and {{{val(end-handling-plasma-spiked,puc19_r1_end_position1_pct,%.1f)}}}% at the last base of read 1, compared to {{{val(end-handling-plasma-spiked,puc19_r2_start_reference_pct,%.1f)}}}% in the middle of the read. At the two 5' ends it was {{{val(end-handling-plasma-spiked,puc19_r1_start_position1_pct,%.1f)}}}% and {{{val(end-handling-plasma-spiked,puc19_r2_end_position1_pct,%.1f)}}}% ([[fig-end-handling-controls]]). Lambda stayed at or below {{{val(end-handling-plasma-spiked,unmeth_lambda_max_position_pct,%.1f)}}}% at all four read ends.
+Methylation is counted with the first five sequenced bases of read 2 excluded. End repair fills recessed 3' ends with unmethylated cytosine before conversion, so the last bases of each original strand read as unmethylated whatever the template carried. Read 2 starts on that end, and read 1 reaches it on fragments no longer than the read. In one plasma cfDNA library carrying both spike-in controls ({{{val(end-handling-plasma-spiked,puc19_usable_reads_text)}}} usable pUC19 reads), pUC19 CpG methylation was {{{val(end-handling-plasma-spiked,puc19_r2_start_position1_pct,%.1f)}}}% at the base that begins read 2 and {{{val(end-handling-plasma-spiked,puc19_r1_end_position1_pct,%.1f)}}}% at the last base of read 1, compared to {{{val(end-handling-plasma-spiked,puc19_r2_start_reference_pct,%.1f)}}}% in the middle of the read. At the two 5' ends it was {{{val(end-handling-plasma-spiked,puc19_r1_start_position1_pct,%.1f)}}}% and {{{val(end-handling-plasma-spiked,puc19_r2_end_position1_pct,%.1f)}}}% ([[fig-end-handling-controls]]). Lambda stayed at or below {{{val(end-handling-plasma-spiked,unmeth_lambda_max_position_pct,%.1f)}}}% at all four read ends.
 
 The loss is therefore at the 3' end of the original strand and absent from the 5' end. The clip of 10 bases from both ends of both mates that [[https://github.com/FelixKrueger/Bismark/blob/master/docs/src/content/docs/usage/library-types.md][Bismark]] recommends for EM-seq would remove correctly called bases at the 5' ends. The [[https://github.com/nebiolabs/EM-seq][NEB EM-seq pipeline]] instead excludes bases at the start of read 2 when methylation is counted (=--nOT 0,0,0,5 --nOB 0,0,5,0=). On read pairs constructed by hand, those options excluded 4 or 5 bases of read 2 and left the same bases counted from read 1 where the two mates overlapped ([[file:tests/unit/test_methyldackel_bounds.py][tests/unit/test_methyldackel_bounds.py]]). On fragments no longer than the read, which are common in plasma, an exclusion that names read 2 alone leaves the filled-in bases in the counts.
 
@@ -5418,6 +5429,12 @@ At equal distance from the 3' end, calls made by read 1 were {{{val(end-handling
 #+name: fig-end-handling-strand-ends
 #+caption: *Plasma reads lose methylation over tens of bases at the 3' end of the original strand.* CpG methylation by distance from the 5' and 3' ends of the original strand, on fragments of 160 bp or longer, counted once per fragment. Thick lines pool the libraries and thin lines are single libraries. Plasma, n = 7 libraries. pUC19, n = 1 library. Bands are 95% Wilson intervals.
 [[file:resources/figures/validation_fragment_end_plasma-pilot.png]]
+
+The two masks were also compared on a cohort large enough to show whether the change they make to the counts reaches a comparison between groups. We called {{{val(end-handling-breast-full-depth,n_libraries)}}} plasma cfDNA libraries of a breast cancer study with all aligned reads, {{{val(end-handling-breast-full-depth,n_patients)}}} from patients in a second-line breast cancer cohort and {{{val(end-handling-breast-full-depth,n_healthy)}}} from healthy donors, once with all positions counted, once with the NEB options, and once with the 10-base mask. Global CpG methylation over autosomal calls rose by {{{val(end-handling-breast-full-depth,shift_neb_points,%.2f)}}} points (95% interval {{{val(end-handling-breast-full-depth,shift_neb_points_lower,%.2f)}}} to {{{val(end-handling-breast-full-depth,shift_neb_points_upper,%.2f)}}}) with the NEB options and by {{{val(end-handling-breast-full-depth,shift_all10_points,%.2f)}}} points ({{{val(end-handling-breast-full-depth,shift_all10_points_lower,%.2f)}}} to {{{val(end-handling-breast-full-depth,shift_all10_points_upper,%.2f)}}}) with the 10-base mask (paired t test over libraries). The rise in patients minus the rise in healthy donors was {{{val(end-handling-breast-full-depth,group_shift_neb_points,%.2f)}}} points ({{{val(end-handling-breast-full-depth,group_shift_neb_points_lower,%.2f)}}} to {{{val(end-handling-breast-full-depth,group_shift_neb_points_upper,%.2f)}}}) and {{{val(end-handling-breast-full-depth,group_shift_all10_points,%.2f)}}} points ({{{val(end-handling-breast-full-depth,group_shift_all10_points_lower,%.2f)}}} to {{{val(end-handling-breast-full-depth,group_shift_all10_points_upper,%.2f)}}}) by Welch's t test. The patient minus healthy difference in global methylation was therefore {{{val(end-handling-breast-full-depth,group_diff_none_points,%.2f)}}} points ({{{val(end-handling-breast-full-depth,group_diff_none_points_lower,%.2f)}}} to {{{val(end-handling-breast-full-depth,group_diff_none_points_upper,%.2f)}}}) with all positions counted, {{{val(end-handling-breast-full-depth,group_diff_neb_points,%.2f)}}} with the NEB options, and {{{val(end-handling-breast-full-depth,group_diff_all10_points,%.2f)}}} with the 10-base mask.
+
+Differentially methylated 10 kb tiles were then called between the two groups with methylKit [cite:@akalin2012methylkit], with the breast study's coverage of at least 10 and at least 3 libraries per group, on {{{val(end-handling-breast-full-depth,tiles_tested_none_text)}}} tiles. The methylation difference of each tile correlated with its value under all positions counted at r = {{{val(end-handling-breast-full-depth,r_meth_diff_neb)}}} for the NEB options and r = {{{val(end-handling-breast-full-depth,r_meth_diff_all10)}}} for the 10-base mask, and no tile called under two settings had differences of opposite sign. The masks called more tiles, however. At a q-value below 0.01 and a difference of at least 25 points, {{{val(end-handling-breast-full-depth,called_q01_d25_none)}}} tiles were called with all positions counted, {{{val(end-handling-breast-full-depth,called_q01_d25_neb)}}} with the NEB options, and {{{val(end-handling-breast-full-depth,called_q01_d25_all10)}}} with the 10-base mask, and the calls shared with all positions counted were {{{val(end-handling-breast-full-depth,jaccard_q01_d25_neb_pct,%.0f)}}}% and {{{val(end-handling-breast-full-depth,jaccard_q01_d25_all10_pct,%.0f)}}}% of the union of the two call sets. At a q-value below 0.05 and a difference of at least 10 points, the counts were {{{val(end-handling-breast-full-depth,called_q05_d10_none_text)}}}, {{{val(end-handling-breast-full-depth,called_q05_d10_neb_text)}}}, and {{{val(end-handling-breast-full-depth,called_q05_d10_all10_text)}}}, and the shares {{{val(end-handling-breast-full-depth,jaccard_q05_d10_neb_pct,%.0f)}}}% and {{{val(end-handling-breast-full-depth,jaccard_q05_d10_all10_pct,%.0f)}}}%. Excluding read ends thus moved the group difference in global methylation by less than a fifth of a point, but it changed which tiles a study of this size reports, by about half of the strict call set for the 10-base mask. The cohort comes from one study, the 3' loss itself was not measured in it, and both masks leave most of the loss in the counts, so the effect of the full loss on a group comparison is not known from it.
+
+The pipeline excludes the NEB bases, which lie in the filled-in 3' end, and does not use the 10-base mask, which also removes correctly called bases at the 5' ends. The rest of the 3' loss stays in the counts.
 **** Pairs without the proper-pair flag
 
 BWA-MEM sets the proper-pair flag from a range of fragment lengths that it infers for each batch of reads. In a plasma library that range is narrow, because most fragments are close to 167 bp, and pairs from longer fragments are left unflagged although they are correctly placed. A filter on the flag then removes the fragments of two nucleosomes and longer. The pipeline tests each pair directly, for the same chromosome, inward orientation, and a fragment of at most 1,000 bp, in both the duplicate-marking rule and the filtering rule ([[file:tests/unit/test_pair_filter.py][tests/unit/test_pair_filter.py]]).
@@ -8245,6 +8262,676 @@ invisible(dev.off())
 cat("Saved:", args[2], "\n")
 #+end_src
 
+*** Read-end settings on a two-group cohort
+
+Scripts for the comparison of the three read-end settings on a cohort of plasma libraries held outside the repository, whose result is under [[*Read-end handling][Read-end handling]]. The driver copies each alignment from a bucket, calls it under each setting, calls differentially methylated tiles between the groups once per setting, and writes the comparison tables. The values script turns those tables into the values file the method text reads.
+
+**** Conversion from MethylDackel calls to the methylKit table
+
+#+begin_src python :tangle ./scripts/emseq_bedgraph_to_methylkit.py
+#!/usr/bin/env python3
+"""Convert a MethylDackel CpG bedGraph to the table MethylDackel writes with --methylKit.
+
+The bedGraph holds one line per cytosine of a CpG (chrom, 0-based start, end,
+percent, methylated, unmethylated) without the strand. The strand is read from
+the reference: the call sits on a C for the top strand (F) and on a G for the
+bottom strand (R). Also prints, on stderr, the autosomal totals of methylated
+and unmethylated calls and the number of positions.
+
+Usage: emseq_bedgraph_to_methylkit.py <in.bedGraph[.gz]> <ref.fa> <out.methylKit>
+"""
+from __future__ import annotations
+
+import gzip
+import sys
+
+AUTOSOMES = {str(i) for i in range(1, 23)} | {f"chr{i}" for i in range(1, 23)}
+
+
+def read_fai(path: str) -> dict:
+    """{contig: (length, offset, bases per line, bytes per line)} from a .fai index."""
+    index = {}
+    with open(path) as fh:
+        for line in fh:
+            name, length, offset, linebases, linewidth = line.split("\t")[:5]
+            index[name] = (int(length), int(offset), int(linebases), int(linewidth))
+    return index
+
+
+def contig_sequence(fasta, entry) -> bytes:
+    """Upper-case sequence of one contig, read through its index entry."""
+    length, offset, linebases, linewidth = entry
+    lines = -(-length // linebases)
+    fasta.seek(offset)
+    raw = fasta.read(length + lines * (linewidth - linebases))
+    return raw.replace(b"\n", b"").replace(b"\r", b"").upper()[:length]
+
+
+def strand_of(base: int) -> str | None:
+    """F for a call on C, R for a call on G, None for another base."""
+    if base == 67:
+        return "F"
+    if base == 71:
+        return "R"
+    return None
+
+
+def convert(bedgraph, fasta_path: str, out) -> dict:
+    index = read_fai(fasta_path + ".fai")
+    totals = {"positions": 0, "meth": 0, "unmeth": 0, "other_base": 0}
+    current, seq = None, b""
+    out.write("chrBase\tchr\tbase\tstrand\tcoverage\tfreqC\tfreqT\n")
+    with open(fasta_path, "rb") as fasta:
+        for line in bedgraph:
+            if line.startswith("track"):
+                continue
+            chrom, start, _, _, meth, unmeth = line.rstrip("\n").split("\t")
+            if chrom != current:
+                current, seq = chrom, contig_sequence(fasta, index[chrom])
+            start, meth, unmeth = int(start), int(meth), int(unmeth)
+            strand = strand_of(seq[start])
+            if strand is None:
+                totals["other_base"] += 1
+                continue
+            cov = meth + unmeth
+            pos = start + 1
+            out.write(f"{chrom}.{pos}\t{chrom}\t{pos}\t{strand}\t{cov}\t{100 * meth / cov:.2f}\t{100 * unmeth / cov:.2f}\n")
+            if chrom in AUTOSOMES:
+                totals["positions"] += 1
+                totals["meth"] += meth
+                totals["unmeth"] += unmeth
+    return totals
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if len(argv) != 3:
+        print(__doc__, file=sys.stderr)
+        return 2
+    opener = gzip.open if argv[0].endswith(".gz") else open
+    with opener(argv[0], "rt") as bedgraph, open(argv[2], "w") as out:
+        totals = convert(bedgraph, argv[1], out)
+    print("\t".join(f"{k}={v}" for k, v in totals.items()), file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+#+end_src
+
+**** Comparison tables
+
+#+begin_src R :tangle ./scripts/emseq_validation_settings_compare.R
+#!/usr/bin/env Rscript
+# Compare the three read-end settings on the full-depth cohort.
+#
+# Usage: emseq_validation_settings_compare.R <work dir> <out dir> <index map>
+#
+# Reads, from the work dir:
+#   global/<library>.<setting>.txt   autosomal totals written by emseq_bedgraph_to_methylkit.py
+#   dmr/<setting>/methylDiff_*.txt.bgz   tile-level differential methylation, patients against healthy
+#   index map: TSV with columns library and library_index (leading '#' lines
+#   ignored), so the tables name libraries only by their index
+# Writes, to the out dir:
+#   global.tsv      one row per library index and setting: positions, methylated, unmethylated, percent
+#   global_diff.tsv per setting pair: paired difference in percent over libraries, with 95% interval,
+#                   and per setting: patient minus healthy difference with 95% interval
+#   tiles.tsv       per setting: tiles tested and tiles called at two thresholds
+#   tiles_pair.tsv  per setting pair: shared tiles, correlation and largest change of the methylation
+#                   difference, calls shared, Jaccard index, calls whose sign differs
+suppressPackageStartupMessages(library(data.table))
+
+args <- commandArgs(trailingOnly = TRUE)
+work <- args[1]; out <- args[2]; index_map <- args[3]
+dir.create(out, recursive = TRUE, showWarnings = FALSE)
+settings <- c("none", "neb", "all10")
+pairs <- list(c("neb", "none"), c("all10", "none"), c("all10", "neb"))
+
+# ---- global methylation ----
+read_global <- function(path) {
+  kv <- strsplit(strsplit(readLines(path, n = 1), "\t")[[1]], "=")
+  vals <- setNames(as.numeric(sapply(kv, `[`, 2)), sapply(kv, `[`, 1))
+  parts <- strsplit(sub("\\.txt$", "", basename(path)), ".", fixed = TRUE)[[1]]
+  data.table(library = parts[1], setting = parts[2], positions = vals[["positions"]],
+             meth = vals[["meth"]], unmeth = vals[["unmeth"]])
+}
+glob <- rbindlist(lapply(Sys.glob(file.path(work, "global", "*.txt")), read_global))
+glob[, pct := 100 * meth / (meth + unmeth)]
+glob[, group := ifelse(grepl("^NH_", library), "healthy", "patient")]
+idx <- fread(index_map, skip = "library\tlibrary_index")
+missing <- setdiff(unique(glob$library), idx$library)
+if (length(missing)) stop("index map has no entry for: ", paste(missing, collapse = ", "))
+glob[idx, library_index := i.library_index, on = "library"]
+fwrite(glob[order(library_index, setting), .(library_index, setting, group, positions, meth, unmeth, pct)],
+       file.path(out, "global.tsv"), sep = "\t")
+
+wide <- dcast(glob, library + group ~ setting, value.var = "pct")
+ci <- function(x) { t <- t.test(x); c(mean(x), t$conf.int[1], t$conf.int[2]) }
+rows <- list()
+for (p in pairs) {
+  d <- wide[[p[1]]] - wide[[p[2]]]
+  v <- ci(d)
+  rows[[length(rows) + 1]] <- data.table(comparison = paste(p[1], "minus", p[2]), n = length(d),
+                                         estimate = v[1], lower = v[2], upper = v[3])
+}
+for (s in settings) {
+  t <- t.test(wide[group == "patient"][[s]], wide[group == "healthy"][[s]])
+  rows[[length(rows) + 1]] <- data.table(comparison = paste("patient minus healthy,", s), n = nrow(wide),
+                                         estimate = unname(t$estimate[1] - t$estimate[2]),
+                                         lower = t$conf.int[1], upper = t$conf.int[2])
+}
+for (s in c("neb", "all10")) {
+  shift <- wide[[s]] - wide[["none"]]
+  t <- t.test(shift[wide$group == "patient"], shift[wide$group == "healthy"])
+  rows[[length(rows) + 1]] <- data.table(comparison = paste("patient minus healthy, of", s, "minus none"), n = nrow(wide),
+                                         estimate = unname(t$estimate[1] - t$estimate[2]),
+                                         lower = t$conf.int[1], upper = t$conf.int[2])
+}
+fwrite(rbindlist(rows), file.path(out, "global_diff.tsv"), sep = "\t")
+
+# ---- tiles ----
+read_diff <- function(s) {
+  f <- Sys.glob(file.path(work, "dmr", s, "methylDiff_*.txt.bgz"))
+  stopifnot(length(f) == 1)
+  # methylKit writes its object metadata as leading '#' lines in the tabix file
+  d <- fread(cmd = paste("zcat", shQuote(f), "| grep -v '^#'"), header = FALSE,
+             col.names = c("chr", "start", "end", "strand", "pvalue", "qvalue", "meth.diff"))
+  d[, tile := paste(chr, start)]
+  setkey(d, tile)
+  d
+}
+diffs <- setNames(lapply(settings, read_diff), settings)
+called <- function(d, q, delta) d[qvalue < q & abs(meth.diff) >= delta]
+thresholds <- list(c(0.01, 25), c(0.05, 10))  # methylKit's getMethylDiff default, and a looser one
+tiles <- rbindlist(lapply(settings, function(s) {
+  d <- diffs[[s]]
+  data.table(setting = s, tiles_tested = nrow(d),
+             called_q01_d25 = nrow(called(d, 0.01, 25)), called_q05_d10 = nrow(called(d, 0.05, 10)))
+}))
+fwrite(tiles, file.path(out, "tiles.tsv"), sep = "\t")
+
+pair_rows <- list()
+for (p in pairs) {
+  a <- diffs[[p[1]]]; b <- diffs[[p[2]]]
+  m <- merge(a, b, by = "tile", suffixes = c(".a", ".b"))
+  for (th in thresholds) {
+    ca <- called(a, th[1], th[2])$tile; cb <- called(b, th[1], th[2])$tile
+    both <- intersect(ca, cb)
+    flips <- m[tile %in% both & sign(meth.diff.a) != sign(meth.diff.b), .N]
+    pair_rows[[length(pair_rows) + 1]] <- data.table(
+      comparison = paste(p[1], "against", p[2]), q = th[1], min_diff = th[2],
+      tiles_shared = nrow(m), tiles_only_first = nrow(a) - nrow(m), tiles_only_second = nrow(b) - nrow(m),
+      r_meth_diff = cor(m$meth.diff.a, m$meth.diff.b),
+      median_abs_change = median(abs(m$meth.diff.a - m$meth.diff.b)),
+      max_abs_change = max(abs(m$meth.diff.a - m$meth.diff.b)),
+      called_first = length(ca), called_second = length(cb), called_both = length(both),
+      jaccard = length(both) / length(union(ca, cb)), sign_differs = flips)
+  }
+}
+fwrite(rbindlist(pair_rows), file.path(out, "tiles_pair.tsv"), sep = "\t")
+#+end_src
+
+**** Values for the method text
+
+#+begin_src python :tangle ./scripts/emseq_validation_settings_values.py
+#!/usr/bin/env python3
+"""Numbers for the comparison of read-end settings on a two-group cohort.
+
+Reads the four tables written by the settings comparison (global.tsv,
+global_diff.tsv, tiles.tsv, tiles_pair.tsv) from one results folder and writes
+values.json beside them, for the val macro of the method text.
+
+Settings: none (all read positions counted), neb (the NEB pipeline's read-2
+bounds), all10 (10 bases excluded at both ends of both mates).
+
+Usage: emseq_validation_settings_values.py <results folder>
+Exit codes: 0 success, 1 runtime error, 2 usage error.
+"""
+import csv
+import json
+import sys
+from pathlib import Path
+
+SETTINGS = ["none", "neb", "all10"]
+MASKS = ["neb", "all10"]
+
+
+def read_tsv(path: Path) -> list:
+    with open(path, newline="") as fh:
+        return list(csv.DictReader(fh, delimiter="\t"))
+
+
+def by_key(rows: list, key: str) -> dict:
+    return {r[key]: r for r in rows}
+
+
+def interval(values: dict, prefix: str, row: dict, digits: int = 2) -> None:
+    """Write estimate, lower and upper of one comparison row under prefix."""
+    for name, col in (("", "estimate"), ("_lower", "lower"), ("_upper", "upper")):
+        values[f"{prefix}{name}"] = round(float(row[col]), digits)
+
+
+def settings_values(folder: Path) -> dict:
+    glob = read_tsv(folder / "global.tsv")
+    diff = by_key(read_tsv(folder / "global_diff.tsv"), "comparison")
+    tiles = by_key(read_tsv(folder / "tiles.tsv"), "setting")
+    pairs = read_tsv(folder / "tiles_pair.tsv")
+
+    libraries = {r["library_index"]: r["group"] for r in glob}
+    values: dict[str, float] = {
+        "n_libraries": len(libraries),
+        "n_patients": sum(g == "patient" for g in libraries.values()),
+        "n_healthy": sum(g == "healthy" for g in libraries.values()),
+    }
+    for s in SETTINGS:
+        pct = [float(r["pct"]) for r in glob if r["setting"] == s]
+        if len(pct) != len(libraries):
+            raise ValueError(f"setting {s}: {len(pct)} rows for {len(libraries)} libraries")
+        values[f"global_mean_{s}_pct"] = round(sum(pct) / len(pct), 2)
+        interval(values, f"group_diff_{s}_points", diff[f"patient minus healthy, {s}"])
+        values[f"tiles_tested_{s}"] = int(tiles[s]["tiles_tested"])
+        values[f"called_q01_d25_{s}"] = int(tiles[s]["called_q01_d25"])
+        values[f"called_q05_d10_{s}"] = int(tiles[s]["called_q05_d10"])
+        for key in (f"tiles_tested_{s}", f"called_q05_d10_{s}"):
+            values[f"{key}_text"] = f"{int(values[key]):,}"
+    for m in MASKS:
+        interval(values, f"shift_{m}_points", diff[f"{m} minus none"])
+        interval(values, f"group_shift_{m}_points", diff[f"patient minus healthy, of {m} minus none"])
+    sign_differs = 0
+    for r in pairs:
+        first, second = r["comparison"].split(" against ")
+        if second != "none":
+            continue
+        th = "q01_d25" if float(r["q"]) == 0.01 else "q05_d10"
+        values[f"r_meth_diff_{first}"] = round(float(r["r_meth_diff"]), 3)
+        values[f"median_abs_change_{first}_points"] = round(float(r["median_abs_change"]), 2)
+        values[f"called_both_{th}_{first}"] = int(r["called_both"])
+        values[f"jaccard_{th}_{first}_pct"] = round(100 * float(r["jaccard"]), 1)
+        sign_differs += int(r["sign_differs"])
+    values["sign_differs_vs_none"] = sign_differs
+    return values
+
+
+def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if len(argv) != 1:
+        print(__doc__, file=sys.stderr)
+        return 2
+    folder = Path(argv[0])
+    try:
+        values = settings_values(folder)
+    except (OSError, KeyError, ValueError) as err:
+        print(f"error: {err}", file=sys.stderr)
+        return 1
+    (folder / "values.json").write_text(json.dumps(values, indent=2, sort_keys=True) + "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
+#+end_src
+
+**** Cohort driver
+
+#+begin_src bash :tangle ./scripts/emseq_validation_settings_cohort.sh
+#!/usr/bin/env bash
+# Read-end settings on a two-group cohort held outside the repository.
+#
+# extract: copies each library's filtered alignment (and index) from a bucket
+#   folder, calls CpG methylation with MethylDackel under each read-end setting
+#   (the flags of VALIDATION_END_SETTINGS in workflows/validation.smk), gzips
+#   the calls, and deletes the alignment. Libraries at a time is the first
+#   option, so the alignments on disk at once stay bounded.
+# dmr: converts each call table to MethylDackel's methylKit table, makes the
+#   per-library methylKit object, then calls differentially methylated tiles
+#   between the groups once per setting with the pipeline's methylKit script.
+#   Healthy libraries are named NH_*, patients any other name.
+# compare: writes the comparison tables (emseq_validation_settings_compare.R),
+#   naming libraries by the index map kept in the project repository.
+#
+# Usage:
+#   emseq_validation_settings_cohort.sh extract <work dir> <bucket folder> <libraries at a time>
+#   emseq_validation_settings_cohort.sh dmr <work dir> <conversions at a time> <cores per setting>
+#   emseq_validation_settings_cohort.sh compare <work dir> <index map>
+# The work dir holds ref/hg38.fa (+ .fai), libraries.txt (one library name per
+# line, written from the bucket listing when absent), and receives extract/,
+# tabix/, dmr/, global/, compare/, logs/, timing.tsv, and failed.txt.
+# MethylDackel, pigz, gsutil, Rscript (with methylKit), and python3 are taken from PATH.
+# Bucket alignments are named <library>.hg38.bwa_meth.coorsort.filt.bam.
+set -uo pipefail
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+declare -A FLAGS=([none]="" [neb]="--nOT 0,0,0,5 --nOB 0,0,5,0" [all10]="--nOT 10,11,10,11 --nOB 10,11,10,11")
+SETTINGS=(none neb all10)
+mode=${1:?usage: see header}; W=${2:?work dir}
+cd "$W" || exit 1
+mkdir -p extract bams logs global tabix dmr tmp
+export TMPDIR=$W/tmp
+[[ -f timing.tsv ]] || printf 'unit\tstep\tseconds\n' > timing.tsv
+stamp() { printf '%s\t%s\t%s\n' "$1" "$2" $(( $(date +%s) - $3 )) >> timing.tsv; }
+
+extract_one() {
+  local lib=$1 bucket=$2 bam=bams/$1.bam t0 s
+  ls extract/"$lib".{none,neb,all10}_CpG.bedGraph.gz > /dev/null 2>&1 && return 0
+  t0=$(date +%s)
+  gsutil -q cp "$bucket/$lib.hg38.bwa_meth.coorsort.filt.bam" "$bam" \
+    && gsutil -q cp "$bucket/$lib.hg38.bwa_meth.coorsort.filt.bam.bai" "$bam.bai" \
+    || { echo "FAIL copy $lib" >> failed.txt; return 1; }
+  stamp "$lib" copy "$t0"
+  for s in "${SETTINGS[@]}"; do
+    (
+      t1=$(date +%s)
+      # shellcheck disable=SC2086
+      MethylDackel extract -@ 4 --keepDiscordant ${FLAGS[$s]} ref/hg38.fa "$bam" -o "extract/$lib.$s" > "logs/$lib.$s.log" 2>&1 \
+        && pigz -p 2 -f "extract/$lib.${s}_CpG.bedGraph" \
+        || echo "FAIL extract $lib $s" >> failed.txt
+      stamp "$lib" "$s" "$t1"
+    ) &
+  done
+  wait
+  rm -f "$bam" "$bam.bai"
+}
+
+single_one() {
+  local lib=$1 s=$2 tx t0; t0=$(date +%s)
+  [[ $lib == NH_* ]] && tx=0 || tx=1
+  [[ -s tabix/$s/$lib.txt.bgz.tbi ]] && return 0
+  mkdir -p "meth/$s" "tabix/$s"
+  python3 "$HERE/emseq_bedgraph_to_methylkit.py" "extract/$lib.${s}_CpG.bedGraph.gz" ref/hg38.fa "meth/$s/$lib.methylKit" 2> "global/$lib.$s.txt" \
+    && Rscript "$HERE/make_single_amp_methylkit_obj.R" --amp_file "meth/$s/$lib.methylKit" --library_id "$lib" --treatment "$tx" \
+         --mincov 1 --build hg38 --out_dir "tabix/$s" > "logs/$lib.$s.single.log" 2>&1 \
+    || echo "FAIL single $lib $s" >> failed.txt
+  # the per-library step leaves the uncompressed table beside the tabix file
+  rm -f "meth/$s/$lib.methylKit" "tabix/$s/$lib.txt"
+  stamp "$lib.$s" single "$t0"
+}
+
+dmr_one() {
+  local s=$1 cores=$2 t0 dbs ids txs; t0=$(date +%s)
+  dbs=$(sed "s|.*|tabix/$s/&.txt.bgz|" libraries.txt | tr '\n' ' ')
+  ids=$(tr '\n' ' ' < libraries.txt)
+  txs=$(sed 's/^NH_.*/0/; t; s/.*/1/' libraries.txt | tr '\n' ' ')
+  Rscript "$HERE/make_methylkit_diff_tiled_db.R" --lib_db_list "$dbs" --lib_id_list "$ids" --treatment_list "$txs" \
+    --cores "$cores" --out_dir "dmr/$s" --suffix 2l_vs_nh --assembly hg38 --mincov 10 --win_size 10000 \
+    --chunk_size 1e9 --min_per_group 3 > "logs/dmr.$s.log" 2>&1 || echo "FAIL dmr $s" >> failed.txt
+  stamp "$s" dmr "$t0"
+}
+
+case $mode in
+  extract)
+    bucket=${3:?bucket folder}; at_once=${4:?libraries at a time}
+    [[ -s libraries.txt ]] || gsutil ls "$bucket/" | grep '\.bam$' | sed 's|.*/||; s|\.hg38\..*||' > libraries.txt
+    n=0
+    while read -r lib; do
+      extract_one "$lib" "$bucket" &
+      n=$((n + 1)); (( n % at_once == 0 )) && wait
+    done < libraries.txt
+    wait ;;
+  dmr)
+    at_once=${3:?conversions at a time}; cores=${4:?cores per setting}
+    n=0
+    for s in "${SETTINGS[@]}"; do
+      while read -r lib; do
+        single_one "$lib" "$s" &
+        n=$((n + 1)); (( n % at_once == 0 )) && wait
+      done < libraries.txt
+    done
+    wait
+    # methylKit normalizes one library at a time, so the settings run side by side
+    for s in "${SETTINGS[@]}"; do dmr_one "$s" "$cores" & done
+    wait ;;
+  compare)
+    Rscript "$HERE/emseq_validation_settings_compare.R" . compare "${3:?index map}" ;;
+  *) echo "unknown mode $mode" >&2; exit 2 ;;
+esac
+[[ -s failed.txt ]] && exit 1
+echo "done $mode" > "finished_$mode"
+#+end_src
+
+**** Tests of the conversion, the comparison, and the driver flags
+
+#+begin_src python :tangle ./tests/unit/test_validation_settings_cohort.py
+"""Tests for the cohort comparison of read-end settings on constructed inputs.
+
+Covers scripts/emseq_bedgraph_to_methylkit.py (strand from the reference and
+autosomal totals), scripts/emseq_validation_settings_compare.R (tables from
+constructed per-library totals and tile tables), and the read-end flags of
+scripts/emseq_validation_settings_cohort.sh against workflows/validation.smk.
+"""
+import csv
+import gzip
+import io
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+import emseq_bedgraph_to_methylkit as b2m
+
+REPO = Path(__file__).resolve().parents[2]
+
+
+def write_fasta(path: Path, contigs: dict, width: int = 10) -> None:
+    """FASTA with lines of `width` bases and its .fai index."""
+    fai, offset = [], 0
+    with open(path, "w") as fh:
+        for name, seq in contigs.items():
+            header = f">{name}\n"
+            fh.write(header)
+            offset += len(header)
+            fai.append(f"{name}\t{len(seq)}\t{offset}\t{width}\t{width + 1}\n")
+            for i in range(0, len(seq), width):
+                line = seq[i:i + width] + "\n"
+                fh.write(line)
+                offset += len(line)
+    Path(str(path) + ".fai").write_text("".join(fai))
+
+
+@pytest.fixture
+def ref(tmp_path):
+    # contig 1: C at 0-based 2, G at 3, A at 12 (second line); chrX: C at 0
+    fa = tmp_path / "ref.fa"
+    write_fasta(fa, {"1": "AACGTTTTTTAAATT", "X": "CGAA"})
+    return fa
+
+
+def test_strand_from_reference_and_autosomal_totals(ref):
+    bedgraph = io.StringIO(
+        "track type=bedGraph\n"
+        "1\t2\t3\t75\t3\t1\n"   # C: top strand
+        "1\t3\t4\t50\t1\t1\n"   # G: bottom strand
+        "1\t12\t13\t100\t2\t0\n"  # A: neither, counted as other_base
+        "X\t0\t1\t100\t5\t0\n"  # sex chromosome: written, not in the totals
+    )
+    out = io.StringIO()
+    totals = b2m.convert(bedgraph, str(ref), out)
+    rows = out.getvalue().splitlines()
+    assert rows[0] == "chrBase\tchr\tbase\tstrand\tcoverage\tfreqC\tfreqT"
+    assert rows[1] == "1.3\t1\t3\tF\t4\t75.00\t25.00"
+    assert rows[2] == "1.4\t1\t4\tR\t2\t50.00\t50.00"
+    assert rows[3] == "X.1\tX\t1\tF\t5\t100.00\t0.00"
+    assert totals == {"positions": 2, "meth": 4, "unmeth": 2, "other_base": 1}
+
+
+def test_contig_sequence_spans_line_breaks(ref):
+    index = b2m.read_fai(str(ref) + ".fai")
+    with open(ref, "rb") as fh:
+        assert b2m.contig_sequence(fh, index["1"]) == b"AACGTTTTTTAAATT"
+
+
+def tile_table(path: Path, rows: list) -> None:
+    with gzip.open(path, "wt") as fh:
+        fh.write("#Date:2026-11-22\n#Class:methylDiffDB\n")
+        for r in rows:
+            fh.write("\t".join(map(str, r)) + "\n")
+
+
+@pytest.mark.skipif(shutil.which("Rscript") is None, reason="Rscript not on PATH")
+def test_compare_tables(tmp_path):
+    if subprocess.run(["Rscript", "-e", "library(data.table)"], capture_output=True).returncode:
+        pytest.skip("data.table not installed")
+    work = tmp_path / "work"
+    (work / "global").mkdir(parents=True)
+    # four libraries; neb adds 1 point to healthy and 0.5 to patients, all10 adds 2 and 1
+    base = {"NH_1": 80, "NH_2": 78, "PRO_1": 74, "PRO_2": 72}
+    add = {"none": (0, 0), "neb": (1, 0.5), "all10": (2, 1)}
+    for lib, pct in base.items():
+        for s, (healthy, patient) in add.items():
+            # the second library of each group gains 0.1 point more under a mask
+            spread = 0.1 if lib.endswith("2") and s != "none" else 0
+            p = pct + (healthy if lib.startswith("NH_") else patient) + spread
+            meth = int(round(p * 100))
+            (work / "global" / f"{lib}.{s}.txt").write_text(
+                f"positions=10\tmeth={meth}\tunmeth={10000 - meth}\tother_base=0\n")
+    tiles = {
+        "none": [[1, 1, 10000, "*", 1e-5, 1e-3, -30], [1, 10001, 20000, "*", 0.5, 0.6, 5]],
+        "neb": [[1, 1, 10000, "*", 1e-5, 1e-3, -31], [1, 10001, 20000, "*", 1e-4, 1e-3, 26]],
+        "all10": [[1, 1, 10000, "*", 1e-5, 1e-3, 30], [1, 10001, 20000, "*", 1e-4, 1e-3, 27]],
+    }
+    for s, rows in tiles.items():
+        (work / "dmr" / s).mkdir(parents=True)
+        tile_table(work / "dmr" / s / "methylDiff_x.tiled.txt.bgz", rows)
+    index_map = tmp_path / "index.tsv"
+    index_map.write_text("# shuffled\nlibrary\tlibrary_index\nPRO_2\t1\nNH_1\t2\nPRO_1\t3\nNH_2\t4\n")
+    out = tmp_path / "out"
+    subprocess.run(["Rscript", str(REPO / "scripts" / "emseq_validation_settings_compare.R"), str(work), str(out),
+                    str(index_map)], check=True, capture_output=True)
+
+    glob = list(csv.DictReader(open(out / "global.tsv"), delimiter="\t"))
+    assert "library" not in glob[0]
+    assert [r["library_index"] for r in glob[:3]] == ["1", "1", "1"]
+    assert {r["group"] for r in glob if r["library_index"] == "2"} == {"healthy"}
+
+    diff = {r["comparison"]: r for r in csv.DictReader(open(out / "global_diff.tsv"), delimiter="\t")}
+    assert float(diff["all10 minus none"]["estimate"]) == pytest.approx(1.55)
+    assert float(diff["patient minus healthy, of neb minus none"]["estimate"]) == pytest.approx(-0.5)
+    assert float(diff["patient minus healthy, none"]["estimate"]) == pytest.approx(-6.0)
+
+    called = {r["setting"]: r for r in csv.DictReader(open(out / "tiles.tsv"), delimiter="\t")}
+    assert (called["none"]["called_q01_d25"], called["neb"]["called_q01_d25"]) == ("1", "2")
+
+    pairs = list(csv.DictReader(open(out / "tiles_pair.tsv"), delimiter="\t"))
+    strict = {r["comparison"]: r for r in pairs if r["q"] == "0.01"}
+    assert strict["neb against none"]["called_both"] == "1"
+    assert float(strict["neb against none"]["jaccard"]) == pytest.approx(0.5)
+    # the first tile is called under none and all10 with opposite signs
+    assert strict["all10 against none"]["sign_differs"] == "1"
+
+
+@pytest.mark.skipif(shutil.which("Rscript") is None, reason="Rscript not on PATH")
+def test_compare_stops_on_library_missing_from_map(tmp_path):
+    if subprocess.run(["Rscript", "-e", "library(data.table)"], capture_output=True).returncode:
+        pytest.skip("data.table not installed")
+    (tmp_path / "global").mkdir()
+    (tmp_path / "global" / "NH_9.none.txt").write_text("positions=1\tmeth=1\tunmeth=1\tother_base=0\n")
+    index_map = tmp_path / "index.tsv"
+    index_map.write_text("library\tlibrary_index\nNH_1\t1\n")
+    run = subprocess.run(["Rscript", str(REPO / "scripts" / "emseq_validation_settings_compare.R"), str(tmp_path),
+                          str(tmp_path / "out"), str(index_map)], capture_output=True, text=True)
+    assert run.returncode != 0
+    assert "no entry for: NH_9" in run.stderr
+
+
+def test_driver_flags_match_workflow():
+    smk = (REPO / "workflows" / "validation.smk").read_text()
+    match = re.search(r"VALIDATION_END_SETTINGS = \{(.*?)\}", smk, re.S)
+    assert match
+    block = match.group(1)
+    workflow = dict(re.findall(r'"(\w+)": "([^"]*)"', block))
+    driver = (REPO / "scripts" / "emseq_validation_settings_cohort.sh").read_text()
+    match = re.search(r"declare -A FLAGS=\((.*)\)", driver)
+    assert match
+    line = match.group(1)
+    flags = dict(re.findall(r'\[(\w+)\]="([^"]*)"', line))
+    assert flags == workflow
+#+end_src
+
+**** Tests of the values script
+
+#+begin_src python :tangle ./tests/unit/test_validation_settings_values.py
+"""Tests for scripts/emseq_validation_settings_values.py on constructed tables."""
+import importlib.util
+import json
+from pathlib import Path
+
+import pytest
+
+SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "emseq_validation_settings_values.py"
+spec = importlib.util.spec_from_file_location("settings_values", SCRIPT)
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+
+
+def write(path: Path, header: list, rows: list) -> None:
+    path.write_text("\t".join(header) + "\n" + "".join("\t".join(map(str, r)) + "\n" for r in rows))
+
+
+@pytest.fixture
+def folder(tmp_path):
+    glob = []
+    for lib, group, base in ((1, "healthy", 78.0), (2, "patient", 74.0), (3, "patient", 76.0)):
+        for s, add in (("none", 0.0), ("neb", 1.0), ("all10", 1.5)):
+            glob.append([lib, s, 100, 1, 1, base + add, group])
+    write(tmp_path / "global.tsv", ["library_index", "setting", "positions", "meth", "unmeth", "pct", "group"], glob)
+    diff = [["neb minus none", 3, 1.0, 0.9, 1.1], ["all10 minus none", 3, 1.5, 1.4, 1.6],
+            ["all10 minus neb", 3, 0.5, 0.4, 0.6]]
+    diff += [[f"patient minus healthy, {s}", 3, -3.0, -4.0, -2.0] for s in ("none", "neb", "all10")]
+    diff += [["patient minus healthy, of neb minus none", 3, -0.123, -0.2, -0.05],
+             ["patient minus healthy, of all10 minus none", 3, -0.15, -0.25, -0.04]]
+    write(tmp_path / "global_diff.tsv", ["comparison", "n", "estimate", "lower", "upper"], diff)
+    write(tmp_path / "tiles.tsv", ["setting", "tiles_tested", "called_q01_d25", "called_q05_d10"],
+          [["none", 1000, 10, 100], ["neb", 1000, 11, 105], ["all10", 999, 14, 120]])
+    header = ["comparison", "q", "min_diff", "tiles_shared", "tiles_only_first", "tiles_only_second", "r_meth_diff",
+              "median_abs_change", "max_abs_change", "called_first", "called_second", "called_both", "jaccard",
+              "sign_differs"]
+    pairs = [["neb against none", 0.01, 25, 1000, 0, 0, 0.9978, 0.08, 20, 11, 10, 9, 0.75, 0],
+             ["neb against none", 0.05, 10, 1000, 0, 0, 0.9978, 0.08, 20, 105, 100, 95, 0.8636, 1],
+             ["all10 against none", 0.01, 25, 999, 0, 1, 0.988, 0.15, 30, 14, 10, 7, 0.4118, 0],
+             ["all10 against none", 0.05, 10, 999, 0, 1, 0.988, 0.15, 30, 120, 100, 90, 0.6923, 2],
+             ["all10 against neb", 0.01, 25, 999, 0, 1, 0.99, 0.1, 30, 14, 11, 8, 0.47, 5]]
+    write(tmp_path / "tiles_pair.tsv", header, pairs)
+    return tmp_path
+
+
+def test_counts_and_global_means(folder):
+    v = mod.settings_values(folder)
+    assert (v["n_libraries"], v["n_patients"], v["n_healthy"]) == (3, 2, 1)
+    assert v["global_mean_none_pct"] == 76.0
+    assert v["global_mean_all10_pct"] == 77.5
+
+
+def test_intervals_and_group_shift(folder):
+    v = mod.settings_values(folder)
+    assert (v["shift_neb_points"], v["shift_neb_points_lower"], v["shift_neb_points_upper"]) == (1.0, 0.9, 1.1)
+    assert v["group_shift_neb_points"] == -0.12
+    assert v["group_diff_all10_points_lower"] == -4.0
+
+
+def test_tiles_against_none_only(folder):
+    v = mod.settings_values(folder)
+    assert v["called_q01_d25_all10"] == 14
+    assert v["tiles_tested_none_text"] == "1,000"
+    assert v["called_both_q05_d10_neb"] == 95
+    assert v["jaccard_q01_d25_all10_pct"] == 41.2
+    assert v["r_meth_diff_neb"] == 0.998
+    # the all10-against-neb row (5 sign changes) is not a comparison against none
+    assert v["sign_differs_vs_none"] == 3
+
+
+def test_missing_setting_row_is_an_error(folder):
+    rows = (folder / "global.tsv").read_text().splitlines()
+    (folder / "global.tsv").write_text("\n".join(r for r in rows if not r.startswith("1\tneb")) + "\n")
+    with pytest.raises(ValueError, match="setting neb"):
+        mod.settings_values(folder)
+
+
+def test_main_writes_values_json(folder):
+    assert mod.main([str(folder)]) == 0
+    assert json.loads((folder / "values.json").read_text())["tiles_tested_none"] == 1000
+    assert mod.main([]) == 2
+#+end_src
+
 ** Reference
 :PROPERTIES:
 :ID:       9bfe7d90-1d29-4d71-80be-d1b69d09ecf5
@@ -8321,7 +9008,7 @@ The host reference (ncbi_decoy_hg38) holds no spike-in genome, so a lambda or pU
 
 ** TODO Correct jagged-end fill-in methylation loss (next release after wf/emseq/v5.1.0)
 
-End repair fills cfDNA 5′ overhangs with unmethylated C, which lowers measured CpG methylation at each strand's 3′ end, more in cancer than in controls [cite:@wang2026jeepers]. The pipeline applies no read-end correction (fastp adapter trimming only, =MethylDackel extract= without =--OT=/=--OB= bounds). Add JEEPERS sibling-mode correction on the filtered bwa-meth BAMs before methylation extraction (https://code.stanford.edu/alizadeh-diehn/jeepers), and revise the M-bias section to add 3′ fill-in as a mechanism and drop the claim that its effect on DMR calling is small at WGS depth. The breast 2nd-line cohort (n = 55, median 28.9× from mapped reads) is above the ~9× the correction needs.
+End repair fills cfDNA 5′ overhangs with unmethylated C, which lowers measured CpG methylation at each strand's 3′ end, more in cancer than in controls [cite:@wang2026jeepers]. The pipeline excludes only the first five bases of read 2 at calling (the NEB options, =--nOT 0,0,0,5 --nOB 0,0,5,0=), which leaves most of the loss in the counts ([[*Read-end handling][Read-end handling]]). Add JEEPERS sibling-mode correction on the filtered bwa-meth BAMs before methylation extraction (https://code.stanford.edu/alizadeh-diehn/jeepers), and revise the M-bias section to add 3′ fill-in as a mechanism and drop the claim that its effect on DMR calling is small at WGS depth. The breast 2nd-line cohort (n = 55, median 28.9× from mapped reads) is above the ~9× the correction needs.
 
 Integration plan. JEEPERS is called as an external tool from a new =emseq_jeepers.smk= module, and only the adapters around it are written here. Its license makes any derivative work Stanford property and limits use to non-commercial research (LICENSE §2.3-2.4), so the scripts are run unmodified from a pinned clone and are not vendored into this repo. It needs its own conda env (Python 3.9.7, pysam 0.19, samtools 1.18, bedtools 2.31).
 1. Tag sibling read pairs on the dupsifter-deduplicated, filtered bwa-meth BAM with =bamFormatChange.py=. Our libraries carry no UMIs, so only sibling mode applies.
@@ -8332,6 +9019,42 @@ Integration plan. JEEPERS is called as an external tool from a new =emseq_jeeper
 
 Test result [2026-11-21 Sat]. JEEPERS in sibling mode was run unmodified on chr22 of one deep plasma library (emseq_09, 828,778 fragments in and out, blocks capped at 30,000 CpGs), scored against the opposite strand of the same molecule held out of its input. In the 10 bases nearest the 3′ end, 5′ minus 3′ methylation fell from 39.1 points to 1.8 (=-m 0.9=), and agreement with the opposite strand rose from 61.5% of 872 calls to 84.4% of 865 (difference 22.9 points, 95% interval 18.8 to 26.9). At the CpGs JEEPERS marks, its calls agreed with the opposite strand in 71.4% of 1,137, against 74.3% of 1,157 for a majority call over the other fragments at the locus (difference −2.9, −6.5 to 0.7), so a gain from its anchor matching over the majority call was not detected at this n. On the pUC19 control, 50 draws pooled to 3,474 fragments, methylation at bases 1–10 was 90.3% uncorrected and 99.8% after correction against 97.0% and 99.1% mid-fragment; on lambda it stayed at 0.9–1.0% of 50,125 calls. Four bars were met in the second run and the pUC19 bar under the pooled rule, both declared changes to the design. Whole-genome run time and the effect of the block cap on the calls were not measured. Report: [[file:docs/reports/2026-11-20-jeepers-test.md]]; tables in =results/jeepers-test-plasma-spiked/=.
 
+** TODO Share EM-seq read-end handling at the Chaudhuri lab meeting [0/8] :sci_present:protocol:
+:PROPERTIES:
+:ID:       f9913719-0ab6-4b39-b7b0-89e9000f746a
+:VENUE:    [[id:fa0c5d04-6f81-4c8a-b269-113b49e94270][Chaudhuri weekly lab meeting]]
+:TIER:     lab meeting
+:LENGTH:   10
+:SLIDES:   8
+:END:
+
+- [ ] Gather source material
+  - [[file:METHOD.md][METHOD.md]] Read-end handling: spike-in controls, plasma strand-end tally, the 55-library breast cohort comparison of three read-end settings, and the NEB read-2 bounds as the pipeline default
+  - Figures: [[file:resources/figures/validation_end_handling_plasma-spiked.png][spike-in controls by read end]], [[file:resources/figures/validation_fragment_end_plasma-pilot.png][plasma strand-end tally]]
+  - Tables: [[file:results/end-handling-breast-full-depth/][breast cohort settings comparison]]
+  - [[file:docs/reports/2026-11-20-jeepers-test.md][JEEPERS test report]], for the per-fragment correction as the next step
+- [ ] Draft the outline
+  - Start with the punchline
+  - Panel and slide titles name the subject in plain words; the one-sentence finding goes in the first body line, never in the title
+  - Uses only analyses already recorded in the emseq repo; an analysis that comes up while drafting is written into the repo before it goes on a slide
+  - Script lines in quotation marks
+- [ ] Build the deck
+  - Follow the presentation development process in latex.org
+  - Create the visual content the outline calls for
+- [ ] Revise
+  - Cut detail that does not serve the message
+  - Check the assumed domain knowledge fits this audience
+  - Every slide gets a purpose: synopsis, pacing, substantiating a verbal claim, or capturing interest
+  - Slides substantiate the script; the script does not narrate the slides
+- [ ] Finalize
+  - Typos, abbreviations defined, image resolution and placement
+  - No IMRaD section headings
+  - Hedging language and loaded value terms removed
+- [ ] Practice for delivery and timing
+- [ ] Day before: split into what gets delivered and what gets shared
+- [ ] Present
+  - Kazam recording
+  - Log the presentation into Zotero
 ** Ideas
 - Standardized bench protocol
   - Pradeeps protocol mods - [[https://mail.google.com/mail/u/0/#inbox/FMfcgzQVxlRMrkdpbmdDQwTpXqLNjKdM][gmail]]

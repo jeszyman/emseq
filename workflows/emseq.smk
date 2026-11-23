@@ -31,6 +31,13 @@ EMSEQ_PAIR_FILTER = (
     " && ((!flag.reverse && tlen > 0) || (flag.reverse && tlen < 0))"
     " && tlen >= -1000 && tlen <= 1000"
 )
+
+# Bases excluded from methylation calls (MethylDackel --nOT/--nOB): the first
+# five sequenced bases of read 2, which start at the 3' end of the original
+# strand that end repair fills in with unmethylated C. These are the NEB EM-seq
+# pipeline's options; tests/unit/test_methyldackel_bounds.py pins what they
+# exclude on constructed read pairs.
+EMSEQ_CALL_BOUNDS = "--nOT 0,0,0,5 --nOB 0,0,5,0"
 # ── Spike-in Controls ────────────────────────────────────────────────────────
 # Align to pUC19 (methylated) and Lambda (unmethylated) for conversion QC.
 # Duplicates are retained — every read contributes to conversion rate estimation.
@@ -76,7 +83,8 @@ rule emseq_methyldackel_spike:
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_methyldackel_spike.tsv"
     params:
-        out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0]
+        out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0],
+        bounds     = EMSEQ_CALL_BOUNDS,
     threads: 8
     output:
         bed = f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_methyldackel_CpG.methylKit",
@@ -85,12 +93,13 @@ rule emseq_methyldackel_spike:
         exec &>> "{log.cmd}"
         echo "[methyldackel-spike] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
         mkdir -p "$(dirname "{params.out_prefix}")"
-        # --keepDiscordant: count pairs without the proper-pair flag, as the
-        # host calling does
+        # --keepDiscordant: count pairs without the proper-pair flag, and
+        # exclude the same read-2 bases, as the host calling does
         MethylDackel extract \
           -@ {threads} \
           --methylKit \
           --keepDiscordant \
+          {params.bounds} \
           "{input.fasta}" \
           "{input.bam}" \
           -o "{params.out_prefix}"
@@ -463,7 +472,8 @@ rule emseq_methyldackel:
     benchmark:
         f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}.{{align_method}}_emseq_methyldackel.tsv"
     params:
-        out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0]
+        out_prefix = lambda wc, input, output: output.bed.rsplit("_CpG.methylKit", 1)[0],
+        bounds     = EMSEQ_CALL_BOUNDS,
     threads: 8
     resources:
         concurrency = 25
@@ -479,6 +489,7 @@ rule emseq_methyldackel:
           -@ {threads} \
           --methylKit \
           --keepDiscordant \
+          {params.bounds} \
           "{input.fasta}" \
           "{input.bam}" \
           -o "{params.out_prefix}"

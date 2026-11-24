@@ -25,9 +25,11 @@
 # mates on the same chromosome, facing inward, fragment <= 1000 bp. This
 # replaces the proper-pair flag (0x2), which bwa-meth sets from an insert-size
 # distribution inferred per library; on cfDNA it stops at about 270-280 bp and
-# a `-f 2` filter drops every dinucleosome-length fragment.
+# a `-f 2` filter drops every dinucleosome-length fragment. In samtools
+# expressions flag.reverse is 16 and flag.mreverse is 32 when set, so the
+# strands are compared after negation, which turns each into 0 or 1.
 EMSEQ_PAIR_FILTER = (
-    "mrname == rname && flag.reverse != flag.mreverse"
+    "mrname == rname && !flag.reverse != !flag.mreverse"
     " && ((!flag.reverse && tlen > 0) || (flag.reverse && tlen < 0))"
     " && tlen >= -1000 && tlen <= 1000"
 )
@@ -384,15 +386,16 @@ rule emseq_dedup:
         exec >> "{log.cmd}" 2>&1
         echo "[dedup] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
         mkdir -p "$(dirname "{params.temp_prefix}")"
-        rm -f {params.temp_prefix}.tmp.*
-        # Both mates mapped and passing EMSEQ_PAIR_FILTER before name-sorting for dupsifter
+        rm -f {params.temp_prefix}.nsort.tmp.* {params.temp_prefix}.csort.tmp.*
+        # Both mates mapped and passing EMSEQ_PAIR_FILTER before name-sorting for dupsifter.
+        # The two sorts run at once in this pipe, so each has its own temporary-file prefix.
         samtools view -bh -f 1 -F 12 -e '{params.pair_filter}' "{input.bam}" \
-        | samtools sort -n -@ {threads} -O BAM -T "{params.temp_prefix}.tmp" -o - \
+        | samtools sort -n -@ {threads} -O BAM -T "{params.temp_prefix}.nsort.tmp" -o - \
         | dupsifter \
         --add-mate-tags \
         --stats-output "{log.cmd}.dupsifter.tsv" \
         "{input.fasta}" - \
-        | samtools sort -@ {threads} -O BAM -T "{params.temp_prefix}.tmp" -o "{output.bam}"
+        | samtools sort -@ {threads} -O BAM -T "{params.temp_prefix}.csort.tmp" -o "{output.bam}"
         samtools index -@ {threads} "{output.bam}"
         """
 rule emseq_filter_bam:

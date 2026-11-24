@@ -1335,9 +1335,11 @@ The method text is under [[id:065c6944-8708-4da2-b855-f849dbd669f1][Method]].
 # mates on the same chromosome, facing inward, fragment <= 1000 bp. This
 # replaces the proper-pair flag (0x2), which bwa-meth sets from an insert-size
 # distribution inferred per library; on cfDNA it stops at about 270-280 bp and
-# a `-f 2` filter drops every dinucleosome-length fragment.
+# a `-f 2` filter drops every dinucleosome-length fragment. In samtools
+# expressions flag.reverse is 16 and flag.mreverse is 32 when set, so the
+# strands are compared after negation, which turns each into 0 or 1.
 EMSEQ_PAIR_FILTER = (
-    "mrname == rname && flag.reverse != flag.mreverse"
+    "mrname == rname && !flag.reverse != !flag.mreverse"
     " && ((!flag.reverse && tlen > 0) || (flag.reverse && tlen < 0))"
     " && tlen >= -1000 && tlen <= 1000"
 )
@@ -1860,15 +1862,16 @@ rule emseq_dedup:
         exec >> "{log.cmd}" 2>&1
         echo "[dedup] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} aln={wildcards.align_method} threads={threads}"
         mkdir -p "$(dirname "{params.temp_prefix}")"
-        rm -f {params.temp_prefix}.tmp.*
-        # Both mates mapped and passing EMSEQ_PAIR_FILTER before name-sorting for dupsifter
+        rm -f {params.temp_prefix}.nsort.tmp.* {params.temp_prefix}.csort.tmp.*
+        # Both mates mapped and passing EMSEQ_PAIR_FILTER before name-sorting for dupsifter.
+        # The two sorts run at once in this pipe, so each has its own temporary-file prefix.
         samtools view -bh -f 1 -F 12 -e '{params.pair_filter}' "{input.bam}" \
-        | samtools sort -n -@ {threads} -O BAM -T "{params.temp_prefix}.tmp" -o - \
+        | samtools sort -n -@ {threads} -O BAM -T "{params.temp_prefix}.nsort.tmp" -o - \
         | dupsifter \
         --add-mate-tags \
         --stats-output "{log.cmd}.dupsifter.tsv" \
         "{input.fasta}" - \
-        | samtools sort -@ {threads} -O BAM -T "{params.temp_prefix}.tmp" -o "{output.bam}"
+        | samtools sort -@ {threads} -O BAM -T "{params.temp_prefix}.csort.tmp" -o "{output.bam}"
         samtools index -@ {threads} "{output.bam}"
         """
 #+end_src
@@ -5430,11 +5433,17 @@ At equal distance from the 3' end, calls made by read 1 were {{{val(end-handling
 #+caption: *Plasma reads lose methylation over tens of bases at the 3' end of the original strand.* CpG methylation by distance from the 5' and 3' ends of the original strand, on fragments of 160 bp or longer, counted once per fragment. Thick lines pool the libraries and thin lines are single libraries. Plasma, n = 7 libraries. pUC19, n = 1 library. Bands are 95% Wilson intervals.
 [[file:resources/figures/validation_fragment_end_plasma-pilot.png]]
 
+The measures were repeated on public EM-seq data from another laboratory, four NEB libraries of BioProject PRJNA591788 [cite:@vaisvila2021]: two of NA12878 genomic DNA sheared before library preparation and two of plasma cfDNA, all carrying lambda and pUC19. The controls were tallied on all read pairs and the human reads on a seeded subsample of 30 million read pairs per library. On pUC19, CpG methylation at the base that begins read 2 was {{{val(end-handling-public-sheared-controls,puc19_r2_start_position1_pct,%.1f)}}}% in the sheared-DNA libraries and {{{val(end-handling-public-cfdna-controls,puc19_r2_start_position1_pct,%.1f)}}}% in the cfDNA libraries, compared to {{{val(end-handling-public-sheared-controls,puc19_r2_start_reference_pct,%.1f)}}}% and {{{val(end-handling-public-cfdna-controls,puc19_r2_start_reference_pct,%.1f)}}}% in the middle of the read. On human reads the length of the 3' loss depended on the source of the DNA ([[fig-end-handling-public-strand-ends]]). In the sheared DNA, the difference between the 5' and 3' ends was {{{val(end-handling-public-sheared-host,host_loss_points_d10,%.1f)}}} points at base 10 and exceeded 5 points over {{{val(end-handling-public-sheared-host,host_loss_run)}}} bases, and the NEB options left {{{val(end-handling-public-sheared-host,host_kept_neb_pct,%.1f)}}}% of the calls in those bases in the counts. In the cfDNA, the difference was {{{val(end-handling-public-cfdna-host,host_loss_points_d10,%.1f)}}} points at base 10, {{{val(end-handling-public-cfdna-host,host_loss_points_d30,%.1f)}}} at base 30, and {{{val(end-handling-public-cfdna-host,host_loss_points_d80,%.1f)}}} at base 80, the end of the measured range, and the NEB options left {{{val(end-handling-public-cfdna-host,host_kept_neb_pct,%.1f)}}}% of the calls within 80 bases of the 3' end in the counts. Part of the difference far from the end came from the 5' side: in the cfDNA, methylation 10 bases from the 5' end was {{{val(end-handling-public-cfdna-host,host_p5_pct_d10,%.1f)}}}%, compared to {{{val(end-handling-public-cfdna-host,host_global_none_all_calls_pct,%.1f)}}}% over all calls. The NEB options raised global CpG methylation by {{{val(end-handling-public-cfdna-host,host_global_all_calls_diff_neb_points,%.2f)}}} points in the cfDNA and {{{val(end-handling-public-sheared-host,host_global_all_calls_diff_neb_points,%.2f)}}} points in the sheared DNA. The long 3' loss of the pilot plasma libraries thus recurred in cfDNA prepared in another laboratory and was limited to a few bases in sheared genomic DNA prepared with the same kit.
+
+#+name: fig-end-handling-public-strand-ends
+#+caption: *In public EM-seq data, the 3' loss extends over tens of bases in cfDNA and over a few bases in sheared genomic DNA.* CpG methylation by distance from the 5' and 3' ends of the original strand, on fragments of 160 bp or longer, from a seeded subsample of 30 million read pairs per library. NEB libraries of BioProject PRJNA591788: cfDNA, n = 2 libraries; sheared NA12878 DNA, n = 2 libraries. Each line pools the two libraries of one kind.
+[[file:resources/figures/validation_fragment_end_public-cfdna-host.png]]
+
 The two masks were also compared on a cohort large enough to show whether the change they make to the counts reaches a comparison between groups. We called {{{val(end-handling-breast-full-depth,n_libraries)}}} plasma cfDNA libraries of a breast cancer study with all aligned reads, {{{val(end-handling-breast-full-depth,n_patients)}}} from patients in a second-line breast cancer cohort and {{{val(end-handling-breast-full-depth,n_healthy)}}} from healthy donors, once with all positions counted, once with the NEB options, and once with the 10-base mask. Global CpG methylation over autosomal calls rose by {{{val(end-handling-breast-full-depth,shift_neb_points,%.2f)}}} points (95% interval {{{val(end-handling-breast-full-depth,shift_neb_points_lower,%.2f)}}} to {{{val(end-handling-breast-full-depth,shift_neb_points_upper,%.2f)}}}) with the NEB options and by {{{val(end-handling-breast-full-depth,shift_all10_points,%.2f)}}} points ({{{val(end-handling-breast-full-depth,shift_all10_points_lower,%.2f)}}} to {{{val(end-handling-breast-full-depth,shift_all10_points_upper,%.2f)}}}) with the 10-base mask (paired t test over libraries). The rise in patients minus the rise in healthy donors was {{{val(end-handling-breast-full-depth,group_shift_neb_points,%.2f)}}} points ({{{val(end-handling-breast-full-depth,group_shift_neb_points_lower,%.2f)}}} to {{{val(end-handling-breast-full-depth,group_shift_neb_points_upper,%.2f)}}}) and {{{val(end-handling-breast-full-depth,group_shift_all10_points,%.2f)}}} points ({{{val(end-handling-breast-full-depth,group_shift_all10_points_lower,%.2f)}}} to {{{val(end-handling-breast-full-depth,group_shift_all10_points_upper,%.2f)}}}) by Welch's t test. The patient minus healthy difference in global methylation was therefore {{{val(end-handling-breast-full-depth,group_diff_none_points,%.2f)}}} points ({{{val(end-handling-breast-full-depth,group_diff_none_points_lower,%.2f)}}} to {{{val(end-handling-breast-full-depth,group_diff_none_points_upper,%.2f)}}}) with all positions counted, {{{val(end-handling-breast-full-depth,group_diff_neb_points,%.2f)}}} with the NEB options, and {{{val(end-handling-breast-full-depth,group_diff_all10_points,%.2f)}}} with the 10-base mask.
 
 Differentially methylated 10 kb tiles were then called between the two groups with methylKit [cite:@akalin2012methylkit], with the breast study's coverage of at least 10 and at least 3 libraries per group, on {{{val(end-handling-breast-full-depth,tiles_tested_none_text)}}} tiles. The methylation difference of each tile correlated with its value under all positions counted at r = {{{val(end-handling-breast-full-depth,r_meth_diff_neb)}}} for the NEB options and r = {{{val(end-handling-breast-full-depth,r_meth_diff_all10)}}} for the 10-base mask, and no tile called under two settings had differences of opposite sign. The masks called more tiles, however. At a q-value below 0.01 and a difference of at least 25 points, {{{val(end-handling-breast-full-depth,called_q01_d25_none)}}} tiles were called with all positions counted, {{{val(end-handling-breast-full-depth,called_q01_d25_neb)}}} with the NEB options, and {{{val(end-handling-breast-full-depth,called_q01_d25_all10)}}} with the 10-base mask, and the calls shared with all positions counted were {{{val(end-handling-breast-full-depth,jaccard_q01_d25_neb_pct,%.0f)}}}% and {{{val(end-handling-breast-full-depth,jaccard_q01_d25_all10_pct,%.0f)}}}% of the union of the two call sets. At a q-value below 0.05 and a difference of at least 10 points, the counts were {{{val(end-handling-breast-full-depth,called_q05_d10_none_text)}}}, {{{val(end-handling-breast-full-depth,called_q05_d10_neb_text)}}}, and {{{val(end-handling-breast-full-depth,called_q05_d10_all10_text)}}}, and the shares {{{val(end-handling-breast-full-depth,jaccard_q05_d10_neb_pct,%.0f)}}}% and {{{val(end-handling-breast-full-depth,jaccard_q05_d10_all10_pct,%.0f)}}}%. Excluding read ends thus moved the group difference in global methylation by less than a fifth of a point, but it changed which tiles a study of this size reports, by about half of the strict call set for the 10-base mask. The cohort comes from one study, the 3' loss itself was not measured in it, and both masks leave most of the loss in the counts, so the effect of the full loss on a group comparison is not known from it.
 
-The pipeline excludes the NEB bases, which lie in the filled-in 3' end, and does not use the 10-base mask, which also removes correctly called bases at the 5' ends. The rest of the 3' loss stays in the counts.
+The pipeline excludes the NEB bases, which lie in the filled-in 3' end, and does not use the 10-base mask, which also removes correctly called bases at the 5' ends. The rest of the 3' loss stays in the counts. JEEPERS, which corrects the calls at filled-in 3' ends from other fragments that cover the same CpGs, was tested on chromosome 22 of one deep plasma library. Within 10 bases of the 3' end, the share of calls that agreed with the call on the partner strand of the same fragment rose from 61.5% to 84.4% (difference 22.9 points, 95% interval 18.8 to 26.9), with every call kept ([[file:results/jeepers-test-plasma-spiked/second-run/opposite_strand.tsv][results/jeepers-test-plasma-spiked/second-run/opposite_strand.tsv]]). Its run time and memory on a whole genome have not been measured.
 **** Pairs without the proper-pair flag
 
 BWA-MEM sets the proper-pair flag from a range of fragment lengths that it infers for each batch of reads. In a plasma library that range is narrow, because most fragments are close to 167 bp, and pairs from longer fragments are left unflagged although they are correctly placed. A filter on the flag then removes the fragments of two nucleosomes and longer. The pipeline tests each pair directly, for the same chromosome, inward orientation, and a fragment of at most 1,000 bp, in both the duplicate-marking rule and the filtering rule ([[file:tests/unit/test_pair_filter.py][tests/unit/test_pair_filter.py]]).
@@ -8930,6 +8939,251 @@ def test_main_writes_values_json(folder):
     assert mod.main([str(folder)]) == 0
     assert json.loads((folder / "values.json").read_text())["tiles_tested_none"] == 1000
     assert mod.main([]) == 2
+#+end_src
+
+*** Public EM-seq runs (PRJNA591788)
+
+Configs for the read-end validation on four public EM-seq runs from NEB, BioProject PRJNA591788 [cite:@vaisvila2021]: two libraries of sheared NA12878 DNA at 200 ng input (SRR10532144, SRR10532145, 324 M read pairs each) and two cfDNA libraries at 10 ng input (SRR13076817, 410 M pairs; SRR13076816, 447 M pairs). The libraries carry unmethylated lambda and CpG-methylated pUC19. The reads are held in the lab bucket, outside the repository. The validation runs twice on jeff-ubuntu8: the controls pass aligns all read pairs of each run to lambda and pUC19, and the host pass aligns a seeded 30 M-pair subsample of each run to hg38. Each pass is reported separately for the sheared DNA and the cfDNA, because the 3' loss differs between the two kinds of fragment end. The two configs of one pass share a data directory, so the alignments are made once and each config writes its own result folder.
+
+#+name: validation-public-sheared-controls-config
+#+begin_src yaml :tangle ./config/validation-public-sheared-controls.yaml
+# Config for the emseq validation wrapper: controls pass on the public sheared NA12878 DNA runs (PRJNA591788).
+# Tangled from emseq.org; do not edit directly.
+# Run on jeff-ubuntu8 from ~/repos/emseq:
+#   snakemake -s workflows/validation.smk --configfile config/validation-public-sheared-controls.yaml --use-conda
+
+available-concurrency: 64
+main-data-dir: /mnt/data/projects/emseq-validation-public/controls
+
+envs:
+  emseq: ~/repos/emseq/config/emseq-conda-env.yaml
+  methylkit: ~/repos/emseq/config/methylkit-conda-env.yaml
+repos:
+  emseq: ~/repos/emseq
+
+# Every read pair of each run
+library-ids:
+  - SRR10532144
+  - SRR10532145
+
+keep-bed: /mnt/data/projects/emseq-validation-public/inputs/hg38_autosomes.bed
+exclude-bed: /mnt/data/projects/emseq-validation-public/inputs/hg38-blacklist.v2.sorted.bed.gz
+
+emseq_ref_assemblies:
+  ncbi_decoy_hg38:
+    name: ncbi_decoy_hg38
+    input: GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fa.gz
+  unmeth_lambda:
+    name: unmeth_lambda
+    input: Lambda_NEB.fa.gz
+  puc19:
+    name: puc19
+    input: pUC19.fa.gz
+
+validation-dataset: public-sheared-controls
+validation-host-ref: ncbi_decoy_hg38
+# Both controls are tallied by distance from the strand ends
+validation-fragment-end-sources: [puc19, unmeth_lambda]
+validation-library-index:
+  SRR10532144: 1
+  SRR10532145: 2
+#+end_src
+
+#+name: validation-public-cfdna-controls-config
+#+begin_src yaml :tangle ./config/validation-public-cfdna-controls.yaml
+# Config for the emseq validation wrapper: controls pass on the public cfDNA runs (PRJNA591788).
+# Tangled from emseq.org; do not edit directly.
+# Run on jeff-ubuntu8 from ~/repos/emseq:
+#   snakemake -s workflows/validation.smk --configfile config/validation-public-cfdna-controls.yaml --use-conda
+
+available-concurrency: 64
+main-data-dir: /mnt/data/projects/emseq-validation-public/controls
+
+envs:
+  emseq: ~/repos/emseq/config/emseq-conda-env.yaml
+  methylkit: ~/repos/emseq/config/methylkit-conda-env.yaml
+repos:
+  emseq: ~/repos/emseq
+
+# Every read pair of each run
+library-ids:
+  - SRR13076816
+  - SRR13076817
+
+keep-bed: /mnt/data/projects/emseq-validation-public/inputs/hg38_autosomes.bed
+exclude-bed: /mnt/data/projects/emseq-validation-public/inputs/hg38-blacklist.v2.sorted.bed.gz
+
+emseq_ref_assemblies:
+  ncbi_decoy_hg38:
+    name: ncbi_decoy_hg38
+    input: GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fa.gz
+  unmeth_lambda:
+    name: unmeth_lambda
+    input: Lambda_NEB.fa.gz
+  puc19:
+    name: puc19
+    input: pUC19.fa.gz
+
+validation-dataset: public-cfdna-controls
+validation-host-ref: ncbi_decoy_hg38
+# Both controls are tallied by distance from the strand ends
+validation-fragment-end-sources: [puc19, unmeth_lambda]
+validation-library-index:
+  SRR13076816: 1
+  SRR13076817: 2
+#+end_src
+
+#+name: validation-public-sheared-host-config
+#+begin_src yaml :tangle ./config/validation-public-sheared-host.yaml
+# Config for the emseq validation wrapper: host pass on the public sheared NA12878 DNA runs (PRJNA591788).
+# Tangled from emseq.org; do not edit directly.
+# Run on jeff-ubuntu8 from ~/repos/emseq:
+#   snakemake -s workflows/validation.smk --configfile config/validation-public-sheared-host.yaml --use-conda
+
+available-concurrency: 64
+main-data-dir: /mnt/data/projects/emseq-validation-public/host
+
+envs:
+  emseq: ~/repos/emseq/config/emseq-conda-env.yaml
+  methylkit: ~/repos/emseq/config/methylkit-conda-env.yaml
+repos:
+  emseq: ~/repos/emseq
+
+# A seeded 30 M-pair subsample of each run (seqtk sample -s 20261123)
+library-ids:
+  - SRR10532144_s30m
+  - SRR10532145_s30m
+
+keep-bed: /mnt/data/projects/emseq-validation-public/inputs/hg38_autosomes.bed
+exclude-bed: /mnt/data/projects/emseq-validation-public/inputs/hg38-blacklist.v2.sorted.bed.gz
+
+emseq_ref_assemblies:
+  ncbi_decoy_hg38:
+    name: ncbi_decoy_hg38
+    input: GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fa.gz
+  unmeth_lambda:
+    name: unmeth_lambda
+    input: Lambda_NEB.fa.gz
+  puc19:
+    name: puc19
+    input: pUC19.fa.gz
+
+validation-dataset: public-sheared-host
+validation-host-ref: ncbi_decoy_hg38
+validation-fragment-end-sources: [host]
+validation-compare-settings: true
+validation-library-index:
+  SRR10532144_s30m: 1
+  SRR10532145_s30m: 2
+#+end_src
+
+#+name: validation-public-cfdna-host-config
+#+begin_src yaml :tangle ./config/validation-public-cfdna-host.yaml
+# Config for the emseq validation wrapper: host pass on the public cfDNA runs (PRJNA591788).
+# Tangled from emseq.org; do not edit directly.
+# Run on jeff-ubuntu8 from ~/repos/emseq:
+#   snakemake -s workflows/validation.smk --configfile config/validation-public-cfdna-host.yaml --use-conda
+
+available-concurrency: 64
+main-data-dir: /mnt/data/projects/emseq-validation-public/host
+
+envs:
+  emseq: ~/repos/emseq/config/emseq-conda-env.yaml
+  methylkit: ~/repos/emseq/config/methylkit-conda-env.yaml
+repos:
+  emseq: ~/repos/emseq
+
+# A seeded 30 M-pair subsample of each run (seqtk sample -s 20261123)
+library-ids:
+  - SRR13076816_s30m
+  - SRR13076817_s30m
+
+keep-bed: /mnt/data/projects/emseq-validation-public/inputs/hg38_autosomes.bed
+exclude-bed: /mnt/data/projects/emseq-validation-public/inputs/hg38-blacklist.v2.sorted.bed.gz
+
+emseq_ref_assemblies:
+  ncbi_decoy_hg38:
+    name: ncbi_decoy_hg38
+    input: GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fa.gz
+  unmeth_lambda:
+    name: unmeth_lambda
+    input: Lambda_NEB.fa.gz
+  puc19:
+    name: puc19
+    input: pUC19.fa.gz
+
+validation-dataset: public-cfdna-host
+validation-host-ref: ncbi_decoy_hg38
+validation-fragment-end-sources: [host]
+validation-compare-settings: true
+# Strand-end figure: the cfDNA reads beside the sheared-DNA reads of the same project
+validation-fragment-figure:
+  - source: host
+    label: "cfDNA, 2 libraries"
+  - dataset: public-sheared-host
+    source: host
+    label: "Sheared NA12878 DNA, 2 libraries"
+validation-library-index:
+  SRR13076816_s30m: 1
+  SRR13076817_s30m: 2
+#+end_src
+
+The inputs of both passes are prepared on jeff-ubuntu8 by the script below: the hg38 analysis set from NCBI with its MD5 checked against NCBI's list, the control references from the repository's test inputs, the autosome and blacklist BEDs, read-only links from the controls pass to the bucket copy, and the subsample, drawn with the same seed for both mates so the pairs stay matched.
+
+#+name: validation-public-prep
+#+begin_src bash :tangle no
+#!/usr/bin/env bash
+set -euo pipefail
+export PATH=/snap/bin:/opt/conda/bin:$PATH
+RUNS=(SRR10532144 SRR10532145 SRR13076816 SRR13076817)
+BUCKET=/mnt/gcs/jeszyman/data/public-emseq/PRJNA591788
+ROOT=/mnt/data/projects/emseq-validation-public
+NCBI=https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids
+HG38=GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set
+SEED=20261123; PAIRS=30000000
+REPO=$HOME/repos/emseq
+
+git -C "$REPO" pull --ff-only -q
+mkdir -p "$ROOT"/{inputs,ref,tmp} "$ROOT"/controls/emseq/fastqs "$ROOT"/host/emseq/fastqs
+export TMPDIR=$ROOT/tmp
+
+cd "$ROOT/inputs"
+if [[ ! -s $HG38.fa.gz ]]; then
+  curl -sSf "$NCBI/$HG38.fna.gz" -o "$HG38.fa.gz.part"
+  want=$(curl -sSf "$NCBI/md5checksums.txt" | awk -v f="./$HG38.fna.gz" '$2 == f {print $1}')
+  got=$(md5sum "$HG38.fa.gz.part" | cut -d' ' -f1)
+  [[ -n $want && $got == "$want" ]] || { echo "hg38 MD5 mismatch: $got vs $want" >&2; exit 1; }
+  mv "$HG38.fa.gz.part" "$HG38.fa.gz"
+fi
+cp -f "$REPO/tests/full/inputs/lambda.fa.gz" Lambda_NEB.fa.gz
+cp -f "$REPO/tests/full/inputs/pUC19.fa.gz" pUC19.fa.gz
+zcat "$REPO/tests/full/inputs/hg38-blacklist.v2.bed.gz" | sort -k1,1 -k2,2n | gzip > hg38-blacklist.v2.sorted.bed.gz
+zcat "$HG38.fa.gz" | awk '/^>/ {if (n) print n "\t0\t" l; n = substr($1, 2); l = 0; next} {l += length($0)} END {print n "\t0\t" l}' \
+  | awk '$1 ~ /^chr([1-9]|1[0-9]|2[0-2])$/' > hg38_autosomes.bed
+[[ $(wc -l < hg38_autosomes.bed) -eq 22 ]] || { echo "autosome BED does not have 22 rows" >&2; exit 1; }
+for d in controls host; do ln -sfn "$ROOT/inputs" "$ROOT/$d/inputs"; done
+
+for r in "${RUNS[@]}"; do
+  for m in 1 2; do ln -sfn "$BUCKET/${r}_$m.fastq.gz" "$ROOT/controls/emseq/fastqs/$r.raw_R$m.fastq.gz"; done
+done
+
+mamba create -y -q -p "$ROOT/tools/seqtk" -c conda-forge -c bioconda seqtk pigz > /dev/null
+SEQTK=$ROOT/tools/seqtk/bin/seqtk
+for r in "${RUNS[@]}"; do
+  for m in 1 2; do
+    out=$ROOT/host/emseq/fastqs/${r}_s30m.raw_R$m.fastq.gz
+    [[ -s $out ]] && continue
+    ( "$SEQTK" sample -2 -s "$SEED" "$BUCKET/${r}_$m.fastq.gz" "$PAIRS" | pigz -p 4 > "$out.part" && mv "$out.part" "$out" ) &
+  done
+done
+wait
+for r in "${RUNS[@]}"; do
+  n1=$(zcat "$ROOT/host/emseq/fastqs/${r}_s30m.raw_R1.fastq.gz" | wc -l)
+  h1=$(zcat "$ROOT/host/emseq/fastqs/${r}_s30m.raw_R1.fastq.gz" | awk 'NR % 4 == 1 {print $1}' | md5sum)
+  h2=$(zcat "$ROOT/host/emseq/fastqs/${r}_s30m.raw_R2.fastq.gz" | awk 'NR % 4 == 1 {print $1}' | md5sum)
+  echo "$r reads=$((n1 / 4)) mates_match=$([[ $h1 == "$h2" ]] && echo yes || echo NO)"
+done > "$ROOT/subsample_check.txt"
+echo done > "$ROOT/prep_finished"
 #+end_src
 
 ** Reference

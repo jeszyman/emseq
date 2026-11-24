@@ -39,8 +39,11 @@ RECORDS = {
     "long_unflagged": pair("long_unflagged", 1 | 0x40 | 0x20, 1 | 0x80 | 0x10, 5000, 5851, 900),
     # inward-facing but 5000 bp: likely mismapped or structural
     "too_long": pair("too_long", 1 | 0x40 | 0x20, 1 | 0x80 | 0x10, 10000, 14951, 5000),
-    # both mates on the same strand
+    # both mates on the forward strand
     "same_strand": pair("same_strand", 1 | 0x40, 1 | 0x80, 20000, 20201, 250),
+    # both mates on the reverse strand (flags 113 and 177); flag.reverse is 16 and
+    # flag.mreverse is 32 in samtools expressions, so the two bits are compared as booleans
+    "both_reverse": pair("both_reverse", 1 | 0x40 | 0x10 | 0x20, 1 | 0x80 | 0x10 | 0x20, 25000, 25201, 250),
     # outward-facing: reverse mate leftmost (positive TLEN, per the SAM spec), forward mate downstream
     "outward": pair("outward", 1 | 0x40 | 0x10, 1 | 0x80 | 0x20, 30000, 30201, 250),
 }
@@ -49,7 +52,7 @@ MATE_OTHER_CHROM = (
     f"trans\t{1 | 0x80 | 0x10}\tchr2\t40000\t60\t50M\tchr1\t40000\t0\t{SEQ}\t{QUAL}\n"
 )
 KEEP = {"mono_proper", "di_unflagged", "long_unflagged"}
-DROP = {"too_long", "same_strand", "outward", "trans"}
+DROP = {"too_long", "same_strand", "both_reverse", "outward", "trans"}
 
 
 def pair_filter_expr():
@@ -67,9 +70,9 @@ def test_pair_filter_keeps_long_fragments_and_drops_bad_pairs(tmp_path):
         check=True, capture_output=True, text=True,
     ).stdout
     kept = [line.split("\t")[0] for line in out.splitlines()]
-    assert set(kept) == KEEP
     # both mates of every kept pair survive, so dupsifter never sees an orphan
-    assert all(kept.count(name) == 2 for name in KEEP)
+    assert all(kept.count(name) == 2 for name in set(kept)), kept
+    assert set(kept) == KEEP
 
 
 def rule_shell(rule):

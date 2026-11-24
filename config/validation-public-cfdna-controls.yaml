@@ -1,0 +1,40 @@
+# Config for the emseq validation wrapper: controls pass on the public cfDNA runs (PRJNA591788).
+# Tangled from emseq.org; do not edit directly.
+# Run on jeff-ubuntu8 from ~/repos/emseq:
+#   snakemake -s workflows/validation.smk --configfile config/validation-public-cfdna-controls.yaml --use-conda
+
+available-concurrency: 64
+main-data-dir: /mnt/data/projects/emseq-validation-public/controls
+
+envs:
+  emseq: ~/repos/emseq/config/emseq-conda-env.yaml
+  methylkit: ~/repos/emseq/config/methylkit-conda-env.yaml
+repos:
+  emseq: ~/repos/emseq
+
+# Every read pair of each run
+library-ids:
+  - SRR13076816
+  - SRR13076817
+
+keep-bed: /mnt/data/projects/emseq-validation-public/inputs/hg38_autosomes.bed
+exclude-bed: /mnt/data/projects/emseq-validation-public/inputs/hg38-blacklist.v2.sorted.bed.gz
+
+emseq_ref_assemblies:
+  ncbi_decoy_hg38:
+    name: ncbi_decoy_hg38
+    input: GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fa.gz
+  unmeth_lambda:
+    name: unmeth_lambda
+    input: Lambda_NEB.fa.gz
+  puc19:
+    name: puc19
+    input: pUC19.fa.gz
+
+validation-dataset: public-cfdna-controls
+validation-host-ref: ncbi_decoy_hg38
+# Both controls are tallied by distance from the strand ends
+validation-fragment-end-sources: [puc19, unmeth_lambda]
+validation-library-index:
+  SRR13076816: 1
+  SRR13076817: 2

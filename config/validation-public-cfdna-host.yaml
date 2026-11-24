@@ -1,0 +1,47 @@
+# Config for the emseq validation wrapper: host pass on the public cfDNA runs (PRJNA591788).
+# Tangled from emseq.org; do not edit directly.
+# Run on jeff-ubuntu8 from ~/repos/emseq:
+#   snakemake -s workflows/validation.smk --configfile config/validation-public-cfdna-host.yaml --use-conda
+
+available-concurrency: 64
+main-data-dir: /mnt/data/projects/emseq-validation-public/host
+
+envs:
+  emseq: ~/repos/emseq/config/emseq-conda-env.yaml
+  methylkit: ~/repos/emseq/config/methylkit-conda-env.yaml
+repos:
+  emseq: ~/repos/emseq
+
+# A seeded 30 M-pair subsample of each run (seqtk sample -s 20261123)
+library-ids:
+  - SRR13076816_s30m
+  - SRR13076817_s30m
+
+keep-bed: /mnt/data/projects/emseq-validation-public/inputs/hg38_autosomes.bed
+exclude-bed: /mnt/data/projects/emseq-validation-public/inputs/hg38-blacklist.v2.sorted.bed.gz
+
+emseq_ref_assemblies:
+  ncbi_decoy_hg38:
+    name: ncbi_decoy_hg38
+    input: GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fa.gz
+  unmeth_lambda:
+    name: unmeth_lambda
+    input: Lambda_NEB.fa.gz
+  puc19:
+    name: puc19
+    input: pUC19.fa.gz
+
+validation-dataset: public-cfdna-host
+validation-host-ref: ncbi_decoy_hg38
+validation-fragment-end-sources: [host]
+validation-compare-settings: true
+# Strand-end figure: the cfDNA reads beside the sheared-DNA reads of the same project
+validation-fragment-figure:
+  - source: host
+    label: "cfDNA, 2 libraries"
+  - dataset: public-sheared-host
+    source: host
+    label: "Sheared NA12878 DNA, 2 libraries"
+validation-library-index:
+  SRR13076816_s30m: 1
+  SRR13076817_s30m: 2

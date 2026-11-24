@@ -50,6 +50,13 @@ CLOSED: [2026-11-24 Tue 07:51]
 [[file:docs/plans/2026-11-20-validation-tier-end-handling.md]]
 
 - [2026-11-20 Fri] MethylDackel 0.6.1 end bounds, from [[file:tests/unit/test_methyldackel_bounds.py][tests/unit/test_methyldackel_bounds.py]]: bounds and =mbias= positions count along the stored alignment, not the sequencing cycle. NEB's flags (=--nOT 0,0,0,5 --nOB 0,0,5,0=) both mask the first sequenced bases of read 2, 4 bases on original-top pairs and 5 on original-bottom pairs. Where mates overlap, a base masked in read 2 is still called from read 1, so the flags remove nothing on a fragment shorter than the read.
+*** FUTURE Sample identity check from SNP genotypes
+:PROPERTIES:
+:ID:       592d6186-5eb4-4df3-8553-19a6e1bcc935
+:END:
+
+[[file:docs/plans/2026-11-21-sample-identity-check.md]]
+
 ** [[id:bda70cff-0713-4e32-8da1-ee83924b8f00][README]]
 ** [[elisp:(let ((window-config (current-window-configuration))) (async-shell-command "bash ~/repos/emseq/tools/shell/org_update.sh") (set-window-configuration window-config))][org update]]
 ** Repository setup and administration

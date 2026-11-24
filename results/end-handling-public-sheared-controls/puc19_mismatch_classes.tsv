@@ -1,0 +1,4 @@
+class	mismatches	reads	cpg_calls	cpg_methylation_pct	median_fragment	sampled	aligned_hg38	aligned_hg38_mapq30
+clean	0-3	286086	1680485	95.8	152	20000	39	3
+mid	4-7	11723	43573	69.8	60			
+mismatch	8+	129225	624761	2.4	54	20000	18612	2906

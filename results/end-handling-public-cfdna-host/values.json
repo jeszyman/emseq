@@ -59,7 +59,7 @@
   "host_p5_pct_d80": 77.9,
   "methyldackel_version": "0.6.1 (using HTSlib version 1.23)",
   "n_libraries": 2,
-  "pipeline_commit": "79b747d",
+  "pipeline_commit": "874d74d",
   "puc19_max_position_pct": 98.77,
   "puc19_overall_pct": 96.35,
   "puc19_r1_end_biased_in_window": 1,

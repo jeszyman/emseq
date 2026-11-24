@@ -37,11 +37,13 @@ CLOSED: [2026-11-21 Sat 07:26]
 
 [[file:docs/plans/2026-11-20-jeepers-test.md]]
 
-*** ACTIVE Validation tier: read-end handling
+*** COMPLETE Validation tier: read-end handling
+CLOSED: [2026-11-24 Tue 07:51]
 :PROPERTIES:
 :ID:       99e53181-4b7d-4854-9a58-92868846be3c
 :END:
 :LOGBOOK:
+- State "COMPLETE"   from "ACTIVE"     [2026-11-24 Tue 07:51]
 - State "ACTIVE"     from "FUTURE"     [2026-11-20 Fri 12:38]
 :END:
 

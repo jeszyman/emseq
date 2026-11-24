@@ -5,7 +5,7 @@
   "clip_window": 10,
   "methyldackel_version": "0.6.1 (using HTSlib version 1.23)",
   "n_libraries": 2,
-  "pipeline_commit": "79b747d",
+  "pipeline_commit": "874d74d",
   "puc19_P5_holds": false,
   "puc19_kept_all10_pct": 24.2,
   "puc19_kept_neb_pct": 58.3,

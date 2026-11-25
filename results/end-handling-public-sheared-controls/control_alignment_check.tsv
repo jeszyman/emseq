@@ -1,0 +1,5 @@
+reference	control	reads	cpg_sites	cpg_calls	methylated_calls	cpg_methylation_pct
+control_alone	pUC19	70263	346	46847	38781	82.78
+control_alone	lambda	802409	6226	375113	1524	0.41
+combined	pUC19	9225	346	39946	38688	96.85
+combined	lambda	75112	6226	344216	491	0.14

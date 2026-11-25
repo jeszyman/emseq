@@ -433,6 +433,7 @@ emseq_library_ids = config["library-ids"]
 emseq_ref_names = ["ncbi_decoy_hg38"]   # project decision
 emseq_align_methods = ["bwa_meth"]       # project decision
 spike_builds = ["puc19", "unmeth_lambda"]  # project decision
+spike_host_ref = "ncbi_decoy_hg38"         # project decision
 KEEP_BED = config["keep-bed"]
 EXCL_BED = config["exclude-bed"]
 meth_map = config["meth-map"]
@@ -600,19 +601,20 @@ Paired-end FASTQ files in, per-sample CpG methylation calls and QC metrics out.
 
 The wrapper assigns all variables before =include: "emseq.smk"= (see the Wrapper Snakefile section for the full pattern):
 
-| =ENV_EMSEQ=, =ENV_METHYLKIT=                              | Conda environment YAML paths                                           |
-| =R_EMSEQ=                                               | Repository root path                                                   |
-| =D_DATA=, =D_EMSEQ=, =D_REF=, =D_LOGS=, =D_BENCHMARK=, =D_INPUTS= | Directory layout (derived from =main-data-dir=)                          |
-| =emseq_library_ids=                                     | List of sample IDs (from config)                                       |
-| =emseq_ref_names=                                       | Reference genome names to align against (project decision)             |
-| =emseq_align_methods=                                   | Alignment methods to run (e.g. =["bwa_meth"]= or =["bwa_meth","biscuit"]=) |
-| =spike_builds=                                          | Spike-in reference names included in this run (project decision)       |
-| =EMSEQ_REF_INPUTS=                                      | Dict mapping ref name → input FASTA filename                           |
-| =KEEP_BED=, =EXCL_BED=                                    | Region filter BED file paths                                           |
-| =meth_map=                                              | Experiment map for differential methylation                            |
-| =MOSDEPTH_QUANT_LEVELS=                                 | Coverage quantization thresholds (default: =1,5,10,20=)                  |
-| =EMSEQ_MINCOV=                                          | Minimum coverage for methylKit (default: =2=)                            |
-| =FASTP_EXTRA=                                           | Additional fastp arguments (default: none)                             |
+| =ENV_EMSEQ=, =ENV_METHYLKIT=                              | Conda environment YAML paths                                               |
+| =R_EMSEQ=                                               | Repository root path                                                       |
+| =D_DATA=, =D_EMSEQ=, =D_REF=, =D_LOGS=, =D_BENCHMARK=, =D_INPUTS= | Directory layout (derived from =main-data-dir=)                              |
+| =emseq_library_ids=                                     | List of sample IDs (from config)                                           |
+| =emseq_ref_names=                                       | Reference genome names to align against (project decision)                 |
+| =emseq_align_methods=                                   | Alignment methods to run (e.g. =["bwa_meth"]= or =["bwa_meth","biscuit"]=)     |
+| =spike_builds=                                          | Spike-in reference names included in this run (project decision)           |
+| =spike_host_ref=                                        | Sample reference the controls are aligned together with (project decision) |
+| =EMSEQ_REF_INPUTS=                                      | Dict mapping ref name → input FASTA filename                               |
+| =KEEP_BED=, =EXCL_BED=                                    | Region filter BED file paths                                               |
+| =meth_map=                                              | Experiment map for differential methylation                                |
+| =MOSDEPTH_QUANT_LEVELS=                                 | Coverage quantization thresholds (default: =1,5,10,20=)                      |
+| =EMSEQ_MINCOV=                                          | Minimum coverage for methylKit (default: =2=)                                |
+| =FASTP_EXTRA=                                           | Additional fastp arguments (default: none)                                 |
 
 ***** Processing steps
 
@@ -742,6 +744,7 @@ python3 ~/repos/html/scripts/emacs_export_header_to_markdown.py --org_file ~/rep
   - [2026-11-20 Fri] =emseq_methyldackel=, =emseq_methyldackel_spike= and =emseq_mbias= pass =--keepDiscordant=. MethylDackel ignores pairs without the proper-pair flag by default, which dropped the cfDNA fragments of about 280 bp or longer that =EMSEQ_PAIR_FILTER= keeps. On spike-in alignments the option changes little: in one breast pilot library, 0 of 24 usable pUC19 reads and 197 of 37,444 usable lambda reads lacked the flag (usable means MAPQ 10 or more and not marked QC-fail). Host methylation tables made between [2026-09-25 Fri] and this date need a rerun of =emseq_methyldackel=.
   - [2026-11-22 Sun] Methylation calling for the sample and for the spike-in controls excludes the first five bases of read 2 by default (=--nOT 0,0,0,5 --nOB 0,0,5,0=). Tables made before this change count those bases.
   - [2026-11-24 Tue] =emseq_dedup= gives its name sort and its coordinate sort separate samtools temporary-file prefixes; with one shared prefix the two sorts in the pipe collided at production depth ("File exists"). =EMSEQ_PAIR_FILTER= compares the strand bits of the two mates as true or false; from [2026-09-25 Fri] to this date it kept one mate and dropped the other when both mates mapped to the reverse strand (flags 113 and 177).
+  - [2026-11-25 Wed] The controls are aligned to one reference that holds the sample genome and every control (=emseq_align_bwameth_spike=), and =emseq_split_spike= writes the alignments of each control. Aligned to pUC19 alone, sample reads were counted as pUC19 and lowered its methylation (82.8% against 96.9% in 10.1 million trimmed read pairs of one sheared-DNA library). *Breaking:* wrappers must define =spike_host_ref=, the sample reference that the controls are aligned together with, and the combined reference is indexed once (about 2.3 hours for hg38 with =bwa-mem2 index=). Sample results are unchanged. The control tables of a project made before this change have the same names and count sample reads, so delete the files in =emseq/spike/= before the next run.
 - wf/emseq/v5.1.0
   - [2026-04-07 Mon] Parameterized =align_method= in modules:
     - New required wrapper variable =emseq_align_methods= — list of alignment methods to run. Replaces hardcoded =["biscuit","bwa_meth"]= in =emseq_multiqc= and =emseq_analysis_uxm_deconv= rules.
@@ -1336,6 +1339,7 @@ The method text is under [[id:065c6944-8708-4da2-b855-f849dbd669f1][Method]].
 #   emseq_library_ids              — list of sample IDs
 #   emseq_ref_names                — list of reference genome names to align against
 #   spike_builds                   — list of spike-in reference names
+#   spike_host_ref                 : sample reference that the controls are aligned together with
 #   EMSEQ_REF_INPUTS               — dict mapping ref name to input FASTA filename
 #   KEEP_BED, EXCL_BED             — region filter BED file paths
 #   meth_map                       — experiment map for differential methylation
@@ -1364,6 +1368,9 @@ EMSEQ_PAIR_FILTER = (
 # exclude on constructed read pairs.
 EMSEQ_CALL_BOUNDS = "--nOT 0,0,0,5 --nOB 0,0,5,0"
 
+# Reference that holds the sample genome and every control
+EMSEQ_SPIKE_REF = f"{spike_host_ref}_spike"
+
 #+end_src
 
 *** Spike workflow
@@ -1381,7 +1388,7 @@ and we expect above 90% methylation of exclusively CpG sites for pUC19
 #+ATTR_ORG: :width 800
 [[file:./resources/vaisvila2021figs7c.png]]
 
-The spike workflow uses bwa-meth to quickly align to phage reference genomes. Coordinate-sorted BAM output is limited to only reads matching the phage index (-F 4). CpG methylation is called in methyldackel, allowing duplicates,
+The spike workflow aligns the trimmed reads with bwa-meth to one reference that holds the sample genome and both controls, so a sample read that resembles a control is placed on the sample. The sample results come from a separate alignment to the sample genome alone. The coordinate-sorted BAM of each control holds the primary alignments of pairs placed on that control. CpG methylation is called in methyldackel, allowing duplicates,
 
 The spike-in share of a library also matters beyond conversion QC. Lambda reads are unmethylated and pUC19 reads are CpG-methylated, so any spike-in read counted at a host locus pulls that locus toward 0 or 1. The host reference, ncbi_decoy_hg38, does not contain the spike-in genomes, so an alignment to a host locus does not compete with the correct spike-in alignment. The spike-in share can also differ between the arms of a comparison. In a breast cfDNA cohort, the healthy libraries carried about twice the spike-in of the cancer libraries, so unmethylated spike-in reads that reach host loci fall disproportionally on the healthy arm and make the affected loci appear more methylated in cancer. Report each library's spike-in read share and compare it between arms before any differential analysis.
 
@@ -1395,35 +1402,63 @@ The spike-in share of a library also matters beyond conversion QC. Lambda reads 
 # Align to pUC19 (methylated) and Lambda (unmethylated) for conversion QC.
 # Duplicates are retained — every read contributes to conversion rate estimation.
 rule emseq_align_bwameth_spike:
-    message: "EM-seq bwameth on spike-in reference with simple samtools piping and no duplicate calls"
+    message: "Align to the sample reference and the controls together, keeping the reads on a control"
     conda: ENV_EMSEQ
     input:
-        r1  = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
-        r2  = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
-        ref = f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa",
+        r1   = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
+        r2   = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
+        ref  = f"{D_REF}/bwa_meth/{EMSEQ_SPIKE_REF}/{EMSEQ_SPIKE_REF}.fa",
+        c2t  = f"{D_REF}/bwa_meth/{EMSEQ_SPIKE_REF}/{EMSEQ_SPIKE_REF}.fa.bwameth.c2t",
+        fais = expand(f"{D_REF}/bwa_meth/{{spike}}/{{spike}}.fa.fai", spike=spike_builds),
     log:
-        cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}_emseq_align_bwameth_spike.log",
+        cmd = f"{D_LOGS}/{{library_id}}_emseq_align_bwameth_spike.log",
     benchmark:
-        f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}_emseq_align_bwameth_spike.tsv"
+        f"{D_BENCHMARK}/{{library_id}}_emseq_align_bwameth_spike.tsv"
     params:
-        temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}"
+        temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{EMSEQ_SPIKE_REF}",
     threads: workflow.cores
     resources:
         concurrency = 100
+    output:
+        bam = temp(f"{D_EMSEQ}/spike/{{library_id}}.{EMSEQ_SPIKE_REF}.bwa_meth.coorsort.bam"),
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[bwameth-spike] $(date) lib={wildcards.library_id} threads={threads}"
+        mkdir -p "$(dirname "{params.temp_prefix}")"
+        # rname == "a" || rname == "b" over the control contigs
+        on_control=$(cut -f1 {input.fais} | awk '{{printf "%srname == \\"%s\\"", (NR > 1 ? " || " : ""), $1}}')
+        # -F 2308: primary alignments only. A pair whose mates lie on different
+        # references is dropped, since a mate on the sample leaves the pair's
+        # control origin open.
+        bwameth.py --threads {threads} \
+          --reference "{input.ref}" \
+          "{input.r1}" "{input.r2}" \
+        | samtools view -@ 8 -u -F 2308 -e "mrname == rname && ($on_control)" - \
+        | samtools sort -@ 8 -T "{params.temp_prefix}" -o "{output.bam}"
+        """
+rule emseq_split_spike:
+    message: "Write the alignments of one control, with only its contigs in the header"
+    conda: ENV_EMSEQ
+    input:
+        bam = f"{D_EMSEQ}/spike/{{library_id}}.{EMSEQ_SPIKE_REF}.bwa_meth.coorsort.bam",
+        fai = f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.fai",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}_emseq_split_spike.log",
+    wildcard_constraints:
+        emseq_ref_name = "|".join(spike_builds),
+    threads: 2
     output:
         bam = f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.bwa_meth.coorsort.bam",
     shell:
         """
         exec &>> "{log.cmd}"
-        echo "[bwameth-spike] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} threads={threads}"
-        mkdir -p "$(dirname "{params.temp_prefix}")"
-        bwameth.py --threads {threads} \
-          --reference "{input.ref}" \
-          "{input.r1}" "{input.r2}" \
-        | samtools view -@ 8 -u -F 4 - \
-        | samtools sort -@ 8 -T "{params.temp_prefix}" -o "{output.bam}"
-        # -u: uncompressed BAM avoids compress→decompress overhead in pipe
-        # -F 4: keep only mapped reads (discard unmapped from wrong spike-in)
+        echo "[split-spike] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name}"
+        # MethylDackel reads the control's own FASTA, so the header must hold no
+        # other contig
+        samtools view -h "{input.bam}" \
+          | awk 'BEGIN {{FS = "\t"}} FNR == NR {{keep[$1]; next}} /^@SQ/ {{if (substr($2, 4) in keep) print; next}} /^@/ {{print; next}} $3 in keep' "{input.fai}" - \
+          | samtools view -b -o "{output.bam}" -
         """
 #+end_src
 
@@ -1476,11 +1511,17 @@ Reference
 
 #+begin_src snakemake
 # ── Reference Indexing ───────────────────────────────────────────────────────
+def _emseq_index_fastas(wildcards):
+    """FASTA of one reference, or of the sample reference and every control for EMSEQ_SPIKE_REF."""
+    name = wildcards.emseq_ref_name
+    names = [spike_host_ref, *spike_builds] if name == EMSEQ_SPIKE_REF else [name]
+    return [f"{D_INPUTS}/{EMSEQ_REF_INPUTS[n]}" for n in names]
+
 rule emseq_bwa_meth_index:
     message: "Build bwa-meth bisulfite index from reference FASTA"
     conda: ENV_EMSEQ
     input:
-        lambda wc: f"{D_INPUTS}/{EMSEQ_REF_INPUTS[wc.emseq_ref_name]}"
+        fastas = _emseq_index_fastas,
     log:
         cmd = f"{D_LOGS}/{{emseq_ref_name}}_emseq_bwa_meth_index.log",
     benchmark:
@@ -1501,12 +1542,15 @@ rule emseq_bwa_meth_index:
         """
         exec &>> "{log.cmd}"
         echo "[bwa-meth-index] $(date) ref={wildcards.emseq_ref_name} threads={threads}"
-        if file -b "{input}" | grep -qi gzip; then
-            zcat "{input}" > "{params.fasta_target}"
-        else
-            cat "{input}" > "{params.fasta_target}"
-        fi
+        # awk 1 ends each file with a newline, so the next header starts a line
+        for fasta in {input.fastas}; do
+            if file -bL "$fasta" | grep -qi gzip; then zcat "$fasta"; else cat "$fasta"; fi | awk 1
+        done > "{params.fasta_target}"
         samtools faidx "{params.fasta_target}"
+        if [ "$(grep -c '^>' "{params.fasta_target}")" -ne "$(wc -l < "{params.fasta_target}.fai")" ]; then
+            echo "[bwa-meth-index] a contig name repeats across the FASTAs" >&2
+            exit 1
+        fi
         bwameth.py index-mem2 "{params.fasta_target}"
         """
 #+end_src
@@ -5032,6 +5076,7 @@ emseq_library_ids = config["library-ids"]
 emseq_ref_names = ["chr22"]
 emseq_align_methods = ["bwa_meth", "biscuit"]
 spike_builds = ["puc19", "unmeth_lambda"]
+spike_host_ref = "chr22"
 KEEP_BED = config["keep-bed"]
 EXCL_BED = config["exclude-bed"]
 meth_map = config["meth-map"]
@@ -5183,6 +5228,7 @@ emseq_library_ids = config["library-ids"]
 emseq_ref_names = ["chr22"]
 emseq_align_methods = ["bwa_meth", "biscuit"]
 spike_builds = ["puc19", "unmeth_lambda"]
+spike_host_ref = "chr22"
 KEEP_BED = config["keep-bed"]
 EXCL_BED = config["exclude-bed"]
 meth_map = config["meth-map"]
@@ -5364,7 +5410,7 @@ The stages of [[fig-core-dataflow]] are listed in order with the Snakemake rules
 4. *Duplicate marking* (=emseq_dedup=). Pairs that pass the pair test are kept, and duplicates among them are flagged.
 5. *Filtering* (=emseq_filter_bam=). Flagged duplicates, low mapping quality, and reads outside the kept regions are removed.
 6. *Methylation calling* (=emseq_methyldackel=, =emseq_make_single_methylkit_amp_obj=). Methylated and unmethylated calls are counted at each CpG and stored as an indexed table.
-7. *Spike-in controls* (=emseq_align_bwameth_spike=, =emseq_methyldackel_spike=). The trimmed reads are aligned to the lambda and pUC19 references, and control methylation is counted.
+7. *Spike-in controls* (=emseq_align_bwameth_spike=, =emseq_split_spike=, =emseq_methyldackel_spike=). The trimmed reads are aligned to one reference that holds the sample genome and both controls, the alignments of each control are separated, and control methylation is counted.
 8. *Quality control* (=emseq_fastqc=, =emseq_mosdepth=, =emseq_mbias=, =emseq_samtools_stats=, =emseq_multiqc=). Read quality, coverage, methylation by read position, and alignment statistics are collected into one report.
 9. *Downstream analysis* (the rules of =emseq_analysis.smk=). Libraries are compared between two groups, read-level methylation patterns are summarized, and tissue-of-origin fractions are estimated.
 *** Trimming
@@ -5389,7 +5435,7 @@ The first five sequenced bases of read 2, which lie at the filled-in 3' end of t
 
 The EM-seq kit supplies two control DNAs that are added to each sample before library preparation: unmethylated lambda DNA, and pUC19 DNA methylated at CpG sites. Lambda measures conversion. A cytosine that reads as methylated in lambda escaped conversion, so lambda methylation is the non-conversion rate of the library, and it is expected to be below 1%. pUC19 measures protection. A CpG that reads as unmethylated in pUC19 was converted despite its methylation, and pUC19 CpG methylation is expected to be above 90% [cite:@vaisvila2021;@chauhan2024;@emseq2023manual].
 
-The trimmed reads of each library are aligned separately to the lambda and pUC19 references with bwa-meth, mapped reads are kept without duplicate marking, and methylation is counted with the same MethylDackel command as for the sample. A library that was prepared without a control still gives alignments to that control's reference, because short stretches of sample reads match it. bwa-meth flags most of these partial alignments as failing quality control and MethylDackel leaves them out, but some pass. In {{{val(end-handling-plasma-pilot,n_libraries)}}} plasma libraries prepared without pUC19, {{{val(end-handling-plasma-pilot,puc19_usable_reads_text)}}} reads in total were counted on the pUC19 reference, with {{{val(end-handling-plasma-pilot,puc19_overall_pct,%.1f)}}}% CpG methylation over {{{val(end-handling-plasma-pilot,puc19_total_calls_text)}}} calls. A pUC19 table with a few hundred calls and low methylation therefore indicates a control that was never added.
+The trimmed reads of each library are aligned with bwa-meth to one reference that holds the sample genome, lambda, and pUC19. The sample results come from a separate alignment to the sample genome alone. The primary alignments of pairs placed on one control are kept without duplicate marking, and methylation is counted with the same MethylDackel command as for the sample. Alignment to a control alone counts sample reads that match it partially. In 10,140,172 trimmed read pairs of one sheared-DNA library, pUC19 CpG methylation was 82.8% of 46,847 calls when the pairs were aligned to pUC19 alone and 96.9% of 39,946 calls with the combined reference, and lambda CpG methylation was 0.41% and 0.14% ([[file:results/end-handling-public-sheared-controls/control_alignment_check.tsv][results/end-handling-public-sheared-controls/control_alignment_check.tsv]]). The reads behind the lower value are described under [[*Read-end handling][Read-end handling]]. A library that was prepared without a control still gave alignments to that control's reference when the control was aligned alone, because short stretches of sample reads match it. bwa-meth flags most of these partial alignments as failing quality control and MethylDackel leaves them out, but some pass. In {{{val(end-handling-plasma-pilot,n_libraries)}}} plasma libraries prepared without pUC19, aligned in this way, {{{val(end-handling-plasma-pilot,puc19_usable_reads_text)}}} reads in total were counted on the pUC19 reference, with {{{val(end-handling-plasma-pilot,puc19_overall_pct,%.1f)}}}% CpG methylation over {{{val(end-handling-plasma-pilot,puc19_total_calls_text)}}} calls. A pUC19 table with a few hundred calls and low methylation therefore indicated a control that was never added.
 *** Quality control
 
 Read quality is reported before and after trimming with FastQC, and fastp writes its own trimming report. Coverage is profiled on the filtered alignment with [[https://github.com/brentp/mosdepth][mosdepth]] [cite:@pedersen2018], which gives the depth distribution, the depth within the kept regions, and the share of bases at or above each depth threshold set in the configuration. Alignment statistics come from =samtools stats= and =samtools flagstat= on the filtered alignment.
@@ -5446,7 +5492,7 @@ At equal distance from the 3' end, calls made by read 1 were {{{val(end-handling
 #+caption: *Plasma reads lose methylation over tens of bases at the 3' end of the original strand.* CpG methylation by distance from the 5' and 3' ends of the original strand, on fragments of 160 bp or longer, counted once per fragment. Thick lines pool the libraries and thin lines are single libraries. Plasma, n = 7 libraries. pUC19, n = 1 library. Bands are 95% Wilson intervals.
 [[file:resources/figures/validation_fragment_end_plasma-pilot.png]]
 
-The measures were repeated on public EM-seq data from another laboratory, four NEB libraries of BioProject PRJNA591788 [cite:@vaisvila2021]: two replicates of NA12878 genomic DNA sheared before library preparation (200 ng) and two replicates of cfDNA from the plasma of one donor (10 ng), all carrying lambda and pUC19. The cfDNA was not sheared, and its oxidation reaction had added DTT, but the two kinds of library otherwise followed one protocol. The controls were tallied on all read pairs and the human reads on a seeded subsample of 30 million read pairs per library. On pUC19, CpG methylation at the base that begins read 2 was {{{val(end-handling-public-sheared-controls,puc19_r2_start_position1_pct,%.1f)}}}% in the sheared-DNA libraries and {{{val(end-handling-public-cfdna-controls,puc19_r2_start_position1_pct,%.1f)}}}% in the cfDNA libraries, compared to {{{val(end-handling-public-sheared-controls,puc19_r2_start_reference_pct,%.1f)}}}% and {{{val(end-handling-public-cfdna-controls,puc19_r2_start_reference_pct,%.1f)}}}% in the middle of the read. The prediction that pUC19 and lambda would be unbiased at the other three read ends failed in both. The last base of read 1, which is also at the 3' end, was {{{val(end-handling-public-sheared-controls,puc19_r1_end_position1_pct,%.1f)}}}% and {{{val(end-handling-public-cfdna-controls,puc19_r1_end_position1_pct,%.1f)}}}%, against {{{val(end-handling-public-sheared-controls,puc19_r1_end_reference_pct,%.1f)}}}% and {{{val(end-handling-public-cfdna-controls,puc19_r1_end_reference_pct,%.1f)}}}% in the middle of the read. In the sheared-DNA libraries, {{{val(end-handling-public-sheared-controls,puc19_r1_start_biased_in_window)}}} of the first 10 bases of read 1 and {{{val(end-handling-public-sheared-controls,puc19_r2_end_biased_in_window)}}} of the last 10 of read 2 also differed from the middle of the read by more than 5 points. pUC19 methylation over all positions was {{{val(end-handling-public-sheared-controls,puc19_overall_pct,%.1f)}}}% in the sheared-DNA libraries and {{{val(end-handling-public-cfdna-controls,puc19_overall_pct,%.1f)}}}% in the cfDNA libraries, where the paper reports about 96% for NA12878. The low value comes from human reads counted as pUC19. Control reads are aligned to the pUC19 sequence alone, and in one sheared-DNA library (SRR10532145, all reads, MAPQ 10 or higher) 129,225 of 427,034 aligned reads differed from pUC19 at 8 or more bases. Those reads were 2.4% methylated, and of 20,000 drawn from them 93% aligned to hg38. The 286,086 reads with at most 3 differences were 95.8% methylated, and 39 of 20,000 drawn from them aligned to hg38 ([[file:results/end-handling-public-sheared-controls/puc19_mismatch_classes.tsv][results/end-handling-public-sheared-controls/puc19_mismatch_classes.tsv]]). The pUC19 values of the sheared-DNA libraries by read position include these reads and are not read here as those of a fully methylated control. The paper aligned reads to one reference that held the human genome and the controls. When all reads of that run were aligned to hg38, lambda, and pUC19 together, pUC19 methylation was 95.7% of 1,714,378 calls. In one cfDNA library (SRR13076817, all reads) it was 96.7% by the same alignment, so the human reads had little effect there ([[file:results/end-handling-public-sheared-controls/competitive_alignment.tsv][results/end-handling-public-sheared-controls/competitive_alignment.tsv]]). On human reads the length of the 3' loss depended on the source of the DNA ([[fig-end-handling-public-strand-ends]]). In the sheared DNA, the difference between the 5' and 3' ends was {{{val(end-handling-public-sheared-host,host_loss_points_d10,%.1f)}}} points at base 10 and exceeded 5 points over {{{val(end-handling-public-sheared-host,host_loss_run)}}} bases, and the NEB options left {{{val(end-handling-public-sheared-host,host_kept_neb_pct,%.1f)}}}% of the calls in those bases in the counts. In the cfDNA, the difference was {{{val(end-handling-public-cfdna-host,host_loss_points_d10,%.1f)}}} points at base 10, {{{val(end-handling-public-cfdna-host,host_loss_points_d30,%.1f)}}} at base 30, and {{{val(end-handling-public-cfdna-host,host_loss_points_d80,%.1f)}}} at base 80, the end of the measured range, and the NEB options left {{{val(end-handling-public-cfdna-host,host_kept_neb_pct,%.1f)}}}% of the calls within 80 bases of the 3' end in the counts. Part of the difference far from the end came from the 5' side: in the cfDNA, methylation 10 bases from the 5' end was {{{val(end-handling-public-cfdna-host,host_p5_pct_d10,%.1f)}}}%, compared to {{{val(end-handling-public-cfdna-host,host_global_none_all_calls_pct,%.1f)}}}% over all calls. The NEB options raised global CpG methylation by {{{val(end-handling-public-cfdna-host,host_global_all_calls_diff_neb_points,%.2f)}}} points in the cfDNA and {{{val(end-handling-public-sheared-host,host_global_all_calls_diff_neb_points,%.2f)}}} points in the sheared DNA. The long 3' loss of the pilot plasma libraries thus recurred in plasma cfDNA of one donor prepared in another laboratory, and it was limited to a few bases in sheared genomic DNA from the same study. The two kinds of library also differ in DNA input, and each is one sample, so the comparison does not separate fragment ends from input or measure variation between donors.
+The measures were repeated on public EM-seq data from another laboratory, four NEB libraries of BioProject PRJNA591788 [cite:@vaisvila2021]: two replicates of NA12878 genomic DNA sheared before library preparation (200 ng) and two replicates of cfDNA from the plasma of one donor (10 ng), all carrying lambda and pUC19. The cfDNA was not sheared, and its oxidation reaction had added DTT, but the two kinds of library otherwise followed one protocol. The controls were tallied on all read pairs and the human reads on a seeded subsample of 30 million read pairs per library. On pUC19, CpG methylation at the base that begins read 2 was {{{val(end-handling-public-sheared-controls,puc19_r2_start_position1_pct,%.1f)}}}% in the sheared-DNA libraries and {{{val(end-handling-public-cfdna-controls,puc19_r2_start_position1_pct,%.1f)}}}% in the cfDNA libraries, compared to {{{val(end-handling-public-sheared-controls,puc19_r2_start_reference_pct,%.1f)}}}% and {{{val(end-handling-public-cfdna-controls,puc19_r2_start_reference_pct,%.1f)}}}% in the middle of the read. The prediction that pUC19 and lambda would be unbiased at the other three read ends failed in both. The last base of read 1, which is also at the 3' end, was {{{val(end-handling-public-sheared-controls,puc19_r1_end_position1_pct,%.1f)}}}% and {{{val(end-handling-public-cfdna-controls,puc19_r1_end_position1_pct,%.1f)}}}%, against {{{val(end-handling-public-sheared-controls,puc19_r1_end_reference_pct,%.1f)}}}% and {{{val(end-handling-public-cfdna-controls,puc19_r1_end_reference_pct,%.1f)}}}% in the middle of the read. In the sheared-DNA libraries, {{{val(end-handling-public-sheared-controls,puc19_r1_start_biased_in_window)}}} of the first 10 bases of read 1 and {{{val(end-handling-public-sheared-controls,puc19_r2_end_biased_in_window)}}} of the last 10 of read 2 also differed from the middle of the read by more than 5 points. pUC19 methylation over all positions was {{{val(end-handling-public-sheared-controls,puc19_overall_pct,%.1f)}}}% in the sheared-DNA libraries and {{{val(end-handling-public-cfdna-controls,puc19_overall_pct,%.1f)}}}% in the cfDNA libraries, where the paper reports about 96% for NA12878. The low value comes from human reads counted as pUC19. For these tallies control reads were aligned to the pUC19 sequence alone, and in one sheared-DNA library (SRR10532145, all reads, MAPQ 10 or higher) 129,225 of 427,034 aligned reads differed from pUC19 at 8 or more bases. Those reads were 2.4% methylated, and of 20,000 drawn from them 93% aligned to hg38. The 286,086 reads with at most 3 differences were 95.8% methylated, and 39 of 20,000 drawn from them aligned to hg38 ([[file:results/end-handling-public-sheared-controls/puc19_mismatch_classes.tsv][results/end-handling-public-sheared-controls/puc19_mismatch_classes.tsv]]). The pUC19 values of the sheared-DNA libraries by read position include these reads and are not read here as those of a fully methylated control. The paper aligned reads to one reference that held the human genome and the controls. When all reads of that run were aligned to hg38, lambda, and pUC19 together, pUC19 methylation was 95.7% of 1,714,378 calls. In one cfDNA library (SRR13076817, all reads) it was 96.7% by the same alignment, so the human reads had little effect there ([[file:results/end-handling-public-sheared-controls/competitive_alignment.tsv][results/end-handling-public-sheared-controls/competitive_alignment.tsv]]). On human reads the length of the 3' loss depended on the source of the DNA ([[fig-end-handling-public-strand-ends]]). In the sheared DNA, the difference between the 5' and 3' ends was {{{val(end-handling-public-sheared-host,host_loss_points_d10,%.1f)}}} points at base 10 and exceeded 5 points over {{{val(end-handling-public-sheared-host,host_loss_run)}}} bases, and the NEB options left {{{val(end-handling-public-sheared-host,host_kept_neb_pct,%.1f)}}}% of the calls in those bases in the counts. In the cfDNA, the difference was {{{val(end-handling-public-cfdna-host,host_loss_points_d10,%.1f)}}} points at base 10, {{{val(end-handling-public-cfdna-host,host_loss_points_d30,%.1f)}}} at base 30, and {{{val(end-handling-public-cfdna-host,host_loss_points_d80,%.1f)}}} at base 80, the end of the measured range, and the NEB options left {{{val(end-handling-public-cfdna-host,host_kept_neb_pct,%.1f)}}}% of the calls within 80 bases of the 3' end in the counts. Part of the difference far from the end came from the 5' side: in the cfDNA, methylation 10 bases from the 5' end was {{{val(end-handling-public-cfdna-host,host_p5_pct_d10,%.1f)}}}%, compared to {{{val(end-handling-public-cfdna-host,host_global_none_all_calls_pct,%.1f)}}}% over all calls. The NEB options raised global CpG methylation by {{{val(end-handling-public-cfdna-host,host_global_all_calls_diff_neb_points,%.2f)}}} points in the cfDNA and {{{val(end-handling-public-sheared-host,host_global_all_calls_diff_neb_points,%.2f)}}} points in the sheared DNA. The long 3' loss of the pilot plasma libraries thus recurred in plasma cfDNA of one donor prepared in another laboratory, and it was limited to a few bases in sheared genomic DNA from the same study. The two kinds of library also differ in DNA input, and each is one sample, so the comparison does not separate fragment ends from input or measure variation between donors.
 
 #+name: fig-end-handling-public-strand-ends
 #+caption: *In public EM-seq data, the 3' loss extends over tens of bases in cfDNA and over a few bases in sheared genomic DNA.* CpG methylation by distance from the 5' and 3' ends of the original strand, on fragments of 160 bp or longer, from a seeded subsample of 30 million read pairs per library. NEB libraries of BioProject PRJNA591788: cfDNA, n = 2 replicate libraries of one donor; sheared NA12878 DNA, n = 2 replicate libraries. Each line pools the two libraries of one kind.
@@ -5471,7 +5517,9 @@ Duplicate marking and duplicate removal are separate rules, so that the alignmen
 The methylation loss at the 3' end of each original strand enters the per-CpG counts. In plasma it exceeded 5 percentage points over {{{val(end-handling-plasma-pilot,host_loss_run)}}} bases from the 3' end ([[*Read-end handling][Read-end handling]]), which is a large part of a fragment near 167 bp, and neither read-end mask tested removes most of it. The loss has been reported to be larger in plasma from patients with cancer than in plasma from controls [cite:@wang2026jeepers], so it can differ between the groups a study compares. The plasma measurement rests on {{{val(end-handling-plasma-pilot,host_n_libraries_judged)}}} libraries from one sequencing run at about 2 million read pairs each, on fragments of 160 bp or longer, and the control measurement on one library.
 **** Spike-in reads in the sample alignment
 
-The sample reference holds no lambda or pUC19 sequence, so a control read can align to a human locus and be counted there. The share of control reads that reach the filtered sample alignment has not been measured for this pipeline.
+The sample reference holds no lambda or pUC19 sequence, so a control read can align to a human locus and be counted there. In two public libraries, read pairs placed on lambda or pUC19 by the combined reference were realigned to hg38 alone. Of 2,697,840 control reads in one sheared-DNA library, 3,829 (0.14%) passed the MAPQ and pair filters, and 3,808 of these remained on autosomes outside the blacklist, in 193 windows of 10 kb. Of 3,512,404 control reads in a 2% sample of one cfDNA library, 8,114 (0.23%) passed, and 7,945 remained, in 613 windows ([[file:results/end-handling-public-sheared-controls/control_reads_in_human_results.tsv][results/end-handling-public-sheared-controls/control_reads_in_human_results.tsv]]). Duplicates were not removed in these counts. A library with a larger control share holds more such reads, and the share by arm of a study was not measured.
+
+Adding the controls to the sample reference would place the control reads on the controls. The sample results are nevertheless taken from the alignment to the sample genome alone. We compared the two alignments on 8,176,463 trimmed read pairs of one cfDNA library from one donor (SRR13076817, 1.6% control pairs) with the read filters of the pipeline, except duplicate and blacklist removal. The human genome alone was aligned in two random orders of the pairs, and the human genome with lambda and pUC19 in the first of these orders. A rule fixed before the run kept the human-only alignment for the sample results unless the difference in tile methylation between the combined and the human-only alignment was no larger than the difference between the two human-only runs. In tiles that held no control read, the 95th percentile of the absolute difference in CpG methylation was 1.86, 0.93, and 0.32 percentage points for tiles of 10 kb, 100 kb, and 1 Mb, against 0.00, 0.06, and 0.05 points between the two human-only runs (upper 97.5% bootstrap limits 0.00, 0.07, and 0.05). The human-only alignment was therefore kept. The filtered alignment changed by 101,095 reads with the controls added and by 4,538 reads between the two human-only runs. Global CpG methylation was 72.97% in both human-only runs and 73.00% with the controls added. The aligner estimates fragment length from all reads of a batch, and lambda fragments widen that estimate, from a mean of 168.1 bp (SD 31.4) to 169.5 bp (SD 34.9). In the 94 tiles of 10 kb that held a control read in the first human-only run and met the coverage minimum in both, methylation averaged 1.45 points higher with the controls added, and in 246 tiles of 100 kb it averaged 0.25 points higher. The read counts, the tile table, and the totals are in [[file:results/end-handling-public-sheared-controls/combined_reference_rerun_reads.tsv][combined_reference_rerun_reads.tsv]], [[file:results/end-handling-public-sheared-controls/combined_reference_rerun_tiles.tsv][combined_reference_rerun_tiles.tsv]], and [[file:results/end-handling-public-sheared-controls/combined_reference_rerun_totals.tsv][combined_reference_rerun_totals.tsv]]. Earlier comparisons at 0.42% and 21% control reads, on untrimmed reads and without a repeat of the human-only alignment, are in [[file:results/end-handling-public-sheared-controls/combined_reference_effect.tsv][combined_reference_effect.tsv]].
 **** Two groups per experiment
 
 Differential methylation compares two groups. A design with more groups is run as pairwise experiments, and a continuous outcome has to be made binary or analyzed outside the pipeline.
@@ -5860,6 +5908,7 @@ emseq_library_ids = config["library-ids"]
 emseq_ref_names = [config["validation-host-ref"]]
 emseq_align_methods = ["bwa_meth"]
 spike_builds = ["puc19", "unmeth_lambda"]
+spike_host_ref = config["validation-host-ref"]
 KEEP_BED = config["keep-bed"]
 EXCL_BED = config["exclude-bed"]
 meth_map = config.get("meth-map", {})
@@ -9090,6 +9139,335 @@ for k, (n, m, u) in sorted(T.items()):
 n = sum(hist.values()); print(run, contig, 'reads with >=4 CpG:', n, {k: f'{100 * v / max(1, n):.2f}%' for k, v in sorted(hist.items())})
 #+end_src
 
+#+name: spike-host-realign
+#+begin_src bash :tangle no
+#!/usr/bin/env bash
+# hg38 without lambda and pUC19: how many control reads of the two public runs align there.
+# The controls are the reads whose primary alignment in the composite reference is on lambda
+# or pUC19. Their pairs are realigned to hg38 alone with the pipeline's aligner, and reads
+# that pass the host MAPQ filter (30) and the pair filter are counted.
+set -euo pipefail
+W=/mnt/data/projects/emseq-validation-public/composite; cd $W; export TMPDIR=$W/tmp PATH=$W/env/bin:$PATH
+mkdir -p host
+[[ -s host/hg38.fa ]] || { samtools faidx ref/composite.fa $(grep -v -E '^(NC_001416.1|L09137.2)' ref/composite.fa.fai | cut -f1) > host/hg38.part; mv host/hg38.part host/hg38.fa; }
+[[ -e host/indexed ]] || { bwameth.py index-mem2 host/hg38.fa > host/index.log 2>&1; touch host/indexed; }
+echo "index ready $(date -u +%T)"
+PF='mrname == rname && !flag.reverse != !flag.mreverse && ((!flag.reverse && tlen > 0) || (flag.reverse && tlen < 0)) && tlen >= -1000 && tlen <= 1000'
+for r in SRR10532145 SRR13076817; do
+  s=""; [[ $r == SRR13076817 ]] && s="-s 7.02"
+  samtools view -u -F 2304 $s $r.controls.bam | samtools collate -u -O - $W/tmp/col.$r | samtools fastq -1 host/${r}_1.fq -2 host/${r}_2.fq -0 /dev/null -s /dev/null -n - 2>> host/fastq.log
+  n=$(( $(wc -l < host/${r}_1.fq) / 4 ))
+  bwameth.py --threads 80 --reference host/hg38.fa host/${r}_1.fq host/${r}_2.fq 2> host/$r.log | samtools view -b - > host/$r.bam
+  echo "$r control_pairs=$n primary_mapped_reads=$(samtools view -c -F 2308 host/$r.bam) mapq10=$(samtools view -c -F 2308 -q 10 host/$r.bam) mapq30=$(samtools view -c -F 2308 -q 30 host/$r.bam) host_filter=$(samtools view -c -f 1 -q 30 -F 3852 -e "$PF" host/$r.bam)"
+  samtools view -f 1 -q 30 -F 3852 -e "$PF" host/$r.bam | awk -v r=$r 'BEGIN{FS="\t"} {nm=0; for (i=12;i<=NF;i++) if ($i ~ /^NM:i:/) nm=substr($i,6)+0; s=$6; gsub(/[0-9]+[SH]/,"",s); n=0; while (match(s,/[0-9]+M/)) {n += substr(s,RSTART,RLENGTH-1); s=substr(s,RSTART+RLENGTH)} c[n>=70 ? "aligned>=70" : "aligned<70"]++} END{for (k in c) print r, k, c[k]}'
+done
+echo HOST_FINISHED
+#+end_src
+
+#+name: spike-combined-sample
+#+begin_src bash :tangle no
+#!/usr/bin/env bash
+# Human results with and without the controls in the reference: every 32nd read pair of the
+# sheared run and every 40th of the cfDNA run (about 10 million each, taken across the whole
+# file), aligned to hg38 alone and to hg38 + lambda + pUC19 with the same
+# aligner and thread count, then compared read by read after the host read filter (MAPQ 30,
+# pair filter, autosomes, blacklist removed). Duplicates are not marked.
+set -euo pipefail
+W=/mnt/data/projects/emseq-validation-public/composite; cd $W; mkdir -p cmp2; export TMPDIR=$W/tmp PATH=/snap/bin:$W/env/bin:/opt/conda/bin:$PATH
+B=gs://chaudhuri-lab-bucket1/jeszyman/data/public-emseq/PRJNA591788; declare -A K=([SRR10532145]=32 [SRR13076817]=40)
+zcat $HOME/repos/emseq/tests/full/inputs/hg38-blacklist.v2.bed.gz | cut -f1-3 > cmp2/blacklist.bed
+PF='mrname == rname && !flag.reverse != !flag.mreverse && ((!flag.reverse && tlen > 0) || (flag.reverse && tlen < 0)) && tlen >= -1000 && tlen <= 1000'
+for r in SRR10532145 SRR13076817; do
+  for ref in host/hg38 ref/composite; do
+    t=${ref#*/}; [[ -e cmp2/$r.$t.done ]] && continue
+    s=$(date +%s)
+    bwameth.py --threads 80 --reference $ref.fa <(gsutil -q cat $B/${r}_1.fastq.gz 2> /dev/null | pigz -dc 2> /dev/null | awk -v k=${K[$r]} 'int((NR - 1) / 4) % k == 0') <(gsutil -q cat $B/${r}_2.fastq.gz 2> /dev/null | pigz -dc 2> /dev/null | awk -v k=${K[$r]} 'int((NR - 1) / 4) % k == 0') 2> cmp2/$r.$t.log | samtools view -@ 8 -1 - > cmp2/$r.$t.bam
+    echo "$r $t seconds=$(( $(date +%s) - s )) reads=$(samtools view -@ 16 -c -F 2304 cmp2/$r.$t.bam) mapped=$(samtools view -@ 16 -c -F 2308 cmp2/$r.$t.bam)"
+    touch cmp2/$r.$t.done
+  done
+  for t in hg38 composite; do
+    samtools view -@ 16 -f 1 -q 30 -F 3852 -e "$PF" cmp2/$r.$t.bam | awk 'BEGIN{FS=OFS="\t"} FILENAME==ARGV[1] {b[$1]=b[$1] " " $2 "," $3; next} $3 ~ /^chr[0-9]+$/ {print $1"/"(and($2,64)?1:2), $3, $4, $6, (and($2,16)?"-":"+"), $5}' cmp2/blacklist.bed - \
+      | awk 'BEGIN{FS=OFS="\t"} FILENAME==ARGV[1] {n[$1]++; s[$1,n[$1]]=$2; e[$1,n[$1]]=$3; next} {for (i=1;i<=n[$2];i++) if ($3<=e[$2,i] && $3+100>s[$2,i]) next; print}' cmp2/blacklist.bed - \
+      | LC_ALL=C sort -S 30G --parallel=16 -k1,1 > cmp2/$r.$t.pass
+  done
+  echo "$r pass_hg38=$(wc -l < cmp2/$r.hg38.pass) pass_composite=$(wc -l < cmp2/$r.composite.pass)"
+  LC_ALL=C join -t $'\t' -j 1 cmp2/$r.hg38.pass cmp2/$r.composite.pass | awk -v r=$r 'BEGIN{FS="\t"} {n++; if ($2==$7 && $3==$8 && $4==$9 && $5==$10) same++; else diff++} END{print r, "both", n, "identical", same+0, "different_alignment", diff+0}'
+  LC_ALL=C join -t $'\t' -v 1 cmp2/$r.hg38.pass cmp2/$r.composite.pass > cmp2/$r.only_hg38; LC_ALL=C join -t $'\t' -v 2 cmp2/$r.hg38.pass cmp2/$r.composite.pass > cmp2/$r.only_composite
+  echo "$r only_hg38=$(wc -l < cmp2/$r.only_hg38) only_composite=$(wc -l < cmp2/$r.only_composite)"
+  samtools view -@ 16 -F 2304 cmp2/$r.composite.bam | awk 'BEGIN{FS="\t"} FILENAME==ARGV[1] {w[$1]=1; next} {k=$1"/"(and($2,64)?1:2); if (k in w) print k"\t"$3"\t"$5"\t"and($2,4)}' cmp2/$r.only_hg38 - > cmp2/$r.only_hg38.where
+  awk -v r=$r 'BEGIN{FS="\t"} {c=($2=="NC_001416.1")?"lambda":($2=="L09137.2")?"pUC19":($2=="*")?"unmapped":"human"; n[c]++} END{for(c in n) print r, "only_hg38 reads now on", c, n[c]}' cmp2/$r.only_hg38.where
+  samtools view -@ 16 -F 2308 cmp2/$r.composite.bam | awk -v r=$r 'BEGIN{FS="\t"} $3=="NC_001416.1"{l++} $3=="L09137.2"{p++} END{print r, "composite primary on lambda", l+0, "pUC19", p+0}'
+done
+echo CMP2_FINISHED
+#+end_src
+
+#+name: spike-combined-random
+#+begin_src bash :tangle no
+#!/usr/bin/env bash
+# Human results with and without the controls in the reference: the same 10 million read pairs
+# per run as host_compare2.sh, put in random order first (the public files are sorted by genome
+# position, and the aligner estimates the insert size in batches of reads), aligned to hg38 alone and to hg38 + lambda + pUC19 with the same
+# aligner and thread count, then compared read by read after the host read filter (MAPQ 30,
+# pair filter, autosomes, blacklist removed). Duplicates are not marked.
+set -euo pipefail
+W=/mnt/data/projects/emseq-validation-public/composite; cd $W; mkdir -p cmp3; export TMPDIR=$W/tmp PATH=/snap/bin:$W/env/bin:/opt/conda/bin:$PATH
+B=gs://chaudhuri-lab-bucket1/jeszyman/data/public-emseq/PRJNA591788; declare -A K=([SRR10532145]=32 [SRR13076817]=40)
+zcat $HOME/repos/emseq/tests/full/inputs/hg38-blacklist.v2.bed.gz | cut -f1-3 > cmp3/blacklist.bed
+PF='mrname == rname && !flag.reverse != !flag.mreverse && ((!flag.reverse && tlen > 0) || (flag.reverse && tlen < 0)) && tlen >= -1000 && tlen <= 1000'
+for r in SRR10532145 SRR13076817; do
+  samtools collate -@ 16 -u -O cmp2/$r.composite.bam $W/tmp/shuf.$r 2> /dev/null | samtools fastq -F 2304 -1 cmp3/$r.1.fq -2 cmp3/$r.2.fq -0 /dev/null -s /dev/null -n - 2>> cmp3/fastq.log
+  for ref in host/hg38 ref/composite; do
+    t=${ref#*/}; s=$(date +%s)
+    bwameth.py --threads 80 --reference $ref.fa cmp3/$r.1.fq cmp3/$r.2.fq 2> cmp3/$r.$t.log | samtools view -@ 8 -1 - > cmp3/$r.$t.bam
+    echo "$r $t seconds=$(( $(date +%s) - s )) reads=$(samtools view -@ 16 -c -F 2304 cmp3/$r.$t.bam) mapped=$(samtools view -@ 16 -c -F 2308 cmp3/$r.$t.bam)"
+    grep -A3 "orientation FR" cmp3/$r.$t.log | grep "mean and std" | sed "s/^/$r $t insert size, per batch: /"
+  done
+  rm -f cmp3/$r.1.fq cmp3/$r.2.fq
+  for t in hg38 composite; do
+    samtools view -@ 16 -f 1 -q 30 -F 3852 -e "$PF" cmp3/$r.$t.bam | awk 'BEGIN{FS=OFS="\t"} FILENAME==ARGV[1] {b[$1]=b[$1] " " $2 "," $3; next} $3 ~ /^chr[0-9]+$/ {print $1"/"(and($2,64)?1:2), $3, $4, $6, (and($2,16)?"-":"+"), $5}' cmp3/blacklist.bed - \
+      | awk 'BEGIN{FS=OFS="\t"} FILENAME==ARGV[1] {n[$1]++; s[$1,n[$1]]=$2; e[$1,n[$1]]=$3; next} {for (i=1;i<=n[$2];i++) if ($3<=e[$2,i] && $3+100>s[$2,i]) next; print}' cmp3/blacklist.bed - \
+      | LC_ALL=C sort -S 30G --parallel=16 -k1,1 > cmp3/$r.$t.pass
+  done
+  echo "$r pass_hg38=$(wc -l < cmp3/$r.hg38.pass) pass_composite=$(wc -l < cmp3/$r.composite.pass)"
+  LC_ALL=C join -t $'\t' -j 1 cmp3/$r.hg38.pass cmp3/$r.composite.pass | awk -v r=$r 'BEGIN{FS="\t"} {n++; if ($2==$7 && $3==$8 && $4==$9 && $5==$10) same++; else diff++} END{print r, "both", n, "identical", same+0, "different_alignment", diff+0}'
+  LC_ALL=C join -t $'\t' -v 1 cmp3/$r.hg38.pass cmp3/$r.composite.pass > cmp3/$r.only_hg38; LC_ALL=C join -t $'\t' -v 2 cmp3/$r.hg38.pass cmp3/$r.composite.pass > cmp3/$r.only_composite
+  echo "$r only_hg38=$(wc -l < cmp3/$r.only_hg38) only_composite=$(wc -l < cmp3/$r.only_composite)"
+  samtools view -@ 16 -F 2304 cmp3/$r.composite.bam | awk 'BEGIN{FS="\t"} FILENAME==ARGV[1] {w[$1]=1; next} {k=$1"/"(and($2,64)?1:2); if (k in w) print k"\t"$3"\t"$5"\t"and($2,4)}' cmp3/$r.only_hg38 - > cmp3/$r.only_hg38.where
+  awk -v r=$r 'BEGIN{FS="\t"} {c=($2=="NC_001416.1")?"lambda":($2=="L09137.2")?"pUC19":($2=="*")?"unmapped":"human"; n[c]++} END{for(c in n) print r, "only_hg38 reads now on", c, n[c]}' cmp3/$r.only_hg38.where
+  samtools view -@ 16 -F 2308 cmp3/$r.composite.bam | awk -v r=$r 'BEGIN{FS="\t"} $3=="NC_001416.1"{l++} $3=="L09137.2"{p++} END{print r, "composite primary on lambda", l+0, "pUC19", p+0}'
+done
+echo CMP3_FINISHED
+#+end_src
+
+#+name: spike-combined-low-share
+#+begin_src bash :tangle no
+#!/usr/bin/env bash
+# Human results with and without the controls in the reference, at the control share of the
+# lab's libraries: the cfDNA pairs of host_compare3.sh with 94% of the control pairs left out
+# (1.6% controls remain). The same read pairs
+# per run as host_compare2.sh, put in random order first (the public files are sorted by genome
+# position, and the aligner estimates the insert size in batches of reads), aligned to hg38 alone and to hg38 + lambda + pUC19 with the same
+# aligner and thread count, then compared read by read after the host read filter (MAPQ 30,
+# pair filter, autosomes, blacklist removed). Duplicates are not marked.
+set -euo pipefail
+W=/mnt/data/projects/emseq-validation-public/composite; cd $W; mkdir -p cmp4; export TMPDIR=$W/tmp PATH=/snap/bin:$W/env/bin:/opt/conda/bin:$PATH
+B=gs://chaudhuri-lab-bucket1/jeszyman/data/public-emseq/PRJNA591788; declare -A K=([SRR10532145]=32 [SRR13076817]=40)
+zcat $HOME/repos/emseq/tests/full/inputs/hg38-blacklist.v2.bed.gz | cut -f1-3 > cmp4/blacklist.bed
+PF='mrname == rname && !flag.reverse != !flag.mreverse && ((!flag.reverse && tlen > 0) || (flag.reverse && tlen < 0)) && tlen >= -1000 && tlen <= 1000'
+for r in SRR13076817; do
+  samtools view -@ 16 -F 2308 cmp3/$r.composite.bam | awk 'BEGIN{FS="\t"; srand(7)} ($3=="NC_001416.1" || $3=="L09137.2") && !($1 in d) {d[$1]=1; if (rand() > 0.0596) print $1}' > cmp4/drop.txt
+  echo "control pairs left out $(wc -l < cmp4/drop.txt)"
+  samtools view -@ 16 -u -N ^cmp4/drop.txt cmp3/$r.composite.bam | samtools collate -@ 16 -u -O - $W/tmp/shuf.$r 2> /dev/null | samtools fastq -F 2304 -1 cmp4/$r.1.fq -2 cmp4/$r.2.fq -0 /dev/null -s /dev/null -n - 2>> cmp4/fastq.log
+  for ref in host/hg38 ref/composite; do
+    t=${ref#*/}; s=$(date +%s)
+    bwameth.py --threads 80 --reference $ref.fa cmp4/$r.1.fq cmp4/$r.2.fq 2> cmp4/$r.$t.log | samtools view -@ 8 -1 - > cmp4/$r.$t.bam
+    echo "$r $t seconds=$(( $(date +%s) - s )) reads=$(samtools view -@ 16 -c -F 2304 cmp4/$r.$t.bam) mapped=$(samtools view -@ 16 -c -F 2308 cmp4/$r.$t.bam)"
+    grep -A3 "orientation FR" cmp4/$r.$t.log | grep "mean and std" | sed "s/^/$r $t insert size, per batch: /"
+  done
+  rm -f cmp4/$r.1.fq cmp4/$r.2.fq
+  for t in hg38 composite; do
+    samtools view -@ 16 -f 1 -q 30 -F 3852 -e "$PF" cmp4/$r.$t.bam | awk 'BEGIN{FS=OFS="\t"} FILENAME==ARGV[1] {b[$1]=b[$1] " " $2 "," $3; next} $3 ~ /^chr[0-9]+$/ {print $1"/"(and($2,64)?1:2), $3, $4, $6, (and($2,16)?"-":"+"), $5}' cmp4/blacklist.bed - \
+      | awk 'BEGIN{FS=OFS="\t"} FILENAME==ARGV[1] {n[$1]++; s[$1,n[$1]]=$2; e[$1,n[$1]]=$3; next} {for (i=1;i<=n[$2];i++) if ($3<=e[$2,i] && $3+100>s[$2,i]) next; print}' cmp4/blacklist.bed - \
+      | LC_ALL=C sort -S 30G --parallel=16 -k1,1 > cmp4/$r.$t.pass
+  done
+  echo "$r pass_hg38=$(wc -l < cmp4/$r.hg38.pass) pass_composite=$(wc -l < cmp4/$r.composite.pass)"
+  LC_ALL=C join -t $'\t' -j 1 cmp4/$r.hg38.pass cmp4/$r.composite.pass | awk -v r=$r 'BEGIN{FS="\t"} {n++; if ($2==$7 && $3==$8 && $4==$9 && $5==$10) same++; else diff++} END{print r, "both", n, "identical", same+0, "different_alignment", diff+0}'
+  LC_ALL=C join -t $'\t' -v 1 cmp4/$r.hg38.pass cmp4/$r.composite.pass > cmp4/$r.only_hg38; LC_ALL=C join -t $'\t' -v 2 cmp4/$r.hg38.pass cmp4/$r.composite.pass > cmp4/$r.only_composite
+  echo "$r only_hg38=$(wc -l < cmp4/$r.only_hg38) only_composite=$(wc -l < cmp4/$r.only_composite)"
+  samtools view -@ 16 -F 2304 cmp4/$r.composite.bam | awk 'BEGIN{FS="\t"} FILENAME==ARGV[1] {w[$1]=1; next} {k=$1"/"(and($2,64)?1:2); if (k in w) print k"\t"$3"\t"$5"\t"and($2,4)}' cmp4/$r.only_hg38 - > cmp4/$r.only_hg38.where
+  awk -v r=$r 'BEGIN{FS="\t"} {c=($2=="NC_001416.1")?"lambda":($2=="L09137.2")?"pUC19":($2=="*")?"unmapped":"human"; n[c]++} END{for(c in n) print r, "only_hg38 reads now on", c, n[c]}' cmp4/$r.only_hg38.where
+  samtools view -@ 16 -F 2308 cmp4/$r.composite.bam | awk -v r=$r 'BEGIN{FS="\t"} $3=="NC_001416.1"{l++} $3=="L09137.2"{p++} END{print r, "composite primary on lambda", l+0, "pUC19", p+0}'
+done
+echo CMP4_FINISHED
+#+end_src
+
+#+name: spike-control-check
+#+begin_src bash :tangle no
+#!/usr/bin/env bash
+# The changed workflow on 10 million sheared-library read pairs (SRR10532145, every 32nd pair):
+# trimming, the combined index built by the workflow, alignment, split, and control calling.
+set -euo pipefail
+V=/mnt/data/projects/emseq-validation-public; C=$V/composite; T=$V/optionA; R=$HOME/emseq-a; L=SRR10532145_s10m
+mkdir -p $T/inputs $T/emseq/fastqs $T/tmp; export TMPDIR=$T/tmp PATH=/snap/bin:$T/env/bin:$PATH
+[[ -x $T/env/bin/MethylDackel ]] || /opt/conda/bin/mamba create -y -q -p $T/env -c conda-forge -c bioconda fastp bwameth bwa-mem2 'samtools>=1.20' methyldackel=0.6.1 > $T/env.log 2>&1
+for m in 1 2; do
+  f=$T/emseq/fastqs/$L.raw_R$m.fastq.gz
+  [[ -s $f ]] || samtools view -h -F 2304 $C/cmp3/SRR10532145.composite.bam | samtools collate -@ 16 -u -O - $T/tmp/col$m | samtools fastq -$m $T/tmp/r$m.fq -$(( 3 - m )) /dev/null -0 /dev/null -s /dev/null -n - 2> /dev/null && pigz -p 16 -c $T/tmp/r$m.fq > $f && rm $T/tmp/r$m.fq
+done
+ln -sfn $C/host/hg38.fa $T/inputs/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fa.gz
+cp -n $HOME/repos/emseq/tests/full/inputs/lambda.fa.gz $T/inputs/Lambda_NEB.fa.gz; cp -n $HOME/repos/emseq/tests/full/inputs/pUC19.fa.gz $T/inputs/pUC19.fa.gz
+echo "inputs ready $(date -u +%T) reads=$(( $(zcat $T/emseq/fastqs/$L.raw_R1.fastq.gz | wc -l) / 4 ))"
+cd $R; sed -e "s#main-data-dir:.*#main-data-dir: $T#" -e "s#~/repos/emseq#~/emseq-a#g" -e "/- SRR10532144/d" -e "s#- SRR10532145#- $L#" -e "s#SRR10532144: 1##" -e "s#SRR10532145: 2#$L: 2#" config/validation-public-sheared-controls.yaml > $T/config.yaml
+~/.conda/envs/breast/bin/snakemake -s workflows/validation.smk --configfile $T/config.yaml --cores 80 --rerun-incomplete --printshellcmds \
+  $T/emseq/spike/$L.puc19.bwa_meth_methyldackel_CpG.methylKit $T/emseq/spike/$L.unmeth_lambda.bwa_meth_methyldackel_CpG.methylKit 2>&1
+echo A_TEST_DONE
+#+end_src
+
+#+name: spike-control-alone
+#+begin_src bash :tangle no
+#!/usr/bin/env bash
+# The trimmed pairs of the pUC19 check, aligned to each control alone with the command of commit
+# 72ad1b1, and methylation counted with the same MethylDackel command as the combined alignment.
+set -euo pipefail
+T=/mnt/data/projects/emseq-validation-public/optionA; L=SRR10532145_s10m
+export PATH=$T/env/bin:/snap/bin:$PATH TMPDIR=$T/tmp
+O=$T/alone; mkdir -p $O; cd $O
+for c in puc19 unmeth_lambda; do
+  R=$T/ref/bwa_meth/$c/$c.fa
+  bwameth.py --threads 32 --reference $R $T/emseq/fastqs/$L.trimmed_R1.fastq.gz $T/emseq/fastqs/$L.trimmed_R2.fastq.gz 2> $c.log \
+    | samtools view -@ 8 -u -F 4 - | samtools sort -@ 8 -T $T/tmp/alone_$c -o $c.bam -
+  samtools index $c.bam
+  MethylDackel extract -@ 8 --methylKit --keepDiscordant --nOT 0,0,0,5 --nOB 0,0,5,0 $R $c.bam -o $c > $c.md.log 2>&1
+done
+for d in alone combined; do for c in puc19 unmeth_lambda; do
+  if [[ $d == alone ]]; then f=$O/${c}_CpG.methylKit; b=$O/$c.bam; else f=$T/emseq/spike/$L.$c.bwa_meth_methyldackel_CpG.methylKit; b=$T/emseq/spike/$L.$c.bwa_meth.coorsort.bam; fi
+  awk -v OFS='\t' -v d=$d -v c=$c -v r=$(samtools view -c $b) 'NR>1 {n+=$5; m+=$5*$6/100; s++} END {printf "%s\t%s\t%d\t%d\t%d\t%.0f\t%.3f\n", d, c, r, s, n, m, 100*m/n}' $f
+done; done
+echo "pairs $(( $(zcat $T/emseq/fastqs/$L.trimmed_R1.fastq.gz | wc -l) / 4 ))"
+echo ALONE_DONE
+#+end_src
+
+#+name: spike-human-rerun
+#+begin_src bash :tangle no
+#!/usr/bin/env bash
+# Human results with and without the controls in the reference, rerun on trimmed reads with a
+# same-reference repeat and a methylation endpoint. Every 40th read pair of the cfDNA run
+# (SRR13076817), trimmed as the pipeline does, then thinned to 1.6% controls.
+#   H1, H2  hg38 alone, the same pairs in two random orders
+#   C1      hg38 + lambda + pUC19, the order of H1
+# Reads: MAPQ 30, pair filter, autosomes. Methylation: MethylDackel on those reads.
+set -euo pipefail
+V=/mnt/data/projects/emseq-validation-public; W=$V/composite; T=$V/optionA; X=$W/cmp5; r=SRR13076817
+mkdir -p $X $W/tmp; cd $X; export TMPDIR=$W/tmp PATH=/snap/bin:$T/env/bin:$W/env/bin:$PATH
+B=gs://chaudhuri-lab-bucket1/jeszyman/data/public-emseq/PRJNA591788
+CREF=$T/ref/bwa_meth/ncbi_decoy_hg38_spike/ncbi_decoy_hg38_spike.fa; HREF=$W/host/hg38.fa
+PF='mrname == rname && !flag.reverse != !flag.mreverse && ((!flag.reverse && tlen > 0) || (flag.reverse && tlen < 0)) && tlen >= -1000 && tlen <= 1000'
+[[ -e $X/host_index.ok ]] || ( bwameth.py index-mem2 $HREF > $X/host_index.log 2>&1 && touch $X/host_index.ok ) &
+IDX=$!
+if [[ ! -e raw.ok ]]; then
+  P=()
+  for m in 1 2; do ( set -euo pipefail; gsutil -q cat $B/${r}_$m.fastq.gz | pigz -dc | awk 'int((NR - 1) / 4) % 40 == 0' | pigz -p 8 > raw_R$m.fq.gz ) & P+=($!); done
+  for p in "${P[@]}"; do wait $p || { echo "download failed"; exit 1; }; done
+  touch raw.ok
+fi
+[[ -s trim_R1.fq.gz ]] || fastp --detect_adapter_for_pe --disable_quality_filtering --in1 raw_R1.fq.gz --in2 raw_R2.fq.gz --out1 trim_R1.fq.gz --out2 trim_R2.fq.gz --json fastp.json --html fastp.html --thread 8 > fastp.log 2>&1
+echo "trimmed pairs $(( $(zcat trim_R1.fq.gz | wc -l) / 4 )) $(date -u +%T)"
+while ps -u "$(whoami)" -o args= | grep -q '^bash .*a_test.sh$'; do sleep 60; done
+grep -q A_TEST_DONE ~/a_test.out || { echo "combined index not finished"; exit 1; }
+bwameth.py --threads 80 --reference $CREF trim_R1.fq.gz trim_R2.fq.gz 2> all.log | samtools view -@ 8 -F 2308 - | awk 'BEGIN {FS = "\t"; srand(7)} ($3 == "NC_001416.1" || $3 == "L09137.2") && !($1 in d) {d[$1]; if (rand() > 0.0596) print $1}' > drop.txt
+echo "control pairs left out $(wc -l < drop.txt) $(date -u +%T)"
+paste <(zcat trim_R1.fq.gz | paste - - - -) <(zcat trim_R2.fq.gz | paste - - - -) | awk 'BEGIN {FS = "\t"} FNR == NR {d["@" $1]; next} {split($1, n, " "); if (!(n[1] in d)) print}' drop.txt - > kept.tsv
+for s in 1 2; do awk -v s=$s 'BEGIN {srand(s)} {printf "%.9f\t%s\n", rand(), $0}' kept.tsv | sort -S 60G --parallel=16 -k1,1g | cut -f2- | tee >(cut -f1-4 | tr '\t' '\n' | pigz -p 8 > o${s}_R1.fq.gz) | cut -f5-8 | tr '\t' '\n' | pigz -p 8 > o${s}_R2.fq.gz; sleep 20; done; rm -f kept.tsv
+echo "orders ready $(date -u +%T)"; wait $IDX; [[ -e host_index.ok ]] || exit 1
+one() { # name reference order
+  bwameth.py --threads 80 --reference $2 o$3_R1.fq.gz o$3_R2.fq.gz 2> $1.log | samtools view -@ 8 -u - | samtools sort -@ 16 -T $W/tmp/$1 -o $1.bam -; samtools index -@ 16 $1.bam
+  samtools view -@ 16 -b -f 1 -q 30 -F 3852 -e "$PF" -o $1.f.bam $1.bam $(for c in $(seq 1 22); do echo chr$c; done); samtools index -@ 16 $1.f.bam
+  MethylDackel extract -@ 16 --keepDiscordant --nOT 0,0,0,5 --nOB 0,0,5,0 -o $1 $2 $1.f.bam > $1.md.log 2>&1
+  grep "mean and std" $1.log | sed "s/^/$1 insert size: /"
+  echo "$1 filtered reads $(samtools view -c $1.f.bam) $(date -u +%T)"
+}
+one H1 $HREF 1; one H2 $HREF 2; one C1 $CREF 1
+rm -f o?_R?.fq.gz
+python3 ~/rerun_tiles.py $X drop.txt > tiles.out; cat tiles.out
+echo RERUN_DONE
+#+end_src
+
+#+name: spike-human-rerun-tiles
+#+begin_src python :tangle no
+"""Read changes and tile methylation differences for H1, H2, and C1.
+
+Usage: rerun_tiles.py <directory>
+Writes reads.tsv and tiles.tsv in the directory and prints both.
+Tile sizes 10 kb, 100 kb, and 1 Mb on autosomes, calls on both strands, at least 50, 200, and
+1000 calls in each of the two alignments. Differences are in percentage points. Tiles that
+hold a read of a control pair in H1 (a pair that C1 places on a control) are reported apart.
+"""
+import collections
+import random
+import subprocess
+import sys
+
+d = sys.argv[1]
+CONTROL = ("NC_001416.1", "L09137.2")
+
+
+def calls(name):
+    out = {}
+    for line in open(f"{d}/{name}_CpG.bedGraph"):
+        if line.startswith("track"):
+            continue
+        c, s, _, _, m, u = line.rstrip("\n").split("\t")[:6]
+        out[c, int(s)] = (int(m), int(u))
+    return out
+
+
+def tiles(cov, size):
+    t = collections.defaultdict(lambda: [0, 0])
+    for (c, s), (m, u) in cov.items():
+        t[c, s // size][0] += m
+        t[c, s // size][1] += u
+    return t
+
+
+def pct(x):
+    return 100 * x[0] / (x[0] + x[1])
+
+
+def quantile(v, q):
+    v = sorted(v)
+    return v[min(len(v) - 1, int(q * len(v)))]
+
+
+def reads(name):
+    """{read key: (chrom, pos, cigar, strand)} of the filtered reads; also control pairs."""
+    out = {}
+    p = subprocess.Popen(["samtools", "view", "-@", "8", f"{d}/{name}.f.bam"], stdout=subprocess.PIPE, text=True)
+    for line in p.stdout:
+        f = line.split("\t")
+        flag = int(f[1])
+        out[f"{f[0]}/{1 if flag & 64 else 2}"] = (f[2], f[3], f[5], flag & 16)
+    return out
+
+
+R = {n: reads(n) for n in ("H1", "H2", "C1")}
+print("pair\tboth\tidentical\tchanged\tonly_first\tonly_second")
+for a, b in (("H1", "H2"), ("H1", "C1")):
+    both = R[a].keys() & R[b].keys()
+    same = sum(R[a][k] == R[b][k] for k in both)
+    print(f"{a}_{b}\t{len(both)}\t{same}\t{len(both) - same}\t{len(R[a]) - len(both)}\t{len(R[b]) - len(both)}")
+control_names = set()
+p = subprocess.Popen(["samtools", "view", "-@", "8", "-F", "2308", f"{d}/C1.bam", *CONTROL], stdout=subprocess.PIPE, text=True)
+for line in p.stdout:
+    control_names.add(line.split("\t", 1)[0])
+held = [k for k in R["H1"] if k.rsplit("/", 1)[0] in control_names]
+print(f"control pairs {len(control_names)}, their reads in H1 filtered {len(held)}")
+held_pos = [(R["H1"][k][0], int(R["H1"][k][1])) for k in held]
+cov = {n: calls(n) for n in ("H1", "H2", "C1")}
+for n in cov:
+    m, u = (sum(x[i] for x in cov[n].values()) for i in (0, 1))
+    print(f"{n} CpG methylation {100 * m / (m + u):.4f}% of {m + u} calls")
+random.seed(11)
+rows = []
+for size, least in ((10_000, 50), (100_000, 200), (1_000_000, 1000)):
+    T = {n: tiles(cov[n], size) for n in cov}
+    dirty = {(c, s // size) for c, s in held_pos}
+    for b in ("H2", "C1"):
+        for label, keep in (("without control reads", lambda k: k not in dirty), ("with control reads", lambda k: k in dirty)):
+            x = [pct(T[b][k]) - pct(T["H1"][k]) for k in T["H1"] if k in T[b] and keep(k)
+                 and sum(T["H1"][k]) >= least and sum(T[b][k]) >= least]
+            if not x:
+                continue
+            a = [abs(i) for i in x]
+            boot = []
+            for _ in range(300):
+                boot.append(quantile(random.choices(a, k=len(a)), 0.95))
+            rows.append((size, f"{b}-H1", label, len(x), sum(x) / len(x), quantile(a, 0.5), quantile(a, 0.95),
+                         quantile(boot, 0.025), quantile(boot, 0.975), quantile(a, 0.99), max(a)))
+print("tile_bp\tcomparison\ttiles\tn_tiles\tmean_diff\tmedian_abs\tp95_abs\tp95_lower\tp95_upper\tp99_abs\tmax_abs")
+for r in rows:
+    print("\t".join(f"{v:.4f}" if isinstance(v, float) else str(v) for v in r))
+#+end_src
+
 #+name: puc19-mismatch-classes
 #+begin_src python :tangle no
 """CpG methylation of pUC19 reads split by mismatch class."""
@@ -9430,7 +9808,14 @@ pipeline (breast PROMISE project, 2026-02-25).
 This repo carries two competing tag schemes — plain =v1.0.0/v1.0.1/v1.0.2= and =wf/emseq/v1.0.0 … v5.1.0= (numbers discontinuous between them). Standardize on repo-level plain =vX.Y.Z= per the biopipe versioning convention (no =wf/<workflow>/= prefix — a tag is a whole-repo snapshot; see [[id:271b4d5f-727e-496e-b835-8fe9f8655655][Bioinformatics pipeline]] Versioning). Before retiring the =wf/emseq/*= tags, confirm nothing pins them (consumers pin by whole-repo tag): check the breast and mpnst wrappers for =git checkout wf/emseq= or =wf/emseq= references.
 
 ** TODO Measure spike-in reads that reach the host alignments
-The host reference (ncbi_decoy_hg38) holds no spike-in genome, so a lambda or pUC19 read can align to a host locus and be called there. Count, per library, the host-BAM reads that pass the MAPQ filter and align better to lambda or pUC19 than to hg38 (align the host-mapped reads to the phage references too), and report the spike-in read share per library by arm. The breast cfDNA libraries showed the arm imbalance in a k-mer pipeline (rmeth, repeat-meth =results/spikein_masked_2026-09-21/report.md= [2026-09-25 Fri]); the rate for bwa-meth on hg38 is unmeasured.
+The host reference (ncbi_decoy_hg38) holds no spike-in genome, so a lambda or pUC19 read can align to a host locus and be called there. Count, per library, the host-BAM reads that pass the MAPQ filter and align better to lambda or pUC19 than to hg38 (align the host-mapped reads to the phage references too), and report the spike-in read share per library by arm. The breast cfDNA libraries showed the arm imbalance in a k-mer pipeline (rmeth, repeat-meth =results/spikein_masked_2026-09-21/report.md= [2026-09-25 Fri]); the rate for bwa-meth on hg38 is measured on public libraries only (below).
+
+- [2026-11-25 Wed] Public libraries (NEB, PRJNA591788). Read pairs placed on lambda or pUC19 in a combined reference were realigned to hg38 alone: 3,829 of 2,697,840 control reads (0.14%) passed the host read filter in one sheared library (SRR10532145, whole run), and 8,114 of 3,512,404 (0.23%) in one cfDNA library (SRR13076817, 2% sample). After blacklist removal 3,808 and 7,945 remained on autosomes, in 193 and 613 10-kb windows, so they are concentrated; duplicates were not removed ([[file:results/end-handling-public-sheared-controls/control_reads_in_human_results.tsv][control_reads_in_human_results.tsv]]). The lab libraries and the share by arm are not measured.
+- [2026-11-25 Wed] Decision (Jeff): the controls are measured in a second alignment to the sample genome and the controls together, and sample results keep the alignment to the sample genome alone. Adding the controls to the sample alignment would remove the control reads, but it changed more sample reads than it removed: at 1.6% controls in cfDNA, 1,186 control reads left the results while 91,337 sample reads changed (16,636 stopped passing, 47,918 newly passed, 26,783 changed alignment), because the aligner estimates fragment length from all reads of a batch and lambda fragments widen that estimate (168 bp, SD 31, to 169 bp, SD 34, averaged over three batches). Which of the two alignments is more correct was not tested ([[file:results/end-handling-public-sheared-controls/combined_reference_effect.tsv][combined_reference_effect.tsv]]). The public files are sorted by genome position, so the reads were put in random order first.
+- [2026-11-25 Wed] Review of the comparison above: the read counts (1,186 control reads against 91,337 changed sample reads) compare unlike things, use untrimmed reads, and have no same-reference repeat. Read order alone moved the human-only count of passing cfDNA reads from 12,787,036 (file order) to 12,802,273 (random order). The comparison is being rerun on trimmed reads at 1.6% controls: the same pairs aligned to hg38 alone in two random orders (H1 and H2) and to hg38 with both controls in the order of H1 (C1). Rule written before the result: C1 replaces the human-only alignment for sample results only if, on tiles without control reads, the 95th percentile of the absolute tile difference in CpG methylation between C1 and H1 is not above the upper 97.5% bootstrap limit of the same percentile between H2 and H1, at 10 kb, 100 kb, and 1 Mb. Otherwise the human-only alignment stays. One library and one donor.
+- [2026-11-25 Wed] Rerun result, read by the rule recorded before it: the 95th percentile of the absolute tile difference between C1 and H1 on tiles without control reads was 1.858, 0.934, and 0.318 points at 10 kb, 100 kb, and 1 Mb, and the upper 97.5% bootstrap limit of the same percentile between H2 and H1 was 0.000, 0.067, and 0.054. The rule fails at all three sizes, so the human-only alignment stays for the sample results ([[file:results/end-handling-public-sheared-controls/combined_reference_rerun_tiles.tsv][combined_reference_rerun_tiles.tsv]]). The two human-only runs changed almost nothing (241 of 12,879,212 shared reads aligned differently), so the rule could only have passed an alignment that also changed almost nothing, and it does not say which alignment is more correct.
+- [2026-11-25 Wed] Not measured: what the control table of a library prepared without pUC19 looks like with the combined reference. With the control aligned alone, a few hundred calls and low methylation was the sign.
+- [2026-11-25 Wed] The changed rules were run on real reads: 10,140,172 trimmed read pairs of SRR10532145 (every 32nd pair of the run), with the combined index built by the workflow. pUC19 CpG methylation was 96.85% of 39,946 calls and lambda 0.14% of 344,216. The same pairs aligned to each control alone, with the command of commit 72ad1b1, gave 82.78% of 46,847 calls and 0.41% of 375,113 ([[file:results/end-handling-public-sheared-controls/control_alignment_check.tsv][control_alignment_check.tsv]]). The pipeline counts a CpG covered by both mates once. The earlier 79.1% for this run is a sum of MethylDackel =mbias= tables, which count such a CpG twice (64,846 calls against 47,874 from =extract= on these reads aligned to pUC19 alone, without read-end bounds), and the earlier 70.5% is a tally of untrimmed reads that also counts both mates.
 
 ** TODO Correct jagged-end fill-in methylation loss (next release after wf/emseq/v5.1.0)
 

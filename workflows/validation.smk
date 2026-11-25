@@ -46,6 +46,7 @@ emseq_library_ids = config["library-ids"]
 emseq_ref_names = [config["validation-host-ref"]]
 emseq_align_methods = ["bwa_meth"]
 spike_builds = ["puc19", "unmeth_lambda"]
+spike_host_ref = config["validation-host-ref"]
 KEEP_BED = config["keep-bed"]
 EXCL_BED = config["exclude-bed"]
 meth_map = config.get("meth-map", {})

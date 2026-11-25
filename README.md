@@ -184,6 +184,7 @@ A minimal wrapper follows this structure:
     emseq_ref_names = ["ncbi_decoy_hg38"]   # project decision
     emseq_align_methods = ["bwa_meth"]       # project decision
     spike_builds = ["puc19", "unmeth_lambda"]  # project decision
+    spike_host_ref = "ncbi_decoy_hg38"         # project decision
     KEEP_BED = config["keep-bed"]
     EXCL_BED = config["exclude-bed"]
     meth_map = config["meth-map"]
@@ -408,6 +409,11 @@ The wrapper assigns all variables before `include: "emseq.smk"` (see the Wrapper
 <tr>
 <td class="org-left"><code>spike_builds</code></td>
 <td class="org-left">Spike-in reference names included in this run (project decision)</td>
+</tr>
+
+<tr>
+<td class="org-left"><code>spike_host_ref</code></td>
+<td class="org-left">Sample reference the controls are aligned together with (project decision)</td>
 </tr>
 
 <tr>
@@ -714,6 +720,7 @@ Both have been validated on production-scale data.
     -   <span class="timestamp-wrapper"><span class="timestamp">[2026-11-20 Fri] </span></span> `emseq_methyldackel`, `emseq_methyldackel_spike` and `emseq_mbias` pass `--keepDiscordant`. MethylDackel ignores pairs without the proper-pair flag by default, which dropped the cfDNA fragments of about 280 bp or longer that `EMSEQ_PAIR_FILTER` keeps. On spike-in alignments the option changes little: in one breast pilot library, 0 of 24 usable pUC19 reads and 197 of 37,444 usable lambda reads lacked the flag (usable means MAPQ 10 or more and not marked QC-fail). Host methylation tables made between <span class="timestamp-wrapper"><span class="timestamp">[2026-09-25 Fri] </span></span> and this date need a rerun of `emseq_methyldackel`.
     -   <span class="timestamp-wrapper"><span class="timestamp">[2026-11-22 Sun] </span></span> Methylation calling for the sample and for the spike-in controls excludes the first five bases of read 2 by default (`--nOT 0,0,0,5 --nOB 0,0,5,0`). Tables made before this change count those bases.
     -   <span class="timestamp-wrapper"><span class="timestamp">[2026-11-24 Tue] </span></span> `emseq_dedup` gives its name sort and its coordinate sort separate samtools temporary-file prefixes; with one shared prefix the two sorts in the pipe collided at production depth ("File exists"). `EMSEQ_PAIR_FILTER` compares the strand bits of the two mates as true or false; from <span class="timestamp-wrapper"><span class="timestamp">[2026-09-25 Fri] </span></span> to this date it kept one mate and dropped the other when both mates mapped to the reverse strand (flags 113 and 177).
+    -   <span class="timestamp-wrapper"><span class="timestamp">[2026-11-25 Wed] </span></span> The controls are aligned to one reference that holds the sample genome and every control (`emseq_align_bwameth_spike`), and `emseq_split_spike` writes the alignments of each control. Aligned to pUC19 alone, sample reads were counted as pUC19 and lowered its methylation (82.8% against 96.9% in 10.1 million trimmed read pairs of one sheared-DNA library). **Breaking:** wrappers must define `spike_host_ref`, the sample reference that the controls are aligned together with, and the combined reference is indexed once (about 2.3 hours for hg38 with `bwa-mem2 index`). Sample results are unchanged. The control tables of a project made before this change have the same names and count sample reads, so delete the files in `emseq/spike/` before the next run.
 -   wf/emseq/v5.1.0  
     -   <span class="timestamp-wrapper"><span class="timestamp">[2026-04-07 Tue] </span></span> Parameterized `align_method` in modules:  
         -   New required wrapper variable `emseq_align_methods` — list of alignment methods to run. Replaces hardcoded `["biscuit","bwa_meth"]` in `emseq_multiqc` and `emseq_analysis_uxm_deconv` rules.

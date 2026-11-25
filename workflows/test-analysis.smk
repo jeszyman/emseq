@@ -50,6 +50,7 @@ emseq_library_ids = config["library-ids"]
 emseq_ref_names = ["chr22"]
 emseq_align_methods = ["bwa_meth", "biscuit"]
 spike_builds = ["puc19", "unmeth_lambda"]
+spike_host_ref = "chr22"
 KEEP_BED = config["keep-bed"]
 EXCL_BED = config["exclude-bed"]
 meth_map = config["meth-map"]

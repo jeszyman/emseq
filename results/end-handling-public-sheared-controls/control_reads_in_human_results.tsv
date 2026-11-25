@@ -1,0 +1,3 @@
+run	read_sample	control_reads_tested	pass_host_filter	pass_autosomes_outside_blacklist	ten_kb_windows	reads_in_top_10_windows	host_filter_pct
+SRR10532145	all	2697840	3829	3808	193	2638	0.142
+SRR13076817	2%	3512404	8114	7945	613	1836	0.231

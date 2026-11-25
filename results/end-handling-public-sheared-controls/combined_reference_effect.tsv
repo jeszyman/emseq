@@ -1,0 +1,4 @@
+run	control_share_of_reads_pct	read_order	reads_aligned	pass_human_only	pass_combined	stop_passing_now_on_control	stop_passing_still_on_human	newly_passing	changed_alignment	insert_mean_human_only	insert_sd_human_only	insert_mean_combined	insert_sd_combined
+SRR10532145	0.42	random	20280626	16311516	16311328	169	19	0	0	168.1	82.3	168.1	82.3
+SRR13076817	21.4	random	20491932	12802273	12968940	20607	23918	211192	54022	168.2	31.3	208.4	92.0
+SRR13076817	1.6	random	16353194	12782678	12812774	1186	16636	47918	26783	168.0	30.9	169.3	34.5

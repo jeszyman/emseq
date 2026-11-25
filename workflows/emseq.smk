@@ -13,6 +13,7 @@
 #   emseq_library_ids              — list of sample IDs
 #   emseq_ref_names                — list of reference genome names to align against
 #   spike_builds                   — list of spike-in reference names
+#   spike_host_ref                 : sample reference that the controls are aligned together with
 #   EMSEQ_REF_INPUTS               — dict mapping ref name to input FASTA filename
 #   KEEP_BED, EXCL_BED             — region filter BED file paths
 #   meth_map                       — experiment map for differential methylation
@@ -40,39 +41,70 @@ EMSEQ_PAIR_FILTER = (
 # pipeline's options; tests/unit/test_methyldackel_bounds.py pins what they
 # exclude on constructed read pairs.
 EMSEQ_CALL_BOUNDS = "--nOT 0,0,0,5 --nOB 0,0,5,0"
+
+# Reference that holds the sample genome and every control
+EMSEQ_SPIKE_REF = f"{spike_host_ref}_spike"
 # ── Spike-in Controls ────────────────────────────────────────────────────────
 # Align to pUC19 (methylated) and Lambda (unmethylated) for conversion QC.
 # Duplicates are retained — every read contributes to conversion rate estimation.
 rule emseq_align_bwameth_spike:
-    message: "EM-seq bwameth on spike-in reference with simple samtools piping and no duplicate calls"
+    message: "Align to the sample reference and the controls together, keeping the reads on a control"
     conda: ENV_EMSEQ
     input:
-        r1  = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
-        r2  = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
-        ref = f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa",
+        r1   = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R1.fastq.gz",
+        r2   = f"{D_EMSEQ}/fastqs/{{library_id}}.trimmed_R2.fastq.gz",
+        ref  = f"{D_REF}/bwa_meth/{EMSEQ_SPIKE_REF}/{EMSEQ_SPIKE_REF}.fa",
+        c2t  = f"{D_REF}/bwa_meth/{EMSEQ_SPIKE_REF}/{EMSEQ_SPIKE_REF}.fa.bwameth.c2t",
+        fais = expand(f"{D_REF}/bwa_meth/{{spike}}/{{spike}}.fa.fai", spike=spike_builds),
     log:
-        cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}_emseq_align_bwameth_spike.log",
+        cmd = f"{D_LOGS}/{{library_id}}_emseq_align_bwameth_spike.log",
     benchmark:
-        f"{D_BENCHMARK}/{{library_id}}.{{emseq_ref_name}}_emseq_align_bwameth_spike.tsv"
+        f"{D_BENCHMARK}/{{library_id}}_emseq_align_bwameth_spike.tsv"
     params:
-        temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{wc.emseq_ref_name}"
+        temp_prefix = lambda wc: f"{D_DATA}/tmp/{wc.library_id}.{EMSEQ_SPIKE_REF}",
     threads: workflow.cores
     resources:
         concurrency = 100
+    output:
+        bam = temp(f"{D_EMSEQ}/spike/{{library_id}}.{EMSEQ_SPIKE_REF}.bwa_meth.coorsort.bam"),
+    shell:
+        """
+        exec &>> "{log.cmd}"
+        echo "[bwameth-spike] $(date) lib={wildcards.library_id} threads={threads}"
+        mkdir -p "$(dirname "{params.temp_prefix}")"
+        # rname == "a" || rname == "b" over the control contigs
+        on_control=$(cut -f1 {input.fais} | awk '{{printf "%srname == \\"%s\\"", (NR > 1 ? " || " : ""), $1}}')
+        # -F 2308: primary alignments only. A pair whose mates lie on different
+        # references is dropped, since a mate on the sample leaves the pair's
+        # control origin open.
+        bwameth.py --threads {threads} \
+          --reference "{input.ref}" \
+          "{input.r1}" "{input.r2}" \
+        | samtools view -@ 8 -u -F 2308 -e "mrname == rname && ($on_control)" - \
+        | samtools sort -@ 8 -T "{params.temp_prefix}" -o "{output.bam}"
+        """
+rule emseq_split_spike:
+    message: "Write the alignments of one control, with only its contigs in the header"
+    conda: ENV_EMSEQ
+    input:
+        bam = f"{D_EMSEQ}/spike/{{library_id}}.{EMSEQ_SPIKE_REF}.bwa_meth.coorsort.bam",
+        fai = f"{D_REF}/bwa_meth/{{emseq_ref_name}}/{{emseq_ref_name}}.fa.fai",
+    log:
+        cmd = f"{D_LOGS}/{{library_id}}.{{emseq_ref_name}}_emseq_split_spike.log",
+    wildcard_constraints:
+        emseq_ref_name = "|".join(spike_builds),
+    threads: 2
     output:
         bam = f"{D_EMSEQ}/spike/{{library_id}}.{{emseq_ref_name}}.bwa_meth.coorsort.bam",
     shell:
         """
         exec &>> "{log.cmd}"
-        echo "[bwameth-spike] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name} threads={threads}"
-        mkdir -p "$(dirname "{params.temp_prefix}")"
-        bwameth.py --threads {threads} \
-          --reference "{input.ref}" \
-          "{input.r1}" "{input.r2}" \
-        | samtools view -@ 8 -u -F 4 - \
-        | samtools sort -@ 8 -T "{params.temp_prefix}" -o "{output.bam}"
-        # -u: uncompressed BAM avoids compress→decompress overhead in pipe
-        # -F 4: keep only mapped reads (discard unmapped from wrong spike-in)
+        echo "[split-spike] $(date) lib={wildcards.library_id} ref={wildcards.emseq_ref_name}"
+        # MethylDackel reads the control's own FASTA, so the header must hold no
+        # other contig
+        samtools view -h "{input.bam}" \
+          | awk 'BEGIN {{FS = "\t"}} FNR == NR {{keep[$1]; next}} /^@SQ/ {{if (substr($2, 4) in keep) print; next}} /^@/ {{print; next}} $3 in keep' "{input.fai}" - \
+          | samtools view -b -o "{output.bam}" -
         """
 rule emseq_methyldackel_spike:
     message: "MethylDackel CpG extraction on spike-in alignments, allowing duplicates"
@@ -107,11 +139,17 @@ rule emseq_methyldackel_spike:
           -o "{params.out_prefix}"
         """
 # ── Reference Indexing ───────────────────────────────────────────────────────
+def _emseq_index_fastas(wildcards):
+    """FASTA of one reference, or of the sample reference and every control for EMSEQ_SPIKE_REF."""
+    name = wildcards.emseq_ref_name
+    names = [spike_host_ref, *spike_builds] if name == EMSEQ_SPIKE_REF else [name]
+    return [f"{D_INPUTS}/{EMSEQ_REF_INPUTS[n]}" for n in names]
+
 rule emseq_bwa_meth_index:
     message: "Build bwa-meth bisulfite index from reference FASTA"
     conda: ENV_EMSEQ
     input:
-        lambda wc: f"{D_INPUTS}/{EMSEQ_REF_INPUTS[wc.emseq_ref_name]}"
+        fastas = _emseq_index_fastas,
     log:
         cmd = f"{D_LOGS}/{{emseq_ref_name}}_emseq_bwa_meth_index.log",
     benchmark:
@@ -132,12 +170,15 @@ rule emseq_bwa_meth_index:
         """
         exec &>> "{log.cmd}"
         echo "[bwa-meth-index] $(date) ref={wildcards.emseq_ref_name} threads={threads}"
-        if file -b "{input}" | grep -qi gzip; then
-            zcat "{input}" > "{params.fasta_target}"
-        else
-            cat "{input}" > "{params.fasta_target}"
-        fi
+        # awk 1 ends each file with a newline, so the next header starts a line
+        for fasta in {input.fastas}; do
+            if file -bL "$fasta" | grep -qi gzip; then zcat "$fasta"; else cat "$fasta"; fi | awk 1
+        done > "{params.fasta_target}"
         samtools faidx "{params.fasta_target}"
+        if [ "$(grep -c '^>' "{params.fasta_target}")" -ne "$(wc -l < "{params.fasta_target}.fai")" ]; then
+            echo "[bwa-meth-index] a contig name repeats across the FASTAs" >&2
+            exit 1
+        fi
         bwameth.py index-mem2 "{params.fasta_target}"
         """
 # ── Alignment ────────────────────────────────────────────────────────────────

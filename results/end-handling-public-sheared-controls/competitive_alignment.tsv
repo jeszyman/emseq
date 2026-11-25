@@ -1,0 +1,5 @@
+run	dna	control	reads_mapq10	cpg_calls	cpg_methylation_pct	read_sample
+SRR10532145	sheared	pUC19	292138	1714378	95.71	all
+SRR10532145	sheared	lambda	2390568	14506918	0.296	all
+SRR13076817	cfDNA	pUC19	5569140	34725721	96.74	all
+SRR13076817	cfDNA	lambda	3399136	21896656	0.402	2%

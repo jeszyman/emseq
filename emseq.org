@@ -11,6 +11,7 @@
 *TANGLE NOTE (2026-03-25):* All divergences from 2026-03-24 resolved (rule_threads, mosdepth quantize, wildcard constraints, haplotype deps). Org source and tangled files are in sync.
 
 - [2026-11-24 Tue] Claude session "emseq-read-end-validation": [[elisp:(start-process "claude-resume" nil (expand-file-name "~/.claude/bin/claude-resume") "acacea49-0f2d-481e-ac99-c9d2cf4ccfef" "/home/jeszyman/repos/emseq")][resume]]
+- [2026-11-27 Fri] Claude session "emseq-control-alignment": [[elisp:(start-process "claude-resume" nil (expand-file-name "~/.claude/bin/claude-resume") "acacea49-0f2d-481e-ac99-c9d2cf4ccfef" "/home/jeszyman/repos/emseq")][resume]]
 
 ** Plans
 :PROPERTIES:
